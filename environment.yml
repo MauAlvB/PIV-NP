@@ -1,0 +1,19 @@
+# Entorno de desarrollo reproducible.
+#   conda env create -f environment.yml
+#   conda activate pivnp
+#   pip install -e .
+name: pivnp
+channels:
+  - conda-forge
+  - msys2
+dependencies:
+  - python=3.12
+  - numpy>=1.24
+  - numba>=0.58
+  - pytest
+  - pytest-cov
+  - ruff
+  - git
+  # Solo para compilar el código Fortran original y regenerar resultados de referencia
+  # (legacy/make_reference.py). En Linux/macOS usa el gfortran del sistema.
+  - m2w64-gcc-fortran  # [win]

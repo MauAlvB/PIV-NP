@@ -1,0 +1,23 @@
+{
+  "description": "Escenarios de regresión: cada uno se ejecuta con el Fortran original (tools/make_reference.py) y con la versión Python (tests/test_regression.py); las salidas deben ser idénticas byte a byte.",
+  "window": {
+    "source_grid": [60, 35],
+    "cols": [24, 34],
+    "rows_from_top": [20, 32],
+    "n_frames": 20
+  },
+  "cell_size": 0.212115,
+  "scenarios": {
+    "v1_npc3": {"npc": 3, "version": 1, "steps": 20, "print_every": 10},
+    "v1_npc4_tracking": {"npc": 4, "version": 1, "steps": 12, "print_every": 4,
+                         "tracking": [0.1, 0.1, 5.3, 11.0, 12.0, 4.0, 500.0, 500.0]},
+    "v1_npc7": {"npc": 7, "version": 1, "steps": 2, "print_every": 2},
+    "v1_npc11": {"npc": 11, "version": 1, "steps": 1, "print_every": 1},
+    "v1_moisture_5col": {"npc": 2, "version": 1, "steps": 12, "print_every": 6,
+                         "moisture": true, "pivlab_format": 2},
+    "v2_npc2": {"npc": 2, "version": 2, "steps": 20, "print_every": 10},
+    "v2_moisture": {"npc": 3, "version": 2, "steps": 12, "print_every": 6, "moisture": true},
+    "v1_restart": {"npc": 2, "version": 1, "steps": 8, "print_every": 4, "restart_steps": 8},
+    "v2_restart": {"npc": 2, "version": 2, "steps": 8, "print_every": 4, "restart_steps": 8}
+  }
+}

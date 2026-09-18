@@ -1,0 +1,7 @@
+BLOQUE 1: CALCULO DEFORMACIONES PARA ENSAYO DE LABORATORIO.
+BLOQUE 2: N_cel N_nod n_p/c N_fil Ancho Alto (GEOMETRIA)
+2006  2100    3    34	0.212115	0.212115
+BLOQUE 3: del_t Total_steps Impresion Moister Version PIVlab Contour Rec Track
+0.8	149	1	0	1	1	0	0	0
+BLOQUE 4: Densidad Porosidad
+2650.0  0.4

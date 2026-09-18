@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Caché de compilación de Numba
+*.nbi
+*.nbc
+
+# Binarios del código legado
+legacy/*.exe
+legacy/*.o
+legacy/*.mod
+
+# Resultados de ejecución (se regeneran)
+*.POST.RES
+*.POST.MSH
+*.REC
+!tests/data/**/expected/*.POST.RES
+!tests/data/**/expected/*.POST.MSH
+!tests/data/**/expected/*.REC
+runs/

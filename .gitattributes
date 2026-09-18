@@ -1,0 +1,5 @@
+# Archivos de referencia: no convertir finales de línea
+*.REC binary
+*.gz binary
+tests/data/** -text
+legacy/*.for -text

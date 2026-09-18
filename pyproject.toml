@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pivnp"
+version = "2.0.0"
+description = "PIV-NP: seguimiento de partículas numéricas sobre campos de velocidad de PIVlab (desplazamientos, deformaciones, humedad)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Núria M. Pinyol" },
+    { name = "Mauricio Alvarado" },
+]
+dependencies = [
+    "numpy>=1.24",
+    "numba>=0.58",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov", "ruff"]
+
+[project.scripts]
+pivnp = "pivnp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "slow: pruebas lentas (caso completo de regresión)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY"]
