@@ -29,6 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="con ICONTOUR=1: vecinos con datos necesarios para rellenar un nodo")
     parser.add_argument("--contour-layers", type=int, default=1,
                         help="con ICONTOUR=1: capas de nodos a rellenar hacia el exterior")
+    parser.add_argument("--vtk", action="store_true",
+                        help="al terminar, exportar también a VTK para ParaView (<caso>_vtk/)")
     parser.add_argument("-q", "--quiet", action="store_true", help="solo errores")
     return parser
 
@@ -50,10 +52,16 @@ def main(argv: list[str] | None = None) -> int:
         contour_min_neighbors=args.contour_min_neighbors,
         contour_layers=args.contour_layers,
     )
+    log = logging.getLogger("pivnp")
     try:
-        run_case(args.case_dir, args.case, options)
+        summary = run_case(args.case_dir, args.case, options)
+        if args.vtk:
+            from .vtk_export import export_vtk
+
+            res = Path(args.case_dir) / f"{summary.case_name}.POST.RES"
+            log.info("Resultados para ParaView: %s", export_vtk(res))
     except (ConfigError, FileNotFoundError, ValueError) as exc:
-        logging.getLogger("pivnp").error("%s", exc)
+        log.error("%s", exc)
         return 1
     return 0
 

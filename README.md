@@ -23,11 +23,12 @@ La versión 2.0 es una reingeniería en Python del código Fortran original
 3. [Archivos de entrada](#archivos-de-entrada)
 4. [Resultados](#resultados)
 5. [Cómo funciona](#cómo-funciona)
-6. [Corrección de contorno (CONTOUR)](#corrección-de-contorno-contour)
-7. [Rendimiento](#rendimiento)
-8. [Pruebas](#pruebas)
-9. [Estructura del proyecto](#estructura-del-proyecto)
-10. [Hallazgos y propuestas](#hallazgos-y-propuestas)
+6. [Visualización](#visualización)
+7. [Corrección de contorno (CONTOUR)](#corrección-de-contorno-contour)
+8. [Rendimiento](#rendimiento)
+9. [Pruebas](#pruebas)
+10. [Estructura del proyecto](#estructura-del-proyecto)
+11. [Hallazgos y propuestas](#hallazgos-y-propuestas)
 
 ## Instalación
 
@@ -74,6 +75,7 @@ Opciones:
 | `--prefetch N` | archivos PIVlab leídos por adelantado (por defecto 4) |
 | `--contour-min-neighbors N` | con `ICONTOUR=1`: vecinos con datos necesarios (por defecto 3) |
 | `--contour-layers N` | con `ICONTOUR=1`: capas de nodos a rellenar (por defecto 1) |
+| `--vtk` | exportar también a VTK para ParaView (ver [Visualización](#visualización)) |
 | `-q` | solo mostrar errores |
 
 También funciona `python -m pivnp ruta/al/caso`.
@@ -213,6 +215,22 @@ se consideran fuera del material (aire, fondo) y se excluyen de los resultados.
 **6. Resultados.** En el paso 1 y cada `IMPPAS` pasos se escriben todos los resultados;
 al final se guarda el estado en `<caso>.REC`.
 
+## Visualización
+
+Recomendación: [ParaView](https://www.paraview.org/download/), gratuito y de código
+abierto. PIV-NP convierte los resultados a VTK (su formato nativo), también los del
+ejecutable Fortran original:
+
+```bash
+pivnp-vtk ruta/al/caso/zapatak.POST.RES
+```
+
+Después, en ParaView: **File → Open → `zapatak_vtk/zapatak.pvd` → Apply**, colorear por
+`Equi_strain` y pulsar **Play**. Guía completa en
+[`docs/VISUALIZACION.md`](docs/VISUALIZACION.md).
+
+![Deformación de corte equivalente en el ensayo de centrífuga](docs/img/centrifuga_equi_strain.png)
+
 ## Corrección de contorno (CONTOUR)
 
 En el borde del material PIVlab no da velocidad (NaN) en los puntos cuya ventana de
@@ -314,6 +332,7 @@ piv-np/
 │   ├── restart.py         archivo .REC (RECOM)
 │   ├── simulation.py      bucle principal
 │   ├── compare.py         comparación de resultados
+│   ├── vtk_export.py      conversión a VTK para ParaView
 │   └── cli.py             línea de comandos
 ├── tests/                 pruebas (unitarias y de regresión con datos reales recortados)
 ├── legacy/                código Fortran original, sin modificar
@@ -322,7 +341,8 @@ piv-np/
 ├── examples/              caso de la centrífuga (formato .PAR actual)
 └── docs/
     ├── HALLAZGOS.md       errores y dudas encontrados en el original
-    └── ARQUITECTURA.md    diseño actual y propuestas de mejora
+    ├── ARQUITECTURA.md    diseño actual y propuestas de mejora
+    └── VISUALIZACION.md   guía de ParaView
 ```
 
 ## Hallazgos y propuestas

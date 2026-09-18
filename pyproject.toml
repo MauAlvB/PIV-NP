@@ -20,9 +20,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-cov", "ruff"]
+# Solo para abrir/renderizar los VTK desde Python (ParaView no lo necesita)
+viz = ["pyvista"]
 
 [project.scripts]
 pivnp = "pivnp.cli:main"
+pivnp-vtk = "pivnp.vtk_export:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
