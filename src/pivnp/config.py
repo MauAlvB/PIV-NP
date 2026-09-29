@@ -11,8 +11,7 @@ por espacios, tabuladores o comas y pueden repartirse en varias líneas)::
     Bloque 4  línea de comentario
               S_DENSITY  POROSITY
 
-ITR (partículas de seguimiento PTV) debe ser 0: esa opción se eliminó, ver
-``docs/HALLAZGOS.md`` (H-15).
+ITR (partículas de seguimiento PTV) debe ser 0: esa opción ya no está soportada.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ class ConfigError(ValueError):
 
 
 #: Máximo de partículas por lado de celda: con más, el original las colocaba todas en el
-#: centro de la celda (H-05).
+#: centro de la celda.
 MAX_PARTICLES_PER_SIDE = 6
 
 
@@ -150,8 +149,8 @@ def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
 
     if _to_int(itr, "ITR") != 0:
         raise ConfigError(
-            "ITR: las partículas de seguimiento PTV se han eliminado (H-15: nunca llegaban "
-            "a los resultados). Usa ITR=0 y quita el bloque 5 del .PAR"
+            "ITR: las partículas de seguimiento PTV ya no están soportadas. Usa ITR=0 y "
+            "quita el bloque 5 del .PAR"
         )
 
     irec_value = _to_int(irec, "IREC")

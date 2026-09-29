@@ -28,10 +28,10 @@ def _load_measurements_kernel(u, v, moisture_in, saturation_in, point_to_node,
                               moisture_measured, saturation_measured, legacy_previous):
     for p in range(u.size):
         if legacy_previous:
-            # H-01: el original copia la "velocidad anterior" con el índice del punto
+            # El original copiaba la "velocidad anterior" con el índice del punto
             # PIVlab en vez del índice del nodo, dentro del mismo bucle que va
-            # sobrescribiendo las velocidades, así que en la mitad de los nodos guarda la
-            # velocidad nueva. Solo se reproduce en modo compatibilidad.
+            # sobrescribiendo las velocidades, así que en la mitad de los nodos
+            # guardaba la velocidad nueva.
             previous_velocity[p, 0] = velocity[p, 0]
             previous_velocity[p, 1] = velocity[p, 1]
         node = point_to_node[p]
@@ -113,7 +113,7 @@ def _has_velocity(nodes: Nodes) -> np.ndarray:
 def compute_nodal_momentum_v1(nodes: Nodes) -> None:
     """IVERSION = 1: los nodos de cálculo son los propios puntos PIVlab (masa nodal = 1).
 
-    Los nodos sin velocidad conservan la cantidad de movimiento del paso anterior (H-02).
+    Los nodos sin velocidad conservan la cantidad de movimiento del paso anterior.
     """
     n = nodes.is_nan.size
     nodes.mass[:n] = 1.0
@@ -152,7 +152,7 @@ def _distribute_to_staggered(velocity, previous_velocity, has_velocity, lost, ce
             saturation[node] = saturation[node] + saturation_measured[i] * weight
 
     if normalize:
-        # H-23: un nodo del borde recibe menos de 4 aportaciones y se quedaría con una
+        # Un nodo del borde recibe menos de 4 aportaciones y se quedaría con una
         # fracción de la velocidad. Dividir por el peso acumulado (1 en el interior, donde
         # por tanto no cambia nada) lo convierte en la media de los puntos que sí aportan.
         for node in range(momentum.shape[0]):
@@ -173,7 +173,7 @@ def compute_nodal_momentum_v2(nodes: Nodes, grid: Grid, centers: np.ndarray,
     desplazada que lo contiene.
 
     Reproduce que el original localiza los centros de celda (``XP2``) usando la marca de
-    partícula ``IDONDE`` del mismo índice (H-10).
+    partícula ``IDONDE`` del mismo índice.
     """
     n_points = nodes.is_nan.size
     cells, _, _ = grid_locate(centers[:n_points], grid)

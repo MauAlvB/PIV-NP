@@ -28,7 +28,7 @@ pivnp-vtk ruta/al/caso/zapatak.POST.RES
 
 Para resultados del ejecutable Fortran original (o calculados con `--legacy-compat`), hay
 que añadir `--legacy-msh`, porque su malla trae las posiciones del primer paso en vez de
-las iniciales (H-08):
+las iniciales:
 
 ```bash
 pivnp-vtk ruta/al/caso/zapatak.POST.RES --legacy-msh

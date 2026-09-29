@@ -4,10 +4,10 @@ PIVlab no da velocidad (NaN) en los puntos cuya ventana de interrogación cae pa
 fuera del material. Eso provoca dos efectos en el borde:
 
 * las partículas del borde interpolan con nodos a velocidad 0, así que se mueven menos de
-  lo que deberían (H-02: además, el original conserva ahí la velocidad del último paso con
+  lo que deberían (además, el original conserva ahí la velocidad del último paso con
   dato, lo que hace que algunas partículas "salgan volando");
 * con IVERSION=2, los nodos que reciben menos de cuatro aportaciones se quedan con una
-  fracción de la velocidad que les corresponde (H-23).
+  fracción de la velocidad que les corresponde.
 
 Este módulo implementa tres formas de reconstruir la velocidad de los puntos sin dato, para
 poder compararlas. Se eligen con ``ICONTOUR`` en el ``.PAR``:
@@ -22,7 +22,7 @@ ICONTOUR     Método
 ===========  ==========================================================================
 
 Además, con cualquier método distinto de 0 la malla desplazada (IVERSION=2) normaliza las
-aportaciones de cada nodo, que es la corrección de H-23.
+aportaciones de cada nodo entre los de su celda.
 
 Decisiones comunes a los tres métodos:
 
@@ -67,7 +67,7 @@ class ContourCorrection(Protocol):
 
     @property
     def normalizes_staggered(self) -> bool:
-        """Si corrige también el reparto en la malla desplazada (H-23)."""
+        """Si normaliza también el reparto de la malla desplazada."""
 
 
 class NoContourCorrection:

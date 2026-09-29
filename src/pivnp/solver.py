@@ -61,8 +61,8 @@ def _advance_kernel(lost, cells, cell_x, cell_y, n_cols, dx, dy, dt,
             if step == 1 and not restart:
                 nan_initial[i] = 0
             if step == 1 and legacy_restart_displacement:
-                # H-14: el original sumaba el desplazamiento acumulado al "instantáneo" en
-                # el primer paso tras un reinicio.
+                # El original sumaba el desplazamiento acumulado al "instantáneo" en el
+                # primer paso tras un reinicio.
                 step_disp[i, 0] = displacement[i, 0]
                 step_disp[i, 1] = displacement[i, 1]
             nan_corners = 0
@@ -149,7 +149,7 @@ def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
             dndx = NODE_SIGN_X[j] * 0.5 / dx
             dndy = NODE_SIGN_Y[j] * 0.5 / dy
             if nodal_mass[node] >= MACHINE_EPSILON:
-                # H-04: el original divide por la masa nodal, que con IVERSION=2 vale
+                # El original dividía por la masa nodal, que con IVERSION=2 vale
                 # aproximadamente NPC² y deja las deformaciones a escala de la velocidad
                 # dividida por NPC². Solo se reproduce en modo compatibilidad.
                 if legacy_divide_by_mass:
@@ -237,7 +237,7 @@ def _count_nan_kernel(lost, cells, n_cols, node_is_nan, mesh_version, out):
 
 def count_nan_nodes(particles: Particles, nodes: Nodes, grid: Grid, mesh_version: int,
                     step: int) -> np.ndarray:
-    """Cuántos datos faltan alrededor de cada partícula (resultado ``NaNs``, ver H-11)."""
+    """Cuántos datos faltan alrededor de cada partícula (resultado ``NaNs``)."""
     n = particles.position.shape[0]
     cells, _, _ = grid_locate(particles.position, grid)
     update_lost_flags(particles.lost[:n], cells, step)

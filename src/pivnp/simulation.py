@@ -48,8 +48,8 @@ class RunOptions:
     contour_min_particles: int = 1  # ICONTOUR=2: partículas necesarias alrededor
     eol: str = os.linesep  # fin de línea de los archivos GiD (CRLF en Windows, como Intel)
     log_every: int = 10  # cada cuántos pasos se informa del archivo analizado
-    #: Reproduce los errores del Fortran original (H-01, H-04, H-08 y H-13) para poder
-    #: repetir análisis antiguos. Ver docs/HALLAZGOS.md.
+    #: Reproduce exactamente el comportamiento del Fortran original, para repetir con
+    #: esta versión análisis hechos con él.
     legacy_compat: bool = False
 
 
@@ -82,8 +82,8 @@ class Simulation:
         self.particles: Particles = create_particles(config, self.grid, options.legacy_compat)
         self.nodes = Nodes.zeros(config.n_nodes, self.grid.n_nodes)
         self.point_to_node = pivlab_to_node(config.n_cols, config.n_rows)
-        # Centros de celda de la malla desplazada (H-13: el original solo los genera si no
-        # es un reinicio, y entonces todas las velocidades acaban en la celda 1).
+        # Centros de celda de la malla desplazada. El original solo los generaba cuando
+        # no era un reinicio, así que en modo compatibilidad se dejan a cero.
         legacy_restart = config.restart and options.legacy_compat
         if config.mesh_version == 2 and not legacy_restart:
             self.centers = cell_centers(self.grid)
@@ -163,14 +163,14 @@ class Simulation:
         located = output_mask(self.particles, self.grid, step)
         count_nan_nodes(self.particles, self.nodes, self.grid, self.config.mesh_version, step)
         if not summary.output_times:  # primer instante impreso: malla y cabecera
-            # H-08: la malla GiD debe tener las posiciones iniciales, porque los
-            # desplazamientos se acumulan desde ellas y GiD dibuja malla + desplazamiento.
-            # El original escribía las posiciones ya movidas por el primer paso.
+            # La malla GiD lleva las posiciones iniciales, porque los desplazamientos se
+            # acumulan desde ellas y GiD dibuja malla + desplazamiento. El original
+            # escribía las posiciones ya movidas por el primer paso.
             positions = (self.particles.position if self.options.legacy_compat
                          else self.particles.initial_position)
             writer.write_mesh(positions, self.particles.nan_initial)
-            # H-14: al continuar un análisis, los resultados se añaden a los anteriores en
-            # vez de sobrescribirlos.
+            # Al continuar un análisis, los resultados se añaden a los anteriores en vez
+            # de sobrescribirlos.
             writer.start_results(append=append)
         writer.write_step(t, self.particles, self.nodes, located, self.config.moisture)
         summary.output_times.append(t)
@@ -202,7 +202,7 @@ class Simulation:
         p.eq_strain[:n] = data.eq_strain
         p.nan_initial[:n] = data.nan_initial
         if self.options.legacy_compat:
-            # H-14: el original arrastraba el desplazamiento acumulado al "instantáneo".
+            # El original arrastraba el desplazamiento acumulado al "instantáneo".
             p.step_displacement[:n] = data.displacement
             return 0, 0.0, False
         if data.nodes is None:

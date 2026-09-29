@@ -20,7 +20,7 @@ from pivnp.simulation import RunOptions, run_case
 REGRESSION = Path(__file__).parent / "data" / "regression"
 SCENARIOS = json.loads((REGRESSION / "scenarios.json").read_text(encoding="utf-8"))["scenarios"]
 CASE = "mini"
-# Modo compatibilidad: reproduce los errores del Fortran (H-01, H-04, H-08, H-13).
+# Modo compatibilidad: reproduce el comportamiento del Fortran original.
 OPTIONS = RunOptions(eol="\r\n", prefetch=2, legacy_compat=True)
 
 

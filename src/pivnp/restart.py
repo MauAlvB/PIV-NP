@@ -8,7 +8,7 @@ Registros del original: NP, IVERSION, XP(NP,2), UP(NP,2), EPS(NP,4), EPSEQ(NP), 
 
 A continuación se añaden registros con el instante, el número de paso y el estado nodal,
 necesarios para que continuar un análisis dé exactamente el mismo resultado que no haberlo
-interrumpido (H-14). El Fortran original los ignora, porque solo lee los siete primeros.
+interrumpido. El Fortran original los ignora, porque solo lee los siete primeros.
 """
 
 from __future__ import annotations

@@ -134,7 +134,7 @@ def test_extrapolation_falls_back_to_the_average():
     np.testing.assert_array_equal(ctx.nodes.is_nan, MASK)
 
 
-# --- H-23: reparto en la malla desplazada -----------------------------------------------------
+# --- reparto en la malla desplazada -----------------------------------------------------
 def test_staggered_normalization_only_changes_the_boundary():
     grid = Grid(3, 3, 1.0, 1.0, -0.5, -0.5)  # 9 puntos PIVlab -> 16 nodos
     particles = Particles.zeros(1, n_lost=9)

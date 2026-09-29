@@ -54,13 +54,11 @@ byte a byte con el original.
 
 Ordenadas por relación beneficio/esfuerzo.
 
-### P1. Corregir los hallazgos con un modo de compatibilidad — **hecho**
+### P1. Modo de compatibilidad con el código original — **hecho**
 
-Corregidos H-01, H-04, H-05, H-08, H-13 y H-15. Los cuatro que cambian resultados se
-revierten con `RunOptions(legacy_compat=True)` (`pivnp --legacy-compat`), de modo que las
-pruebas de regresión siguen comparando byte a byte con el Fortran y los análisis antiguos
-se pueden repetir. Quedan hallazgos pendientes de decisión (H-02, H-23, H-06, H-07, H-11,
-H-12, H-14 y H-22).
+`RunOptions(legacy_compat=True)` (`pivnp --legacy-compat`) reproduce exactamente el
+comportamiento del Fortran, de modo que las pruebas de regresión siguen comparando byte a
+byte con él y los análisis antiguos se pueden repetir con esta versión.
 
 ### P2. Archivo de configuración autodescriptivo (esfuerzo bajo)
 
@@ -100,10 +98,10 @@ igual que ya se ha hecho con `ContourCorrection`:
 
 | Decisión | Opciones | Estado |
 |---|---|---|
-| Corrección de contorno (H-02, H-23) | ninguna · media de vecinos · media de partículas · extrapolación | **hecho** (`ICONTOUR`) |
+| Corrección de contorno | ninguna · media de vecinos · media de partículas · extrapolación | **hecho** (`ICONTOUR`) |
 | Masa de partícula | unitaria (actual) · densidad seca × volumen (`S_DENSITY`, `POROSITY`) | pendiente |
 | Cálculo de la deformación | centro del elemento (actual) · en la posición de la partícula | pendiente |
-| Reparto inicial de partículas (H-06) | Gauss (NPC 4-6) · uniforme (NPC 2-3) | fijado por NPC |
+| Reparto inicial de partículas | Gauss (NPC 4-6) · uniforme (NPC 2-3) | fijado por NPC |
 
 Así cada variante queda documentada, probada y seleccionable sin tocar el código, como ya
 ocurre con `ContourCorrection`.
@@ -117,7 +115,8 @@ El `.POST.RES` de texto del caso de ejemplo ocupa **768 MB**. Propuesta: una int
 * `Hdf5Writer` / `NetCdfWriter`: binario comprimido, típicamente de 10 a 20 veces más
   pequeño; se abre directamente desde Python, MATLAB o ParaView.
 * `VtkWriter` (`.vtu` por paso + `.pvd`): visualización en ParaView sin licencia de GiD.
-* `TrajectoryCsvWriter` para las partículas PTV (resuelve H-15).
+* `TrajectoryCsvWriter` con la trayectoria de puntos concretos, para comparar con
+  marcadores de seguimiento PTV de laboratorio.
 
 ### P5. Entrada de datos desacoplada de PIVlab (esfuerzo bajo)
 
@@ -146,7 +145,6 @@ ejemplo con el caso de la centrífuga.
 
 ## 3. Hoja de ruta sugerida
 
-1. Revisar `HALLAZGOS.md` y decidir qué corregir → **P1**.
-2. **P2** + **P3**, ya que las correcciones de P1 introducen opciones nuevas.
-3. **P4** (HDF5/VTK) y **P7** (CI) para compartir el código con otros grupos.
-4. **P5**, **P6** y **P8** según las necesidades del grupo.
+1. **P2** + **P3**: configuración con nombres y opciones de cálculo seleccionables.
+2. **P4** (HDF5/VTK) y **P7** (CI) para compartir el código con otros grupos.
+3. **P5**, **P6** y **P8** según las necesidades del grupo.

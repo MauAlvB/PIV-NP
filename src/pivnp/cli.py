@@ -32,8 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--contour-min-particles", type=int, default=1,
                         help="con ICONTOUR=2: partículas necesarias alrededor del punto")
     parser.add_argument("--legacy-compat", action="store_true",
-                        help="reproducir los errores del Fortran original (H-01, H-04, H-08 "
-                             "y H-13) para repetir análisis antiguos")
+                        help="reproducir exactamente el comportamiento del Fortran "
+                             "original, para repetir análisis hechos con él")
     parser.add_argument("--vtk", action="store_true",
                         help="al terminar, exportar también a VTK para ParaView (<caso>_vtk/)")
     parser.add_argument("-q", "--quiet", action="store_true", help="solo errores")

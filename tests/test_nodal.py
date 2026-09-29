@@ -46,7 +46,7 @@ def test_load_measurements_reproduces_legacy_previous_velocity_quirk():
     load_measurements(_frame(u, v), conn, nodes, legacy_compat=True)
     np.testing.assert_array_equal(nodes.velocity, expected_vel)
     np.testing.assert_array_equal(nodes.previous_velocity, expected_prev)
-    # H-01: la "velocidad anterior" de algún nodo ya es la del paso actual
+    # la "velocidad anterior" de algún nodo ya es la del paso actual
     assert (nodes.previous_velocity != before).any()
     assert nodes.is_nan[conn[4]] == 1 and nodes.is_nan.sum() == 1
 
@@ -68,7 +68,7 @@ def test_momentum_v1_keeps_previous_value_for_nan_nodes():
     nodes.previous_velocity[:] = [[1.0, 2.0], [3.0, 4.0]]
     nodes.is_nan[1] = 1
     compute_nodal_momentum_v1(nodes)
-    assert nodes.momentum.tolist() == [[5.0, 6.0], [3.0, 4.0]]  # H-02: nodo 1 conserva
+    assert nodes.momentum.tolist() == [[5.0, 6.0], [3.0, 4.0]]  # el nodo 1 conserva
     assert nodes.momentum_increment.tolist() == [[4.0, 4.0], [3.0, 4.0]]  # también conserva
     assert nodes.mass.tolist() == [1.0, 1.0]
 

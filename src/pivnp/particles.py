@@ -70,7 +70,7 @@ def update_lost_flags(lost, cells, step):
 
     * Punto fuera de la malla: se marca como perdido.
     * Punto dentro y paso distinto de 1: deja de estar perdido.
-    * Punto dentro en el paso 1: conserva su estado anterior (ver H-09).
+    * Punto dentro en el paso 1: conserva su estado anterior (regla del original).
     """
     for i in prange(cells.size):
         if cells[i] < 0:

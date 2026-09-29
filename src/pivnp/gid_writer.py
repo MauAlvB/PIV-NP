@@ -38,7 +38,7 @@ class ResultSpec:
 
 
 def _nodal_count_by_particle(p: Particles, nodes: Nodes) -> np.ndarray:
-    # Reproduce el original: imprime un contador nodal indexado por número de partícula (H-11).
+    # Reproduce el original: imprime un contador nodal indexado por número de partícula.
     counts = np.zeros(p.position.shape[0], dtype=np.int64)
     n = min(counts.size, nodes.active_count.size)
     counts[:n] = nodes.active_count[:n]
@@ -47,14 +47,14 @@ def _nodal_count_by_particle(p: Particles, nodes: Nodes) -> np.ndarray:
 
 #: Resultado "NaNs": datos que faltan alrededor de la partícula. Con IVERSION=1, cuántos de
 #: los 4 nodos de su elemento no tienen medida; con IVERSION=2, si el punto PIVlab del centro
-#: de su elemento no la tiene (ver H-11).
+#: de su elemento no la tiene.
 MISSING_DATA = ResultSpec("NaNs", "Scalar", lambda p, n: p.missing_data,
                           only_active=False, integer=True)
 LEGACY_MISSING_DATA = ResultSpec("NaNs", "Scalar", _nodal_count_by_particle,
                                  only_active=False, integer=True)
 
 #: Energía cinética: un escalar, la suma de las dos componentes. El original las escribía
-#: por separado bajo una cabecera "Scalar", así que GiD solo leía la componente x (H-12).
+#: por separado bajo una cabecera "Scalar", así que GiD solo leía la componente x.
 KINETIC_ENERGY = ResultSpec("E_kinetic", "Scalar", lambda p, n: p.kinetic_energy.sum(axis=1))
 LEGACY_KINETIC_ENERGY = ResultSpec("E_kinetic", "Scalar", lambda p, n: p.kinetic_energy)
 
@@ -81,8 +81,8 @@ RESULTS: tuple[ResultSpec, ...] = (
 def result_specs(legacy_compat: bool = False) -> tuple[ResultSpec, ...]:
     """Bloques del ``.POST.RES``.
 
-    En modo compatibilidad, "NaNs" vuelve a ser el contador nodal del original (H-11) y
-    "E_kinetic" sus dos componentes (H-12).
+    En modo compatibilidad, "NaNs" vuelve a ser el contador nodal del original y
+    "E_kinetic" sus dos componentes.
     """
     if not legacy_compat:
         return RESULTS

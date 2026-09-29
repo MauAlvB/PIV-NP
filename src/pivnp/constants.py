@@ -2,7 +2,7 @@
 
 Varios literales del código Fortran original se escribieron sin sufijo ``d0`` (por ejemplo
 ``9.81`` o ``1.E-10``), así que Fortran los almacenaba en simple precisión (REAL*4) antes de
-promoverlos a REAL*8, perdiendo precisión a partir de la séptima cifra (H-07). Aquí se usan
+promoverlos a REAL*8, perdiendo precisión a partir de la séptima cifra. Aquí se usan
 en doble precisión; las versiones redondeadas se conservan con el sufijo ``LEGACY_`` para el
 modo compatibilidad.
 """

@@ -31,7 +31,7 @@ def test_seed_positions_match_legacy_bitwise(npc, staggered):
 
 
 def test_local_coordinates_use_double_precision():
-    assert local_coordinates(3)[0] == -2.0 / 3.0  # H-07 corregido
+    assert local_coordinates(3)[0] == -2.0 / 3.0
     assert local_coordinates(2).tolist() == [-0.5, 0.5]
     # el modo compatibilidad conserva los literales REAL*4 del original
     assert local_coordinates(3, legacy_compat=True)[0] == as_fortran_real4(-0.66666666666667)
@@ -65,7 +65,7 @@ def test_restart_does_not_seed_positions():
     (False, False, 1, True),   # fuera de la malla: perdida
     (False, False, 5, True),
     (True, True, 5, False),    # vuelve a entrar
-    (True, True, 1, True),     # en el paso 1 se conserva el estado (H-09)
+    (True, True, 1, True),     # en el paso 1 se conserva el estado anterior
     (False, True, 1, False),
 ])
 def test_lost_flag_rule(before, found, step, after):

@@ -12,7 +12,7 @@ Uso::
 Las coordenadas de cada instante son las posiciones **actuales** de las partículas:
 ``malla + Displacement``. Con ``--legacy-msh`` se resta además el desplazamiento del primer
 instante, necesario para resultados del Fortran original, donde la malla se escribía
-después del primer paso (H-08).
+después del primer paso.
 """
 
 from __future__ import annotations
@@ -169,7 +169,7 @@ def export_vtk(res_path: Path, msh_path: Path | None = None, out_dir: Path | Non
     """Convierte un caso GiD a VTK. Devuelve la ruta del ``.pvd``.
 
     ``legacy_mesh``: la malla tiene las posiciones del primer paso en vez de las iniciales
-    (resultados del Fortran original o calculados con ``--legacy-compat``; ver H-08).
+    (resultados del Fortran original o calculados con ``--legacy-compat``).
     """
     res_path = Path(res_path)
     case = res_path.name.removesuffix(".POST.RES").removesuffix(".post.res")

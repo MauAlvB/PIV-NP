@@ -15,7 +15,7 @@ class Particles(NamedTuple):
     """Variables por partícula numérica. ``n`` = número de partículas (NP)."""
 
     position: np.ndarray  # XP (n, 2)
-    initial_position: np.ndarray  # posición al empezar el análisis (malla GiD, ver H-08)
+    initial_position: np.ndarray  # posición al empezar el análisis (malla GiD)
     displacement: np.ndarray  # UP (n, 2): desplazamiento acumulado
     step_displacement: np.ndarray  # UPO (n, 2): desplazamiento del paso
     position_increment: np.ndarray  # XPP (n, 2)
@@ -35,8 +35,8 @@ class Particles(NamedTuple):
     saturation: np.ndarray  # SATURA_NP
     nan_initial: np.ndarray  # NaN_P: 0 activa, 1 sin datos en el paso 1
     nan_step: np.ndarray  # NaN_P2: sin datos en el paso actual (solo informativo)
-    missing_data: np.ndarray  # resultado "NaNs": datos que faltan alrededor (ver H-11)
-    lost: np.ndarray  # IDONDE == -1 (tamaño max(n, nodos PIVlab), ver H-10)
+    missing_data: np.ndarray  # resultado "NaNs": datos que faltan alrededor
+    lost: np.ndarray  # IDONDE == -1 (tamaño max(n, nodos PIVlab))
 
     @classmethod
     def zeros(cls, n: int, n_lost: int) -> Particles:
