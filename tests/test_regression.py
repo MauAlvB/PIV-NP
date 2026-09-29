@@ -20,7 +20,8 @@ from pivnp.simulation import RunOptions, run_case
 REGRESSION = Path(__file__).parent / "data" / "regression"
 SCENARIOS = json.loads((REGRESSION / "scenarios.json").read_text(encoding="utf-8"))["scenarios"]
 CASE = "mini"
-OPTIONS = RunOptions(eol="\r\n", prefetch=2)  # el Fortran de referencia escribe CRLF
+# Modo compatibilidad: reproduce los errores del Fortran (H-01, H-04, H-08, H-13).
+OPTIONS = RunOptions(eol="\r\n", prefetch=2, legacy_compat=True)
 
 
 def _prepare(name: str, spec: dict, directory: Path) -> Path:

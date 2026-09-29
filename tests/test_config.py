@@ -21,16 +21,16 @@ def test_parse_reference_case():
     assert (cfg.n_cells, cfg.n_nodes, cfg.particles_per_side, cfg.n_rows) == (2006, 2100, 3, 34)
     assert cfg.cell_width == cfg.cell_height == 0.212115
     assert (cfg.dt, cfg.total_steps, cfg.print_every) == (0.8, 149, 1)
-    assert not cfg.moisture and not cfg.restart and cfg.tracking is None
+    assert not cfg.moisture and not cfg.restart
     assert cfg.mesh_version == 1 and cfg.pivlab_format == 1 and cfg.contour == 0
     assert (cfg.soil_density, cfg.porosity) == (2650.0, 0.4)
     assert cfg.n_cols == 59
-    assert cfg.n_particles == cfg.n_base_particles == 2006 * 9
+    assert cfg.n_particles == 2006 * 9
 
 
 def test_mesh_version_2_particle_count():
     cfg = parse_par(PAR.replace("0.8\t149\t1\t0\t1", "0.8\t149\t1\t0\t2"))
-    assert cfg.n_base_particles == (59 + 1) * (34 + 1) * 9
+    assert cfg.n_particles == (59 + 1) * (34 + 1) * 9
 
 
 def test_values_may_span_lines_commas_and_fortran_exponents():
@@ -40,11 +40,9 @@ def test_values_may_span_lines_commas_and_fortran_exponents():
     assert cfg.total_steps == 149  # REAL truncado, como el DO del original
 
 
-def test_tracking_block():
-    text = PAR.replace("0\t0\t0\n", "0\t0\t1\n") + "BLOQUE 5\n2 3 1 1 2 2 3 3\n"
-    cfg = parse_par(text)
-    assert cfg.tracking.positions() == [(2.0, 3.0), (4.0, 6.0), (6.0, 9.0)]
-    assert cfg.n_particles == cfg.n_base_particles + 3
+def test_particle_count():
+    cfg = parse_par(PAR)
+    assert cfg.n_particles == 2006 * 3**2
 
 
 @pytest.mark.parametrize(("old", "new", "message"), [

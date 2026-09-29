@@ -20,10 +20,18 @@ Al calcular:
 pivnp ruta/al/caso --vtk
 ```
 
-A partir de resultados ya existentes (también sirven los del ejecutable Fortran original):
+A partir de resultados ya existentes:
 
 ```bash
 pivnp-vtk ruta/al/caso/zapatak.POST.RES
+```
+
+Para resultados del ejecutable Fortran original (o calculados con `--legacy-compat`), hay
+que añadir `--legacy-msh`, porque su malla trae las posiciones del primer paso en vez de
+las iniciales (H-08):
+
+```bash
+pivnp-vtk ruta/al/caso/zapatak.POST.RES --legacy-msh
 ```
 
 Se crea la carpeta `zapatak_vtk/` con `zapatak.pvd`. Con `--every 5` se exporta uno de cada
@@ -63,7 +71,7 @@ falta *Warp By Vector*). Arrays por punto:
 
 | Array | Componentes |
 |---|---|
-| `id`, `material` | número de partícula GiD y material (1 activa, 2 sin datos, 3 PTV) |
+| `id`, `material` | número de partícula GiD y material (1 activa, 2 sin datos) |
 | `Displacement`, `Inst_displacement`, `Velocity`, `Acceleration` | vector (x, y, 0) |
 | `Total_strain`, `Inc_strain` | xx, yy, xy (γxy ingenieril) |
 | `Equi_strain`, `In_E_strain`, `Vol_strain`, `Ins_vol_strain` | escalar |

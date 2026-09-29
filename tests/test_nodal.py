@@ -43,7 +43,7 @@ def test_load_measurements_reproduces_legacy_previous_velocity_quirk():
     u[4] = NAN
     expected_vel, expected_prev = _legacy_velocidades_mapping(u, v, conn, before,
                                                               nodes.previous_velocity)
-    load_measurements(_frame(u, v), conn, nodes)
+    load_measurements(_frame(u, v), conn, nodes, legacy_compat=True)
     np.testing.assert_array_equal(nodes.velocity, expected_vel)
     np.testing.assert_array_equal(nodes.previous_velocity, expected_prev)
     # H-01: la "velocidad anterior" de algún nodo ya es la del paso actual

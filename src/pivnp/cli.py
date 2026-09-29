@@ -29,6 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="con ICONTOUR=1: vecinos con datos necesarios para rellenar un nodo")
     parser.add_argument("--contour-layers", type=int, default=1,
                         help="con ICONTOUR=1: capas de nodos a rellenar hacia el exterior")
+    parser.add_argument("--legacy-compat", action="store_true",
+                        help="reproducir los errores del Fortran original (H-01, H-04, H-08 "
+                             "y H-13) para repetir análisis antiguos")
     parser.add_argument("--vtk", action="store_true",
                         help="al terminar, exportar también a VTK para ParaView (<caso>_vtk/)")
     parser.add_argument("-q", "--quiet", action="store_true", help="solo errores")
@@ -51,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         prefetch=args.prefetch,
         contour_min_neighbors=args.contour_min_neighbors,
         contour_layers=args.contour_layers,
+        legacy_compat=args.legacy_compat,
     )
     log = logging.getLogger("pivnp")
     try:
@@ -59,7 +63,8 @@ def main(argv: list[str] | None = None) -> int:
             from .vtk_export import export_vtk
 
             res = Path(args.case_dir) / f"{summary.case_name}.POST.RES"
-            log.info("Resultados para ParaView: %s", export_vtk(res))
+            log.info("Resultados para ParaView: %s",
+                     export_vtk(res, legacy_mesh=args.legacy_compat))
     except (ConfigError, FileNotFoundError, ValueError) as exc:
         log.error("%s", exc)
         return 1

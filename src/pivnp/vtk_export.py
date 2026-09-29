@@ -10,8 +10,9 @@ Uso::
     pivnp-vtk ruta/caso.POST.RES -o vtk --every 5
 
 Las coordenadas de cada instante son las posiciones **actuales** de las partículas:
-``malla + Displacement - Displacement(primer instante)``, porque la malla GiD se escribe
-después del primer paso (H-08) y el desplazamiento se acumula desde el inicio.
+``malla + Displacement``. Con ``--legacy-msh`` se resta además el desplazamiento del primer
+instante, necesario para resultados del Fortran original, donde la malla se escribía
+después del primer paso (H-08).
 """
 
 from __future__ import annotations
@@ -164,8 +165,12 @@ def _align(block: ResultBlock, ids: np.ndarray, n_total: int) -> np.ndarray:
 
 
 def export_vtk(res_path: Path, msh_path: Path | None = None, out_dir: Path | None = None,
-               every: int = 1) -> Path:
-    """Convierte un caso GiD a VTK. Devuelve la ruta del ``.pvd``."""
+               every: int = 1, legacy_mesh: bool = False) -> Path:
+    """Convierte un caso GiD a VTK. Devuelve la ruta del ``.pvd``.
+
+    ``legacy_mesh``: la malla tiene las posiciones del primer paso en vez de las iniciales
+    (resultados del Fortran original o calculados con ``--legacy-compat``; ver H-08).
+    """
     res_path = Path(res_path)
     case = res_path.name.removesuffix(".POST.RES").removesuffix(".post.res")
     msh_path = Path(msh_path) if msh_path else res_path.with_name(f"{case}.POST.MSH")
@@ -185,7 +190,8 @@ def export_vtk(res_path: Path, msh_path: Path | None = None, out_dir: Path | Non
         disp_block = blocks["Displacement"]
         if first_disp is None:
             first_disp = np.zeros((n_total + 1, 2))
-            first_disp[disp_block.ids] = disp_block.values
+            if legacy_mesh:
+                first_disp[disp_block.ids] = disp_block.values
         if k % every:
             continue
         ids = disp_block.ids
@@ -208,8 +214,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--msh", type=Path, help="archivo .POST.MSH (por defecto, junto al .RES)")
     parser.add_argument("-o", "--out", type=Path, help="carpeta de salida (por defecto <caso>_vtk)")
     parser.add_argument("--every", type=int, default=1, help="exportar 1 de cada N instantes")
+    parser.add_argument("--legacy-msh", action="store_true",
+                        help="la malla trae las posiciones del primer paso (resultados del "
+                             "Fortran original o calculados con --legacy-compat)")
     args = parser.parse_args(argv)
-    pvd = export_vtk(args.res, args.msh, args.out, max(1, args.every))
+    pvd = export_vtk(args.res, args.msh, args.out, max(1, args.every), args.legacy_msh)
     print(f"Abre en ParaView: {pvd}")
     return 0
 

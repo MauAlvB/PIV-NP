@@ -76,7 +76,6 @@ def _write_moisture(path: Path, rows: list[str], step: int) -> None:
 
 
 def par_text(spec: dict, n_cols: int, n_rows: int, size: float, restart: bool) -> str:
-    tracking = spec.get("tracking")
     lines = [
         "Caso de regresion PIV-NP",
         "BLOQUE 2: NC NN NPC NFIL AXC AYC",
@@ -84,13 +83,10 @@ def par_text(spec: dict, n_cols: int, n_rows: int, size: float, restart: bool) -
         "BLOQUE 3: DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR",
         f"0.8 {spec['restart_steps'] if restart else spec['steps']} {spec['print_every']} "
         f"{int(spec.get('moisture', False))} {spec['version']} {spec.get('pivlab_format', 1)} "
-        f"0 {int(restart)} {int(bool(tracking))}",
+        f"0 {int(restart)} 0",
         "BLOQUE 4: S_DENSITY POROSITY",
         "2650.0 0.4",
     ]
-    if tracking:
-        lines += ["BLOQUE 5: DXT DYT PTVX1 PTVY1 PTVX2 PTVY2 PTVX3 PTVY3",
-                  " ".join(str(v) for v in tracking)]
     return "\n".join(lines) + "\n"
 
 

@@ -54,13 +54,13 @@ byte a byte con el original.
 
 Ordenadas por relación beneficio/esfuerzo.
 
-### P1. Corregir los hallazgos con un modo de compatibilidad (esfuerzo bajo)
+### P1. Corregir los hallazgos con un modo de compatibilidad — **hecho**
 
-Cuando decidas qué hallazgos de `HALLAZGOS.md` corregir, añadir una opción
-`legacy_compat` (por defecto desactivada) que conserve el comportamiento antiguo. Así
-puedes reproducir resultados ya publicados y, a la vez, usar la versión corregida en
-trabajos nuevos. Las pruebas de regresión actuales pasarían a ejecutarse en modo
-compatible y se añadirían pruebas nuevas para el modo corregido.
+Corregidos H-01, H-04, H-05, H-08, H-13 y H-15. Los cuatro que cambian resultados se
+revierten con `RunOptions(legacy_compat=True)` (`pivnp --legacy-compat`), de modo que las
+pruebas de regresión siguen comparando byte a byte con el Fortran y los análisis antiguos
+se pueden repetir. Quedan hallazgos pendientes de decisión (H-02, H-23, H-06, H-07, H-11,
+H-12, H-14 y H-22).
 
 ### P2. Archivo de configuración autodescriptivo (esfuerzo bajo)
 

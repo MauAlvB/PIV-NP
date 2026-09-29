@@ -10,9 +10,10 @@ malla fija (euleriana), PIV-NP sigue cada punto del material (lagrangiano), así
 > Pinyol, N.M. & Alvarado, M. (2017). *Novel PIV-based analysis for large displacement*.
 > Canadian Geotechnical Journal 54(7): 933-944.
 
-La versión 2.0 es una reingeniería en Python del código Fortran original
-(`legacy/`). **Produce resultados idénticos byte a byte** a los del original y es unas
-**19 veces más rápida** en el caso de la centrífuga (38 s → 2 s).
+La versión 2.0 es una reingeniería en Python del código Fortran original (`legacy/`), unas
+**19 veces más rápida** en el caso de la centrífuga (38 s → 2 s). Corrige seis errores del
+original (ver [Hallazgos](#hallazgos-y-propuestas)); con `--legacy-compat` reproduce su
+comportamiento **byte a byte**, para repetir análisis antiguos.
 
 ---
 
@@ -75,6 +76,7 @@ Opciones:
 | `--prefetch N` | archivos PIVlab leídos por adelantado (por defecto 4) |
 | `--contour-min-neighbors N` | con `ICONTOUR=1`: vecinos con datos necesarios (por defecto 3) |
 | `--contour-layers N` | con `ICONTOUR=1`: capas de nodos a rellenar (por defecto 1) |
+| `--legacy-compat` | reproducir los errores del Fortran original (H-01, H-04, H-08 y H-13) |
 | `--vtk` | exportar también a VTK para ParaView (ver [Visualización](#visualización)) |
 | `-q` | solo mostrar errores |
 
@@ -120,13 +122,12 @@ BLOQUE 3: DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR
 0.8  149  1  0  1  1  0  0  0
 BLOQUE 4: S_DENSITY POROSITY
 2650.0  0.4
-BLOQUE 5 (solo si ITR=1): DXT DYT PTVX1 PTVY1 PTVX2 PTVY2 PTVX3 PTVY3
 ```
 
 | Parámetro | Significado |
 |---|---|
 | `NC`, `NN` | celdas y nodos (puntos) de la malla PIVlab; debe cumplirse NN = (NC/NFIL + 1)(NFIL + 1) |
-| `NPC` | partículas por lado de celda (NPC² por celda) |
+| `NPC` | partículas por lado de celda (NPC² por celda), de 1 a 6 |
 | `NFIL` | filas de celdas |
 | `AXC`, `AYC` | ancho y alto de celda [m] |
 | `DT` | tiempo entre imágenes [s] |
@@ -137,7 +138,7 @@ BLOQUE 5 (solo si ITR=1): DXT DYT PTVX1 PTVY1 PTVX2 PTVY2 PTVX3 PTVY3
 | `IPIVLAB` | 1 = archivos de 4 columnas (PIVlab antiguo); otro = 5 columnas |
 | `ICONTOUR` | 0 = sin corrección de contorno; 1 = corrección por media de vecinos (nuevo) |
 | `IREC` | 0 = análisis nuevo; 1 = continuar desde `<caso>.REC` |
-| `ITR` | 1 = añadir 3 partículas de seguimiento (PTV) definidas en el bloque 5 |
+| `ITR` | debe ser 0: las partículas de seguimiento PTV se eliminaron (H-15) |
 | `S_DENSITY`, `POROSITY` | se leen pero no intervienen en el cálculo |
 
 A diferencia del original, se validan los datos (por ejemplo, que NC sea múltiplo de NFIL)
@@ -157,7 +158,7 @@ Los nombres no distinguen mayúsculas.
 
 | Archivo | Contenido |
 |---|---|
-| `<caso>.POST.MSH` | malla de puntos para GiD (una por partícula). Material 1 = activa, 2 = sin datos en el paso 1, 3 = partícula PTV |
+| `<caso>.POST.MSH` | malla de puntos para GiD (una por partícula), en sus posiciones iniciales. Material 1 = activa, 2 = sin datos en el paso 1 |
 | `<caso>.POST.RES` | resultados por partícula en cada instante impreso (GiD) |
 | `<caso>.REC` | estado final para continuar el análisis con `IREC=1` (binario compatible con el original) |
 
@@ -292,10 +293,13 @@ más rápido.
 pytest
 ```
 
-* **Regresión** (`tests/test_regression.py`): 9 escenarios ejecutados con el Fortran
-  original (malla 1 y 2, NPC = 2, 3, 4, 7 y 11, partículas PTV, humedad, formato de 5
-  columnas y reinicio). Se exige que `.POST.RES`, `.POST.MSH` y `.REC` sean
-  **idénticos byte a byte**.
+* **Regresión** (`tests/test_regression.py`): 7 escenarios ejecutados con el Fortran
+  original (malla 1 y 2, NPC = 2, 3 y 4, humedad, formato de 5 columnas y reinicio). En
+  modo `--legacy-compat` se exige que `.POST.RES`, `.POST.MSH` y `.REC` sean **idénticos
+  byte a byte**.
+* **Correcciones** (`tests/test_fixes.py`): cada hallazgo corregido se comprueba contra su
+  solución analítica (aceleración constante, campo de deformación lineal, reinicio
+  equivalente a un análisis seguido).
 * **Unitarias**: cada módulo se compara con una traducción literal de los bucles del
   Fortran (`tests/legacy_reference.py`) o con casos de solución conocida (traslación
   uniforme, campo de deformación lineal, formato E14.6 real de gfortran).
@@ -347,18 +351,22 @@ piv-np/
 
 ## Hallazgos y propuestas
 
-Durante la migración se encontraron **22 puntos** en el código original. Los más
-importantes:
+Durante la migración se encontraron **23 puntos** en el código original. Corregidos:
 
-* **H-01**: la aceleración usa una "velocidad anterior" equivocada en el 50 % de los nodos.
-* **H-04**: con `IVERSION=2` las deformaciones salen divididas por NPC².
-* **H-13**: un reinicio con `IVERSION=2` reparte todas las velocidades a una sola celda.
-* **H-08**: la malla GiD se escribe con las posiciones del paso 1.
+* **H-01**: la aceleración usaba una "velocidad anterior" equivocada en el 50 % de los nodos.
+* **H-04**: con `IVERSION=2` las deformaciones salían divididas por NPC².
+* **H-13**: un reinicio con `IVERSION=2` repartía todas las velocidades a una sola celda.
+* **H-08**: la malla GiD se escribía con las posiciones del paso 1, no las iniciales.
+* **H-05**: con NPC entre 7 y 10 todas las partículas se creaban en el centro de la celda
+  (ahora NPC está limitado a 6).
+* **H-15**: las partículas de seguimiento PTV (`ITR`) nunca llegaban a los resultados
+  (opción eliminada).
 
-**No se ha corregido ninguno**: esta versión los reproduce para poder validar la migración.
-La lista completa, con propuestas de corrección, está en
-[`docs/HALLAZGOS.md`](docs/HALLAZGOS.md). Las propuestas de arquitectura (configuración
-autodescriptiva, estrategias intercambiables, salida HDF5/VTK, CI, etc.) están en
+Los cuatro primeros cambian resultados, así que se pueden revertir con `--legacy-compat`.
+Quedan puntos pendientes de decisión, entre ellos **H-23** (con `IVERSION=2`, los nodos del
+borde reciben una velocidad infravalorada) y **H-02** (los nodos que pasan a NaN conservan
+la velocidad del paso anterior). La lista completa está en
+[`docs/HALLAZGOS.md`](docs/HALLAZGOS.md), y las propuestas de arquitectura en
 [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
 
 ## Licencia y cita

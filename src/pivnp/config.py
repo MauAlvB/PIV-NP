@@ -10,8 +10,9 @@ por espacios, tabuladores o comas y pueden repartirse en varias líneas)::
               DT  TOTAL_STEPS  IMPPAS  MOISTER  IVERSION  IPIVLAB  ICONTOUR  IREC  ITR
     Bloque 4  línea de comentario
               S_DENSITY  POROSITY
-    Bloque 5  (solo si ITR != 0) línea de comentario
-              DXT  DYT  PTVX1  PTVY1  PTVX2  PTVY2  PTVX3  PTVY3
+
+ITR (partículas de seguimiento PTV) debe ser 0: esa opción se eliminó, ver
+``docs/HALLAZGOS.md`` (H-15).
 """
 
 from __future__ import annotations
@@ -30,16 +31,9 @@ class ConfigError(ValueError):
     """Datos de entrada ausentes o incoherentes."""
 
 
-@dataclass(frozen=True)
-class TrackingPoints:
-    """Bloque 5: partículas adicionales para comparar con seguimiento PTV de laboratorio."""
-
-    scale_x: float  # DXT
-    scale_y: float  # DYT
-    points: tuple[tuple[float, float], ...]  # (PTVXi, PTVYi), i = 1..3
-
-    def positions(self) -> list[tuple[float, float]]:
-        return [(self.scale_x * px, self.scale_y * py) for px, py in self.points]
+#: Máximo de partículas por lado de celda: con más, el original las colocaba todas en el
+#: centro de la celda (H-05).
+MAX_PARTICLES_PER_SIDE = 6
 
 
 @dataclass(frozen=True)
@@ -61,7 +55,6 @@ class CaseConfig:
     pivlab_format: int  # IPIVLAB: 1 = 4 columnas (PIVlab antiguo); otro = 5 columnas
     contour: int  # ICONTOUR: corrección de velocidades en el contorno (0 = no)
     restart: bool  # IREC: continuar desde <caso>.REC
-    tracking: TrackingPoints | None  # ITR: partículas PTV adicionales
     soil_density: float  # S_DENSITY [kg/m3] (no se usa en el cálculo)
     porosity: float  # POROSITY (no se usa en el cálculo)
 
@@ -71,16 +64,10 @@ class CaseConfig:
         return self.n_cells // self.n_rows
 
     @property
-    def n_base_particles(self) -> int:
-        """NP0: partículas generadas en la malla (sin las de seguimiento PTV)."""
+    def n_particles(self) -> int:
+        """NP: partículas generadas en la malla."""
         cells = self.n_cells if self.mesh_version == 1 else (self.n_cols + 1) * (self.n_rows + 1)
         return cells * self.particles_per_side**2
-
-    @property
-    def n_particles(self) -> int:
-        """NP: total de partículas, incluidas las de seguimiento PTV."""
-        extra = len(self.tracking.points) if self.tracking else 0
-        return self.n_base_particles + extra
 
     def validate(self) -> None:
         """Rechaza combinaciones con las que el original produce resultados sin sentido."""
@@ -94,8 +81,9 @@ class CaseConfig:
                 f"NN={self.n_nodes} no coincide con (NC/NFIL+1)*(NFIL+1)="
                 f"{(self.n_cols + 1) * (self.n_rows + 1)}"
             )
-        if self.particles_per_side < 1:
-            errors.append("NPC debe ser >= 1")
+        if not 1 <= self.particles_per_side <= MAX_PARTICLES_PER_SIDE:
+            errors.append(f"NPC={self.particles_per_side} debe estar entre 1 y "
+                          f"{MAX_PARTICLES_PER_SIDE}")
         if self.cell_width <= 0 or self.cell_height <= 0:
             errors.append("AXC y AYC deben ser positivos")
         if self.mesh_version not in (1, 2):
@@ -158,14 +146,10 @@ def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
     reader.text()
     density, porosity = reader.values(2)
 
-    tracking = None
     if _to_int(itr, "ITR") != 0:
-        reader.text()
-        values = [_to_float(v, "PTV") for v in reader.values(8)]
-        tracking = TrackingPoints(
-            scale_x=values[0],
-            scale_y=values[1],
-            points=((values[2], values[3]), (values[4], values[5]), (values[6], values[7])),
+        raise ConfigError(
+            "ITR: las partículas de seguimiento PTV se han eliminado (H-15: nunca llegaban "
+            "a los resultados). Usa ITR=0 y quita el bloque 5 del .PAR"
         )
 
     irec_value = _to_int(irec, "IREC")
@@ -189,7 +173,6 @@ def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
         pivlab_format=_to_int(ipivlab, "IPIVLAB"),
         contour=_to_int(icontour, "ICONTOUR"),
         restart=irec_value == 1,
-        tracking=tracking,
         soil_density=_to_float(density, "S_DENSITY"),
         porosity=_to_float(porosity, "POROSITY"),
     )

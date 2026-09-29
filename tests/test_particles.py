@@ -19,7 +19,7 @@ NC, NFIL, AXC, AYC = 12, 3, 0.212115, 0.18
 
 
 @pytest.mark.parametrize("staggered", [False, True])
-@pytest.mark.parametrize("npc", [1, 2, 3, 4, 5, 6, 7, 11])
+@pytest.mark.parametrize("npc", [1, 2, 3, 4, 5, 6])
 def test_seed_positions_match_legacy_bitwise(npc, staggered):
     nch = NC // NFIL
     if staggered:
@@ -34,7 +34,6 @@ def test_local_coordinates_keep_single_precision_literals():
     g3 = local_coordinates(3)
     assert g3[0] == as_fortran_real4(-0.66666666666667) != -2.0 / 3.0
     assert local_coordinates(2).tolist() == [-0.5, 0.5]
-    assert local_coordinates(8).tolist() == [0.0] * 8  # H-05: sin inicializar en el original
 
 
 def test_cell_centers_are_pivlab_points_in_staggered_grid():
@@ -44,13 +43,13 @@ def test_cell_centers_are_pivlab_points_in_staggered_grid():
     assert grid.locate(centers).tolist() == list(range(6))
 
 
-def test_create_particles_with_tracking_points():
-    text = PAR.replace("0\t0\t0\n", "0\t0\t1\n") + "BLOQUE 5\n1 1 0.5 0.5 1.0 1.0 9 9\n"
-    cfg = parse_par(text)
+def test_create_particles_initial_state():
+    cfg = parse_par(PAR)
     p = create_particles(cfg, particle_grid(cfg))
-    assert p.position.shape == (cfg.n_base_particles + 3, 2)
-    assert p.position[-3:].tolist() == [[0.5, 0.5], [1.0, 1.0], [9.0, 9.0]]
+    assert p.position.shape == (cfg.n_particles, 2)
     np.testing.assert_array_equal(p.potential_energy, 9.81 * p.position[:, 1])
+    np.testing.assert_array_equal(p.mass, 1.0)
+    assert not p.displacement.any() and not p.strain.any()
     assert p.lost.size >= cfg.n_nodes
 
 

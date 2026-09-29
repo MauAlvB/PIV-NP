@@ -2,40 +2,46 @@
 
 Revisión de `legacy/MainCodePIV-NP.for` (v.2024.04.17) hecha durante la migración.
 
-**Ninguno está corregido.** La versión Python reproduce el comportamiento original byte a
-byte (incluidos estos errores) para que puedas validar la migración antes de cambiar
-resultados. Cada punto indica dónde está reproducido en el código nuevo (búscalo como
-`H-xx`) para que corregirlo sea un cambio localizado y con su prueba.
-
 Gravedad: **Alta** = cambia resultados publicables · **Media** = afecta a casos concretos
 o a la visualización · **Baja** = robustez, código muerto o estilo.
 
+Estado: **Corregido** = la versión Python hace lo correcto · **Pendiente** = se reproduce el
+comportamiento original, a la espera de decisión · **N/A en Python** = no existe en la
+reescritura.
+
+> **Modo compatibilidad.** Los hallazgos corregidos que cambian resultados (H-01, H-04,
+> H-08 y H-13) se pueden revertir con `pivnp --legacy-compat` (o
+> `RunOptions(legacy_compat=True)`), para repetir análisis antiguos. En ese modo las
+> salidas siguen siendo idénticas byte a byte a las del Fortran, y así lo comprueban las
+> pruebas de regresión.
+
 ## Resumen
 
-| ID | Gravedad | Dónde (original) | Qué pasa |
+| ID | Gravedad | Estado | Qué pasa |
 |---|---|---|---|
-| H-01 | Alta | VELOCIDADES, l. 486 | La "velocidad anterior" se guarda con el índice equivocado: la aceleración es incorrecta en el 50 % de los nodos |
-| H-02 | Media | VELOCIDADES, l. 528 | Un nodo que pasa a NaN conserva la velocidad del último paso válido |
-| H-03 | Baja | PIVLAB_DATA, l. 375 | Bucle con `NP1` sin inicializar |
-| H-04 | Alta | SOLMOV, l. 733 | Con IVERSION=2 las deformaciones salen divididas por NPC² |
-| H-05 | Media | PIVLAB_DATA, l. 226 | Con NPC entre 7 y 10 todas las partículas se crean en el centro de la celda |
-| H-06 | Baja | PIVLAB_DATA, l. 226 | Reparto de partículas incoherente según NPC |
-| H-07 | Baja | varios | Literales en simple precisión (`9.81`, `1.E-10`, puntos de Gauss) |
-| H-08 | Media | MAIN / IMPRES_GiD | La malla `.POST.MSH` se escribe tras el paso 1, no con las posiciones iniciales |
-| H-09 | Baja | UCELDA, l. 1153 | La marca `IDONDE` no se actualiza en el paso 1 |
-| H-10 | Baja | VELOCIDADES, l. 554 | Con IVERSION=2 el bucle de nodos usa la marca `IDONDE` de las partículas |
-| H-11 | Media | IMPRES_GiD, l. 894 | El resultado "NaNs" imprime un contador nodal indexado por partícula |
-| H-12 | Media | IMPRES_GiD, l. 1024 | "E_kinetic" se declara `Scalar` pero escribe 2 valores |
-| H-13 | Alta* | PIVLAB_DATA, l. 285 | Reinicio con IVERSION=2: todas las velocidades van a la celda 1 |
-| H-14 | Media | MAIN / SOLMOV | Al reiniciar: tiempo a 0, "Inst_displacement" erróneo en el primer paso y se sobrescriben los resultados previos |
-| H-15 | Media | SOLMOV, l. 704 | Las partículas PTV (ITR) nunca aparecen en los resultados |
-| H-16 | Baja | MAIN, l. 72 | `CONTOUR` no existe (el código no enlaza); `ICONTOUR` y `NODE_CONECT` sin uso |
-| H-17 | Baja | SOLMOV, l. 688 | Escritura en `IELEMENT_ACTIVE(0)` (fuera de límites) |
-| H-18 | Baja | varios | Código y variables muertos |
-| H-19 | Media | common | Tamaños fijos (200 000 partículas, 500 filas) sin comprobación |
-| H-20 | Media | fuente | Líneas de más de 72 columnas en formato fijo |
-| H-21 | Baja | PIVLAB_DATA | Datos de entrada sin validar |
-| H-22 | Baja | INVAR2 | Umbral absoluto `J2 > 1e-10` |
+| H-01 | Alta | **Corregido** | La "velocidad anterior" se guarda con el índice equivocado: la aceleración es incorrecta en el 50 % de los nodos |
+| H-02 | Media | Pendiente | Un nodo que pasa a NaN conserva la velocidad del último paso válido |
+| H-03 | Baja | N/A en Python | Bucle con `NP1` sin inicializar |
+| H-04 | Alta | **Corregido** | Con IVERSION=2 las deformaciones salen divididas por NPC² |
+| H-05 | Media | **Corregido** | Con NPC entre 7 y 10 todas las partículas se crean en el centro de la celda |
+| H-06 | Baja | Pendiente | Reparto de partículas incoherente según NPC |
+| H-07 | Baja | Pendiente | Literales en simple precisión (`9.81`, `1.E-10`, puntos de Gauss) |
+| H-08 | Media | **Corregido** | La malla `.POST.MSH` se escribe tras el paso 1, no con las posiciones iniciales |
+| H-09 | Baja | Pendiente | La marca `IDONDE` no se actualiza en el paso 1 |
+| H-10 | Baja | Pendiente | Con IVERSION=2 el bucle de nodos usa la marca `IDONDE` de las partículas |
+| H-11 | Media | Pendiente | El resultado "NaNs" imprime un contador nodal indexado por partícula |
+| H-12 | Media | Pendiente | "E_kinetic" se declara `Scalar` pero escribe 2 valores |
+| H-13 | Alta* | **Corregido** | Reinicio con IVERSION=2: todas las velocidades van a la celda 1 |
+| H-14 | Media | Pendiente | Al reiniciar: tiempo a 0, "Inst_displacement" erróneo en el primer paso y se sobrescriben los resultados previos |
+| H-15 | Media | **Eliminado** | Las partículas PTV (ITR) nunca aparecen en los resultados |
+| H-16 | Baja | **Implementado** | `CONTOUR` no existe; `ICONTOUR` y `NODE_CONECT` sin uso |
+| H-17 | Baja | N/A en Python | Escritura en `IELEMENT_ACTIVE(0)` (fuera de límites) |
+| H-18 | Baja | N/A en Python | Código y variables muertos |
+| H-19 | Media | **Corregido** | Tamaños fijos (200 000 partículas, 500 filas) sin comprobación |
+| H-20 | Media | N/A en Python | Líneas de más de 72 columnas en formato fijo |
+| H-21 | Baja | **Corregido** | Datos de entrada sin validar |
+| H-22 | Baja | Pendiente | Umbral absoluto `J2 > 1e-10` |
+| H-23 | Alta | Pendiente | Con IVERSION=2, los nodos del borde reciben una velocidad infravalorada |
 
 \* Solo con reinicio (IREC=1) y malla desplazada (IVERSION=2).
 
@@ -57,9 +63,14 @@ velocidad actual y `APV = m·(v − v_ant) = 0`.
 
 * En el caso de la centrífuga (60×35 puntos) afecta a **1050 de 2100 nodos** en cada paso.
 * Afecta al resultado **Acceleration**. No afecta a desplazamientos ni deformaciones.
-* Corrección propuesta: copiar el campo completo antes del bucle
-  (`VEL_X_NODO_V(:) = VEL_X_NODO(:)`).
-* Reproducido en `nodal._load_measurements_kernel`.
+
+**Corregido** en `nodal.load_measurements`: se copia el campo completo antes del bucle.
+Los nodos afectados son los de la mitad superior de la malla, que en el ensayo de la
+centrífuga es casi todo aire, así que allí el efecto es pequeño (el 0.6 % de las partículas
+activas tenía la aceleración anulada y la media de |a| cambia un 1 %). En un ensayo donde
+el material ocupe la parte superior de la imagen, el efecto sería mucho mayor.
+Prueba: `tests/test_fixes.py::test_h01_acceleration_is_exact_for_every_node` (campo
+uniforme con aceleración constante conocida).
 
 ### H-02 · Los nodos sin datos conservan la velocidad anterior — Media (¿intencionado?)
 
@@ -92,16 +103,21 @@ Comprobado con un campo lineal `u = 0.01·x`, `dt = 0.5` (valor exacto 5·10⁻�
 | 2 | 5.000·10⁻³ | 1.250·10⁻³ (÷4) |
 | 3 | 5.000·10⁻³ | 0.556·10⁻³ (÷9) |
 
-Corrección propuesta: no dividir por `AM` (igual que las velocidades). Reproducido en
-`solver._strain_kernel`.
+**Corregido** en `solver._strain_kernel`: la deformación usa el mismo peso que la velocidad,
+sin dividir por la masa nodal. Con IVERSION=1 (`AM=1`) los resultados no cambian.
+Prueba: `tests/test_fixes.py::test_h04_strain_matches_analytic_field` con las dos mallas y
+NPC = 2 y 3.
 
 ### H-05 · NPC entre 7 y 10 — Media
 
 `GAUSS` solo se rellena para NPC=1…6, pero se usa si `NPC <= 10`. Para 7…10 el array
 queda sin inicializar: con gfortran vale 0 y **todas** las partículas de la celda se crean
-en el centro (con otro compilador, posiciones aleatorias). Corrección: usar el reparto
-uniforme (`NPC > 10`) o añadir los puntos de Gauss. Reproducido en
-`particles.local_coordinates`.
+en el centro (con otro compilador, posiciones aleatorias).
+
+**Corregido**: NPC queda limitado a 1…6 (`config.MAX_PARTICLES_PER_SIDE`) y un valor mayor
+se rechaza con un mensaje claro. También se ha quitado el reparto uniforme para NPC > 10,
+que ya no es alcanzable. Prueba:
+`tests/test_fixes.py::test_h05_particles_per_side_limited_to_six`.
 
 ### H-06 · Reparto de partículas incoherente — Baja (diseño)
 
@@ -122,8 +138,14 @@ resultados cambian ligeramente. En Python se reproducen en `constants.py`.
 
 `IMPRES_GiD` escribe el `.POST.MSH` en el paso 1, **después** de `SOLMOV`, así que las
 coordenadas ya incluyen el desplazamiento del primer paso. GiD dibuja la deformada como
-malla + desplazamiento, con lo que ese primer incremento se cuenta dos veces. Corrección:
-escribir la malla antes del primer paso.
+malla + desplazamiento, con lo que ese primer incremento se cuenta dos veces.
+
+**Corregido** en `Simulation._write_output`: la malla se escribe con `posición −
+desplazamiento`, es decir, la posición inicial de cada partícula. Así
+`malla + Displacement` es siempre la posición actual, también al reiniciar (donde el
+desplazamiento sigue acumulándose desde el análisis anterior). El conversor a VTK usa esa
+relación; para resultados antiguos hay que pasarle `--legacy-msh`. Prueba:
+`tests/test_fixes.py::test_h08_mesh_plus_displacement_is_the_current_position`.
 
 ### H-09 · `IDONDE` no se actualiza en el paso 1 — Baja
 
@@ -155,7 +177,13 @@ primero. Corrección: declararlo `Vector` o escribir la suma. Ver `gid_writer.RE
 
 Los centros de celda `XP2` solo se generan si `IREC=0`. En un reinicio quedan a (0, 0) y
 todos los puntos PIVlab reparten su velocidad a los nodos de la celda 1: el campo de
-velocidades del resto de la malla es 0. Reproducido en `Simulation.__init__`.
+velocidades del resto de la malla es 0.
+
+**Corregido** en `Simulation.__init__`: los centros se generan siempre. Pruebas:
+`test_h13_restart_continues_the_analysis` comprueba, con las dos mallas, que 4 pasos
+seguidos dan exactamente el mismo estado que 2 pasos + reinicio con los 2 siguientes;
+`test_h13_legacy_restart_sends_everything_to_the_first_cell` documenta el comportamiento
+antiguo.
 
 ### H-14 · Reinicio (IREC=1) — Media
 
@@ -171,8 +199,12 @@ velocidades del resto de la malla es 0. Reproducido en `Simulation.__init__`.
 
 Las 3 partículas de seguimiento se marcan con `NaN_P=2`, y todos los resultados se filtran
 con `NaN_P=0`: nunca aparecen en el `.POST.RES` ni se guardan en el `.REC`. Solo se ven en
-la malla del paso 1 (material 3). Si el objetivo es comparar con PTV, habría que
-imprimirlas (por ejemplo, en un archivo aparte con su trayectoria).
+la malla del paso 1 (material 3).
+
+**Eliminado**: era un análisis puntual que nunca llegó a los resultados. `ITR` debe ser 0 y
+un valor distinto se rechaza con un mensaje que explica el cambio. El material 3 ya no
+existe en el `.POST.MSH`. Si en el futuro hiciera falta seguir puntos concretos, lo suyo
+sería un archivo aparte con su trayectoria (ver `docs/ARQUITECTURA.md`, P4).
 
 ### H-16 · `CONTOUR` sin implementar — Baja
 
@@ -223,3 +255,26 @@ Python valida todo esto y da un mensaje claro. Además, el `.PAR` de
 1e-5 darían `EPSEQ2 = 0`. En el caso de la centrífuga no afecta (0 % de partículas), pero
 en ensayos lentos o con muchas imágenes podría. Un umbral relativo o mucho menor sería más
 robusto.
+
+### H-23 · IVERSION=2: velocidad infravalorada en los nodos del borde — Alta (pendiente)
+
+Encontrado al corregir H-04. Con la malla desplazada, cada punto PIVlab reparte 1/4 de su
+velocidad a los 4 nodos de su celda, **sumando sin normalizar**. Un nodo interior recibe
+4 aportaciones (4 × ¼ = 1) y queda con la velocidad media correcta, pero un nodo del borde
+exterior de la malla, o vecino de una zona sin datos, recibe solo 1, 2 o 3 aportaciones y
+se queda con ¼, ½ o ¾ de la velocidad que le corresponde.
+
+Esto ya pasaba en el original y afecta a **velocidades y desplazamientos**, no solo a las
+deformaciones (allí quedaba parcialmente disimulado por la división por `AM` de H-04).
+Medido en el primer instante del ensayo de la centrífuga con IVERSION=2:
+
+* 188 de los 1140 nodos con datos (16 %) están infravalorados.
+* 1520 de 9405 partículas activas (16 %) tienen una velocidad más de un 5 % baja.
+* En esas partículas, la velocidad es de media el **74 %** de la correcta, y baja hasta el
+  **19 %** en el peor caso.
+
+Corrección propuesta: normalizar por el peso acumulado, es decir, velocidad nodal =
+Σ wᵢ vᵢ / Σ wᵢ, con Σ wᵢ = 1 en el interior (no cambia nada allí) y el reparto correcto en
+el borde. Es el mismo problema de fondo que resuelve la corrección de contorno para
+IVERSION=1, así que conviene decidir los dos a la vez. **Pendiente de tu decisión**: cambia
+desplazamientos y deformaciones de los análisis con IVERSION=2.

@@ -1,5 +1,4 @@
 import math
-from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -109,9 +108,12 @@ def test_particle_leaving_the_mesh_is_lost(case):
     assert not output_mask(p, grid, 2).any()
 
 
-def test_tracking_particles_are_flagged(case):
-    cfg, grid, _, nodes = case
-    tracked = replace(parse_par(PAR.replace("0 0 0\n", "0 0 1\n") + "b5\n1 1 .5 .5 1 1 2 1\n"))
-    particles = create_particles(tracked, grid)
-    advance_particles(particles, nodes, grid, tracked, 1)
-    assert particles.nan_initial[-3:].tolist() == [2, 2, 2]
+def test_strain_is_uniform_inside_each_cell(case):
+    cfg, grid, p, nodes = case
+    rng = np.random.default_rng(5)
+    nodes.velocity[:] = rng.normal(size=(cfg.n_nodes, 2)) * 0.01
+    _step(cfg, grid, p, nodes, 1)
+    cells = grid.locate(p.position - p.position_increment)
+    for cell in np.unique(cells[cells >= 0]):
+        same = cells == cell
+        assert np.ptp(p.strain_increment[same], axis=0).max() == 0.0

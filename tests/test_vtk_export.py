@@ -33,7 +33,7 @@ def gid_case(workdir: Path) -> Path:
 
 
 def test_export_writes_one_file_per_time(gid_case: Path):
-    pvd = export_vtk(gid_case)
+    pvd = export_vtk(gid_case, legacy_mesh=True)
     root = ET.parse(pvd).getroot()
     steps = [(float(d.get("timestep")), d.get("file")) for d in root.iter("DataSet")]
     assert [t for t, _ in steps] == [t for t, _ in iter_time_steps(gid_case)]
@@ -41,7 +41,7 @@ def test_export_writes_one_file_per_time(gid_case: Path):
 
 
 def test_positions_and_values_match_gid_files(gid_case: Path):
-    pvd = export_vtk(gid_case)
+    pvd = export_vtk(gid_case, legacy_mesh=True)
     mesh = read_gid_mesh(gid_case.with_name("mini.POST.MSH"))
     steps = list(iter_time_steps(gid_case))
     first_disp = dict(zip(steps[0][1]["Displacement"].ids,
@@ -67,14 +67,14 @@ def test_positions_and_values_match_gid_files(gid_case: Path):
 
 
 def test_every_option(gid_case: Path, workdir: Path):
-    pvd = export_vtk(gid_case, out_dir=workdir / "vtk", every=2)
+    pvd = export_vtk(gid_case, out_dir=workdir / "vtk", every=2, legacy_mesh=True)
     n_steps = len(list(iter_time_steps(gid_case)))
     assert len(list(ET.parse(pvd).getroot().iter("DataSet"))) == (n_steps + 1) // 2
 
 
 def test_readable_by_vtk(gid_case: Path):
     pv = pytest.importorskip("pyvista")
-    reader = pv.get_reader(str(export_vtk(gid_case)))
+    reader = pv.get_reader(str(export_vtk(gid_case, legacy_mesh=True)))
     reader.set_active_time_point(len(reader.time_values) - 1)
     grid = reader.read()[0]
     assert grid.n_points > 0 and "Equi_strain" in grid.point_data

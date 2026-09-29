@@ -47,6 +47,9 @@ class RunOptions:
     contour_layers: int = 1
     eol: str = os.linesep  # fin de línea de los archivos GiD (CRLF en Windows, como Intel)
     log_every: int = 10  # cada cuántos pasos se informa del archivo analizado
+    #: Reproduce los errores del Fortran original (H-01, H-04, H-08 y H-13) para poder
+    #: repetir análisis antiguos. Ver docs/HALLAZGOS.md.
+    legacy_compat: bool = False
 
 
 DEFAULT_OPTIONS = RunOptions()
@@ -78,9 +81,10 @@ class Simulation:
         self.particles: Particles = create_particles(config, self.grid)
         self.nodes = Nodes.zeros(config.n_nodes, self.grid.n_nodes)
         self.point_to_node = pivlab_to_node(config.n_cols, config.n_rows)
-        # Centros de celda de la malla desplazada. En un reinicio el original no los genera
-        # y quedan a cero (H-13).
-        if config.mesh_version == 2 and not config.restart:
+        # Centros de celda de la malla desplazada (H-13: el original solo los genera si no
+        # es un reinicio, y entonces todas las velocidades acaban en la celda 1).
+        legacy_restart = config.restart and options.legacy_compat
+        if config.mesh_version == 2 and not legacy_restart:
             self.centers = cell_centers(self.grid)
         else:
             self.centers = np.zeros((self.grid.n_cells, 2))
@@ -120,7 +124,8 @@ class Simulation:
                 t += cfg.dt
                 self._update_nodes(frame, step)
                 advance_particles(self.particles, self.nodes, self.grid, cfg, step)
-                update_strains(self.particles, self.nodes, self.grid, cfg, step)
+                update_strains(self.particles, self.nodes, self.grid, cfg, step,
+                               self.options.legacy_compat)
                 if step == 1 or step % cfg.print_every == 0:
                     self._write_output(writer, step, t, summary)
 
@@ -134,7 +139,7 @@ class Simulation:
         cfg = self.config
         accumulate_particle_mass(self.particles, self.grid, self.nodes, step,
                                  accumulate=cfg.mesh_version == 2)
-        load_measurements(frame, self.point_to_node, self.nodes)
+        load_measurements(frame, self.point_to_node, self.nodes, self.options.legacy_compat)
         self.contour.apply(self.nodes, cfg.n_cols, cfg.n_rows)
         if cfg.mesh_version == 1:
             compute_nodal_momentum_v1(self.nodes)
@@ -147,7 +152,13 @@ class Simulation:
                       summary: RunSummary) -> None:
         located = output_mask(self.particles, self.grid, step)
         if not summary.output_times:  # primer instante impreso: malla y cabecera
-            writer.write_mesh(self.particles.position, self.particles.nan_initial)
+            # H-08: la malla GiD debe tener las posiciones iniciales, porque los
+            # desplazamientos se acumulan desde ellas y GiD dibuja malla + desplazamiento.
+            # El original escribía las posiciones ya movidas por el primer paso.
+            positions = self.particles.position
+            if not self.options.legacy_compat:
+                positions = positions - self.particles.displacement
+            writer.write_mesh(positions, self.particles.nan_initial)
             writer.start_results()
         writer.write_step(t, self.particles, self.nodes, located, self.config.moisture)
         summary.output_times.append(t)
@@ -156,9 +167,9 @@ class Simulation:
     def _load_restart(self) -> None:
         cfg = self.config
         data = read_restart(find_file(self.case_dir, self.restart_path.name))
-        if data.n_particles != cfg.n_base_particles:
+        if data.n_particles != cfg.n_particles:
             raise ConfigError(f"{self.restart_path.name}: tiene {data.n_particles} partículas "
-                              f"y el .PAR define {cfg.n_base_particles}")
+                              f"y el .PAR define {cfg.n_particles}")
         if data.mesh_version != cfg.mesh_version:
             raise ConfigError(f"{self.restart_path.name}: IVERSION={data.mesh_version} "
                               f"distinto del .PAR ({cfg.mesh_version})")
@@ -172,7 +183,7 @@ class Simulation:
         p.nan_initial[:n] = data.nan_initial
 
     def _save_restart(self) -> None:
-        n = self.config.n_base_particles
+        n = self.config.n_particles
         p = self.particles
         write_restart(self.restart_path, RestartData(
             mesh_version=self.config.mesh_version,

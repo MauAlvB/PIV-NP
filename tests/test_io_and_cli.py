@@ -65,7 +65,7 @@ def test_cli_runs_a_case(workdir: Path, capsys):
     shutil.copytree(REGRESSION / "frames", workdir, dirs_exist_ok=True)
     for name in ("PIV-NP.TXT", "mini.PAR"):
         shutil.copy(REGRESSION / "v1_npc3" / name, workdir)
-    assert main([str(workdir), "--threads", "2", "-q"]) == 0
+    assert main([str(workdir), "--threads", "2", "--legacy-compat", "-q"]) == 0
     expected = gzip.decompress((REGRESSION / "v1_npc3/expected/mini.POST.MSH.gz").read_bytes())
     produced = (workdir / "mini.POST.MSH").read_bytes()
     assert produced.replace(b"\r\n", b"\n") == expected.replace(b"\r\n", b"\n")

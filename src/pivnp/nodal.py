@@ -25,13 +25,15 @@ from .state import Nodes, Particles
 @njit(cache=True, nogil=True)
 def _load_measurements_kernel(u, v, moisture_in, saturation_in, point_to_node,
                               velocity, previous_velocity, is_nan,
-                              moisture_measured, saturation_measured):
-    # Bucle secuencial a propósito: reproduce el orden de lectura/escritura del original,
-    # en el que la "velocidad anterior" se copia con el índice del punto PIVlab y no con el
-    # del nodo, así que a veces ya contiene la velocidad nueva (ver H-01).
+                              moisture_measured, saturation_measured, legacy_previous):
     for p in range(u.size):
-        previous_velocity[p, 0] = velocity[p, 0]
-        previous_velocity[p, 1] = velocity[p, 1]
+        if legacy_previous:
+            # H-01: el original copia la "velocidad anterior" con el índice del punto
+            # PIVlab en vez del índice del nodo, dentro del mismo bucle que va
+            # sobrescribiendo las velocidades, así que en la mitad de los nodos guarda la
+            # velocidad nueva. Solo se reproduce en modo compatibilidad.
+            previous_velocity[p, 0] = velocity[p, 0]
+            previous_velocity[p, 1] = velocity[p, 1]
         node = point_to_node[p]
         if np.isnan(u[p]) or np.isnan(v[p]):
             velocity[node, 0] = 0.0
@@ -50,13 +52,19 @@ def _load_measurements_kernel(u, v, moisture_in, saturation_in, point_to_node,
             saturation_measured[node] = saturation_in[p]
 
 
-def load_measurements(frame: Frame, point_to_node: np.ndarray, nodes: Nodes) -> None:
-    """Pasa las medidas del instante (orden PIVlab) a los nodos PIV-NP."""
+def load_measurements(frame: Frame, point_to_node: np.ndarray, nodes: Nodes,
+                      legacy_compat: bool = False) -> None:
+    """Pasa las medidas del instante (orden PIVlab) a los nodos PIV-NP.
+
+    Guarda antes las velocidades del paso anterior, necesarias para la aceleración.
+    """
     nodes.filled[:] = False
+    if not legacy_compat:
+        nodes.previous_velocity[:] = nodes.velocity
     _load_measurements_kernel(
         frame.u, frame.v, frame.moisture, frame.saturation, point_to_node,
         nodes.velocity, nodes.previous_velocity, nodes.is_nan,
-        nodes.moisture_measured, nodes.saturation_measured,
+        nodes.moisture_measured, nodes.saturation_measured, legacy_compat,
     )
 
 

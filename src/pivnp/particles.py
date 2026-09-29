@@ -5,21 +5,17 @@ from __future__ import annotations
 import numpy as np
 from numba import njit, prange
 
-from .config import CaseConfig
-from .constants import GRAVITY_INITIAL, MAX_GAUSS_NPC, PARTICLE_LOCAL_COORDS
+from .config import MAX_PARTICLES_PER_SIDE, CaseConfig
+from .constants import GRAVITY_INITIAL, PARTICLE_LOCAL_COORDS
 from .mesh import Grid
 from .state import Particles
 
 
 def local_coordinates(npc: int) -> np.ndarray:
-    """Coordenadas locales en [-1, 1] de las partículas de cada lado de la celda.
-
-    Para NPC entre 7 y 10 el original usa un array sin inicializar (queda a 0 y todas las
-    partículas caen en el centro de la celda); se reproduce tal cual (ver H-05).
-    """
-    if npc in PARTICLE_LOCAL_COORDS:
-        return np.array(PARTICLE_LOCAL_COORDS[npc])
-    return np.zeros(npc)
+    """Coordenadas locales en [-1, 1] de las partículas de cada lado de la celda."""
+    if npc not in PARTICLE_LOCAL_COORDS:
+        raise ValueError(f"NPC={npc} debe estar entre 1 y {MAX_PARTICLES_PER_SIDE}")
+    return np.array(PARTICLE_LOCAL_COORDS[npc])
 
 
 def seed_positions(grid: Grid, npc: int) -> np.ndarray:
@@ -33,15 +29,9 @@ def seed_positions(grid: Grid, npc: int) -> np.ndarray:
     cell_left = grid.x0 + cols * grid.dx  # XF + (J - NCF) * AXC
     cell_bottom = grid.row_y[:-1]  # YF
 
-    if npc <= MAX_GAUSS_NPC:
-        g = local_coordinates(npc)
-        x = (cell_left + grid.dx / 2.0)[:, None] + (g * grid.dx) / 2.0
-        y = (cell_bottom + grid.dy / 2.0)[:, None] + (g * grid.dy) / 2.0
-    else:
-        step_x, step_y = grid.dx / npc, grid.dy / npc
-        k = np.arange(npc, dtype=np.float64)
-        x = (cell_left[:, None] + k * step_x) + step_x / 2.0
-        y = (cell_bottom[:, None] + k * step_y) + step_y / 2.0
+    g = local_coordinates(npc)
+    x = (cell_left + grid.dx / 2.0)[:, None] + (g * grid.dx) / 2.0
+    y = (cell_bottom + grid.dy / 2.0)[:, None] + (g * grid.dy) / 2.0
 
     shape = (grid.n_rows, grid.n_cols, npc, npc)  # fila, columna, iy, ix
     px = np.broadcast_to(x[None, :, None, :], shape)
@@ -60,15 +50,11 @@ def cell_centers(grid: Grid) -> np.ndarray:
 def create_particles(config: CaseConfig, grid: Grid) -> Particles:
     """Crea e inicializa las partículas (parte de ``PIVLAB_DATA``).
 
-    En un reinicio (IREC = 1) las posiciones de la malla se cargan después desde el
-    archivo ``.REC``; aquí solo se colocan las partículas de seguimiento PTV.
+    En un reinicio (IREC = 1) las posiciones se cargan después desde el archivo ``.REC``.
     """
-    n0 = config.n_base_particles
     particles = Particles.zeros(config.n_particles, n_lost=config.n_nodes)
     if not config.restart:
-        particles.position[:n0] = seed_positions(grid, config.particles_per_side)
-    if config.tracking:
-        particles.position[n0:] = config.tracking.positions()
+        particles.position[:] = seed_positions(grid, config.particles_per_side)
 
     particles.potential_energy[:] = particles.mass * GRAVITY_INITIAL * particles.position[:, 1]
     particles.total_energy[:] = particles.potential_energy + 0.0 + 0.0

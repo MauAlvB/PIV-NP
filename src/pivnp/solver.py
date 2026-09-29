@@ -20,7 +20,7 @@ from .particles import update_lost_flags
 from .state import Nodes, Particles
 
 #: Valores de ``Particles.nan_initial``.
-ACTIVE, NAN_AT_START, TRACKING = 0, 1, 2
+ACTIVE, NAN_AT_START = 0, 1
 
 
 @njit(cache=True, nogil=True, inline="always")
@@ -102,8 +102,8 @@ def advance_particles(particles: Particles, nodes: Nodes, grid: Grid, config: Ca
                       step: int) -> None:
     """Interpola velocidad, aceleración y desplazamiento de las partículas desde los nodos.
 
-    Primera mitad de ``SOLMOV``. Marca como ``NAN_AT_START`` las partículas sin datos en el
-    primer paso y, si hay partículas de seguimiento PTV, las marca como ``TRACKING``.
+    Primera mitad de ``SOLMOV``. Marca como ``NAN_AT_START`` las partículas que en el primer
+    paso están en celdas sin ningún dato (fuera del material).
     """
     p = particles
     n = p.position.shape[0]
@@ -117,15 +117,13 @@ def advance_particles(particles: Particles, nodes: Nodes, grid: Grid, config: Ca
         p.step_displacement, p.moisture, p.saturation, p.nan_initial, p.nan_step,
         step, config.restart, config.moisture, config.mesh_version,
     )
-    if config.tracking:
-        p.nan_initial[config.n_base_particles:] = TRACKING
 
 
 @njit(parallel=True, cache=True)
 def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
                    position, increment, velocity, mass, strain, strain_inc,
                    vol_strain, vol_strain_inc, potential, kinetic, total, moisture,
-                   eq_strain, eq_strain_inc):
+                   eq_strain, eq_strain_inc, legacy_divide_by_mass):
     for i in prange(position.shape[0]):
         if lost[i]:
             continue
@@ -140,8 +138,15 @@ def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
             dndx = NODE_SIGN_X[j] * 0.5 / dx
             dndy = NODE_SIGN_Y[j] * 0.5 / dy
             if nodal_mass[node] >= MACHINE_EPSILON:
-                fx = dndx * dt / nodal_mass[node]
-                fy = dndy * dt / nodal_mass[node]
+                # H-04: el original divide por la masa nodal, que con IVERSION=2 vale
+                # aproximadamente NPC² y deja las deformaciones a escala de la velocidad
+                # dividida por NPC². Solo se reproduce en modo compatibilidad.
+                if legacy_divide_by_mass:
+                    fx = dndx * dt / nodal_mass[node]
+                    fy = dndy * dt / nodal_mass[node]
+                else:
+                    fx = dndx * dt
+                    fy = dndy * dt
             else:
                 fx = 0.0
                 fy = 0.0
@@ -180,7 +185,7 @@ def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
 
 
 def update_strains(particles: Particles, nodes: Nodes, grid: Grid, config: CaseConfig,
-                   step: int) -> None:
+                   step: int, legacy_compat: bool = False) -> None:
     """Deformaciones, energías y nueva posición de cada partícula (segunda mitad de SOLMOV)."""
     p = particles
     n = p.position.shape[0]
@@ -190,7 +195,7 @@ def update_strains(particles: Particles, nodes: Nodes, grid: Grid, config: CaseC
         p.lost, cells, grid.n_cols, grid.dx, grid.dy, config.dt, nodes.momentum, nodes.mass,
         p.position, p.position_increment, p.velocity, p.mass, p.strain, p.strain_increment,
         p.vol_strain, p.vol_strain_increment, p.potential_energy, p.kinetic_energy,
-        p.total_energy, p.moisture, p.eq_strain, p.eq_strain_increment,
+        p.total_energy, p.moisture, p.eq_strain, p.eq_strain_increment, legacy_compat,
     )
 
 

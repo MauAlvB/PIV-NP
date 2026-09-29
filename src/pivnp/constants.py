@@ -31,7 +31,7 @@ J2_THRESHOLD: float = as_fortran_real4(1.0e-10)
 
 #: Coordenadas locales (en [-1, 1]) de las partículas dentro de una celda, según NPC
 #: (partículas por lado). NPC=2 y 3 son subdivisiones uniformes; NPC=4..6 son puntos de
-#: Gauss-Legendre. En el original, estas constantes son literales REAL*4 (ver H-07).
+#: Gauss-Legendre (ver H-06). En el original son literales REAL*4 (ver H-07).
 PARTICLE_LOCAL_COORDS: dict[int, tuple[float, ...]] = {
     1: (0.0,),
     2: (-0.5, 0.5),
@@ -51,10 +51,6 @@ PARTICLE_LOCAL_COORDS: dict[int, tuple[float, ...]] = {
                   0.238619186083197, 0.661209386466265, 0.932469514203152)
     ),
 }
-
-#: A partir de este NPC las partículas se reparten de forma uniforme en la celda.
-#: Entre 7 y este valor, el original usa coordenadas sin inicializar (= 0, ver H-05).
-MAX_GAUSS_NPC: int = 10
 
 #: Signo de cada nodo local del elemento bilineal (orden: abajo-izq, abajo-der, arriba-izq,
 #: arriba-der), igual que XN/YN en el original.
