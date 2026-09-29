@@ -16,10 +16,13 @@ ITR (partículas de seguimiento PTV) debe ser 0: esa opción ya no está soporta
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
+
+log = logging.getLogger("pivnp")
 
 CASE_INDEX_FILE = "PIV-NP.TXT"
 
@@ -101,11 +104,11 @@ class _ListDirectedReader:
     def __init__(self, lines: list[str], source: str) -> None:
         self._lines = lines
         self._pos = 0
-        self._source = source
+        self.source = source
 
     def _next_line(self) -> str:
         if self._pos >= len(self._lines):
-            raise ConfigError(f"{self._source}: fin de archivo inesperado (línea {self._pos + 1})")
+            raise ConfigError(f"{self.source}: fin de archivo inesperado (línea {self._pos + 1})")
         line = self._lines[self._pos]
         self._pos += 1
         return line
@@ -119,6 +122,15 @@ class _ListDirectedReader:
         while len(tokens) < count:
             tokens.extend(t for t in _TOKEN_SEPARATORS.split(self._next_line().strip()) if t)
         return tokens[:count]
+
+    def line_values(self) -> list[str]:
+        """Todos los valores de la línea siguiente."""
+        return [t for t in _TOKEN_SEPARATORS.split(self._next_line().strip()) if t]
+
+    def at_end(self) -> bool:
+        return self._pos >= len(self._lines) or not any(
+            line.strip() for line in self._lines[self._pos:]
+        )
 
 
 def _to_int(token: str, name: str) -> int:
@@ -135,17 +147,42 @@ def _to_float(token: str, name: str) -> float:
         raise ConfigError(f"{name}: se esperaba un número y se leyó {token!r}") from None
 
 
+def _analysis_block(reader: _ListDirectedReader) -> list[str]:
+    """Bloque 3, admitiendo también los ``.PAR`` de versiones anteriores.
+
+    El formato actual tiene 9 valores. Las versiones antiguas escribían solo
+    ``DT TOTAL_STEPS IMPPAS`` (3 valores) o esos más ``MOISTER`` (4); el resto toma su
+    valor por defecto: malla PIV-NP (IVERSION=1), archivos PIVlab de 4 columnas, sin
+    corrección de contorno, análisis nuevo y sin partículas PTV.
+    """
+    values = reader.line_values()
+    if len(values) >= 9:
+        return values[:9]
+    if len(values) in (3, 4):
+        log.info("%s: .PAR en formato antiguo (%d valores en el bloque 3); se asumen "
+                 "IVERSION=1, IPIVLAB=1, ICONTOUR=0, IREC=0 e ITR=0", reader.source, len(values))
+        return [*values, *["0"] * (4 - len(values)), "1", "1", "0", "0", "0"]
+    raise ConfigError(
+        f"{reader.source}: el bloque 3 tiene {len(values)} valores; se esperaban 9 "
+        "(DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR) o los 3 "
+        "del formato antiguo (DT TOTAL_STEPS IMPPAS)"
+    )
+
+
 def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
-    """Interpreta el contenido de un archivo ``.PAR``."""
+    """Interpreta el contenido de un archivo ``.PAR`` (formato actual o anterior)."""
     reader = _ListDirectedReader(text.splitlines(), source)
 
     title = reader.text()
     reader.text()
     nc, nn, npc, nfil, axc, ayc = reader.values(6)
     reader.text()
-    dt, steps, imppas, moister, iversion, ipivlab, icontour, irec, itr = reader.values(9)
-    reader.text()
-    density, porosity = reader.values(2)
+    dt, steps, imppas, moister, iversion, ipivlab, icontour, irec, itr = _analysis_block(reader)
+    if reader.at_end():  # los .PAR antiguos no traen el bloque 4
+        density = porosity = "0"
+    else:
+        reader.text()
+        density, porosity = reader.values(2)
 
     if _to_int(itr, "ITR") != 0:
         raise ConfigError(

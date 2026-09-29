@@ -1,0 +1,5 @@
+BLOQUE 1: CALCULO DEFORMACIONES PARA ENSAYO DE LABORATORIO.
+BLOQUE 2: N_cel N_nod n_p/c N_fil Ancho Alto	(GEOMETRIA)
+20	30	1	4	0.5	0.5
+BLOQUE 3: del_t  Total_steps   Salto de impresión	(Datos)
+1.	16	1

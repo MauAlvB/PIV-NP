@@ -146,6 +146,11 @@ BLOCK 4: S_DENSITY POROSITY
 Input is validated on reading: if something does not add up (for instance, NC not a
 multiple of NFIL) you get an explicit message instead of meaningless results.
 
+`.PAR` files from earlier versions are also accepted, with 3 or 4 values in block 3
+(`DT TOTAL_STEPS IMPPAS [MOISTER]`) and no block 4: the remaining parameters take their
+default values (PIV-NP grid, 4-column files, no boundary correction, new analysis). Old
+cases can therefore be re-analysed without editing their files.
+
 ### PIVlab data
 
 * `datos (1).txt`, `datos (2).txt`, …: PIVlab ASCII export with 3 header lines and columns
@@ -310,6 +315,10 @@ with gfortran.
 pytest
 ```
 
+* **Synthetic cases** (`tests/data/sinteticos/`): velocity fields with a known solution
+  (displacement without strain, uniform and varying horizontal strain, shear and rigid-body
+  rotation). The computed strains are checked against the analytical ones, and the analyses
+  the group ran at the time are reproduced.
 * **Regression**: 7 scenarios also run with the Fortran version (both grids, NPC = 2, 3 and
   4, water content, 5-column format and restart). In `--legacy-compat` mode, `.POST.RES`,
   `.POST.MSH` and `.REC` are required to be **byte-for-byte identical**.

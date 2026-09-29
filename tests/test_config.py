@@ -34,10 +34,33 @@ def test_mesh_version_2_particle_count():
 
 
 def test_values_may_span_lines_commas_and_fortran_exponents():
-    text = PAR.replace("0.8\t149\t1\t0\t1\t1\t0\t0\t0", "8.0D-1, 149.9, 1\n0 1 1 0 0 0 ignorado")
+    text = PAR.replace("2006  2100    3    34\t0.212115\t0.212115",
+                       "2006, 2100\n3 34 0.212115 0.212115 sobra")
+    text = text.replace("0.8\t149", "8.0D-1\t149.9")
     cfg = parse_par(text)
+    assert (cfg.n_cells, cfg.n_nodes, cfg.particles_per_side) == (2006, 2100, 3)
     assert cfg.dt == 0.8
     assert cfg.total_steps == 149  # REAL truncado, como el DO del original
+
+
+def test_old_par_format_is_accepted():
+    """Los .PAR de versiones anteriores traen 3 o 4 valores en el bloque 3 y ningún bloque 4."""
+    lineas = PAR.splitlines()
+    antiguo = "\n".join(lineas[:4] + ["1.\t11\t1"]) + "\n"
+    cfg = parse_par(antiguo)
+    assert (cfg.dt, cfg.total_steps, cfg.print_every) == (1.0, 11, 1)
+    assert cfg.mesh_version == 1 and cfg.pivlab_format == 1
+    assert not cfg.moisture and not cfg.restart and cfg.contour == 0
+    assert (cfg.soil_density, cfg.porosity) == (0.0, 0.0)
+
+    con_humedad = "\n".join(lineas[:4] + ["1. 11 1 1"]) + "\n"
+    assert parse_par(con_humedad).moisture
+
+
+def test_incomplete_analysis_block_is_rejected():
+    lineas = PAR.splitlines()
+    with pytest.raises(ConfigError, match="bloque 3"):
+        parse_par("\n".join(lineas[:4] + ["1. 11 1 0 1 1"]) + "\n")
 
 
 def test_particle_count():
@@ -60,7 +83,7 @@ def test_invalid_inputs_are_rejected(old, new, message):
 
 def test_truncated_file():
     with pytest.raises(ConfigError, match="fin de archivo"):
-        parse_par("\n".join(PAR.splitlines()[:5]))
+        parse_par("\n".join(PAR.splitlines()[:3]))
 
 
 @pytest.mark.parametrize(("content", "name"), [

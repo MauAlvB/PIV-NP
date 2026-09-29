@@ -146,6 +146,11 @@ BLOQUE 4: S_DENSITY POROSITY
 Los datos se validan al leerlos: si algo no encaja (por ejemplo, NC no múltiplo de NFIL) se
 explica con un mensaje en lugar de producir resultados sin sentido.
 
+También se leen los `.PAR` de versiones anteriores, con 3 o 4 valores en el bloque 3
+(`DT TOTAL_STEPS IMPPAS [MOISTER]`) y sin bloque 4: el resto de parámetros toma su valor por
+defecto (malla PIV-NP, archivos de 4 columnas, sin corrección de contorno, análisis nuevo).
+Así se pueden reanalizar casos antiguos sin tocar sus archivos.
+
 ### Datos PIVlab
 
 * `datos (1).txt`, `datos (2).txt`, …: exportación ASCII de PIVlab con 3 líneas de
@@ -312,6 +317,10 @@ La comparación es con el Fortran compilado con gfortran.
 pytest
 ```
 
+* **Casos sintéticos** (`tests/data/sinteticos/`): campos de velocidad de solución conocida
+  (desplazamiento sin deformación, deformación horizontal uniforme y variable, corte y
+  rotación de sólido rígido). Se comprueba que las deformaciones calculadas coinciden con
+  las analíticas y que se reproducen los análisis que el grupo hizo en su día.
 * **Regresión**: 7 escenarios ejecutados también con la versión Fortran (las dos mallas,
   NPC = 2, 3 y 4, humedad, formato de 5 columnas y reinicio). En modo `--legacy-compat` se
   exige que `.POST.RES`, `.POST.MSH` y `.REC` sean **idénticos byte a byte**.
