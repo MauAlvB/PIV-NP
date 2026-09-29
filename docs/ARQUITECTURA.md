@@ -98,14 +98,15 @@ partícula, o masa `1.0` frente a `S_DENSITY*(1-POROSITY)*VVP`). Propuesta: conv
 decisión en una interfaz con implementaciones con nombre, elegidas desde la configuración,
 igual que ya se ha hecho con `ContourCorrection`:
 
-| Decisión | Opciones |
-|---|---|
-| Política de nodos NaN (H-02) | mantener último valor · cero · corrección de contorno |
-| Cálculo de la deformación | centro del elemento (actual) · en la partícula |
-| Masa de partícula | unitaria (actual) · densidad seca × volumen |
-| Reparto inicial de partículas (H-05, H-06) | uniforme · Gauss |
+| Decisión | Opciones | Estado |
+|---|---|---|
+| Corrección de contorno (H-02, H-23) | ninguna · media de vecinos · media de partículas · extrapolación | **hecho** (`ICONTOUR`) |
+| Masa de partícula | unitaria (actual) · densidad seca × volumen (`S_DENSITY`, `POROSITY`) | pendiente |
+| Cálculo de la deformación | centro del elemento (actual) · en la posición de la partícula | pendiente |
+| Reparto inicial de partículas (H-06) | Gauss (NPC 4-6) · uniforme (NPC 2-3) | fijado por NPC |
 
-Así cada variante queda documentada, probada y seleccionable sin tocar el código.
+Así cada variante queda documentada, probada y seleccionable sin tocar el código, como ya
+ocurre con `ContourCorrection`.
 
 ### P4. Formatos de salida modernos (esfuerzo medio, gran ganancia)
 

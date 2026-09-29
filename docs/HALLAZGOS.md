@@ -10,7 +10,7 @@ comportamiento original, a la espera de decisión · **N/A en Python** = no exis
 reescritura.
 
 > **Modo compatibilidad.** Los hallazgos corregidos que cambian resultados (H-01, H-04,
-> H-08 y H-13) se pueden revertir con `pivnp --legacy-compat` (o
+> H-07, H-08, H-11, H-13 y H-14) se pueden revertir con `pivnp --legacy-compat` (o
 > `RunOptions(legacy_compat=True)`), para repetir análisis antiguos. En ese modo las
 > salidas siguen siendo idénticas byte a byte a las del Fortran, y así lo comprueban las
 > pruebas de regresión.
@@ -20,19 +20,19 @@ reescritura.
 | ID | Gravedad | Estado | Qué pasa |
 |---|---|---|---|
 | H-01 | Alta | **Corregido** | La "velocidad anterior" se guarda con el índice equivocado: la aceleración es incorrecta en el 50 % de los nodos |
-| H-02 | Media | Pendiente | Un nodo que pasa a NaN conserva la velocidad del último paso válido |
+| H-02 | Media | **Con CONTOUR** | Un nodo que pasa a NaN conserva la velocidad del último paso válido |
 | H-03 | Baja | N/A en Python | Bucle con `NP1` sin inicializar |
 | H-04 | Alta | **Corregido** | Con IVERSION=2 las deformaciones salen divididas por NPC² |
 | H-05 | Media | **Corregido** | Con NPC entre 7 y 10 todas las partículas se crean en el centro de la celda |
-| H-06 | Baja | Pendiente | Reparto de partículas incoherente según NPC |
-| H-07 | Baja | Pendiente | Literales en simple precisión (`9.81`, `1.E-10`, puntos de Gauss) |
+| H-06 | Baja | Sin cambios | Reparto de partículas según NPC: Gauss o uniforme |
+| H-07 | Baja | **Corregido** | Literales en simple precisión (`9.81`, `1.E-10`, puntos de Gauss) |
 | H-08 | Media | **Corregido** | La malla `.POST.MSH` se escribe tras el paso 1, no con las posiciones iniciales |
 | H-09 | Baja | Pendiente | La marca `IDONDE` no se actualiza en el paso 1 |
 | H-10 | Baja | Pendiente | Con IVERSION=2 el bucle de nodos usa la marca `IDONDE` de las partículas |
-| H-11 | Media | Pendiente | El resultado "NaNs" imprime un contador nodal indexado por partícula |
-| H-12 | Media | Pendiente | "E_kinetic" se declara `Scalar` pero escribe 2 valores |
+| H-11 | Media | **Corregido** | El resultado "NaNs" imprime un contador nodal indexado por partícula |
+| H-12 | Media | **Corregido** | "E_kinetic" se declara `Scalar` pero escribe 2 valores |
 | H-13 | Alta* | **Corregido** | Reinicio con IVERSION=2: todas las velocidades van a la celda 1 |
-| H-14 | Media | Pendiente | Al reiniciar: tiempo a 0, "Inst_displacement" erróneo en el primer paso y se sobrescriben los resultados previos |
+| H-14 | Media | **Corregido** | Al reiniciar: tiempo a 0, "Inst_displacement" erróneo en el primer paso y se sobrescriben los resultados previos |
 | H-15 | Media | **Eliminado** | Las partículas PTV (ITR) nunca aparecen en los resultados |
 | H-16 | Baja | **Implementado** | `CONTOUR` no existe; `ICONTOUR` y `NODE_CONECT` sin uso |
 | H-17 | Baja | N/A en Python | Escritura en `IELEMENT_ACTIVE(0)` (fuera de límites) |
@@ -41,7 +41,7 @@ reescritura.
 | H-20 | Media | N/A en Python | Líneas de más de 72 columnas en formato fijo |
 | H-21 | Baja | **Corregido** | Datos de entrada sin validar |
 | H-22 | Baja | Pendiente | Umbral absoluto `J2 > 1e-10` |
-| H-23 | Alta | Pendiente | Con IVERSION=2, los nodos del borde reciben una velocidad infravalorada |
+| H-23 | Alta | **Con CONTOUR** | Con IVERSION=2, los nodos del borde reciben una velocidad infravalorada |
 
 \* Solo con reinicio (IREC=1) y malla desplazada (IVERSION=2).
 
@@ -79,8 +79,12 @@ Con IVERSION=1, si `Node_NaN(I)=1`, `PV` y `APV` no se actualizan: conservan el 
 algún nodo NaN siguen moviéndose con esa velocidad "congelada". En cambio, `VEL_X_NODO` sí
 se pone a 0, así que el paso siguiente con datos calcula la aceleración respecto a 0.
 
-**Pregunta:** ¿es intencionado (mantener el último valor conocido) o debería ser 0?
-Relacionado con la corrección de contorno. Reproducido en `nodal.compute_nodal_momentum_v1`.
+Es lo que hace que algunas partículas del borde "salgan volando": siguen moviéndose con una
+velocidad que ya no se mide. **Se corrige activando la corrección de contorno**
+(`ICONTOUR` distinto de 0), que reconstruye la velocidad de esos puntos en lugar de dejar
+la del paso anterior. Con `ICONTOUR=0` se mantiene el comportamiento del original.
+En el ensayo de la centrífuga, las partículas aisladas al final del análisis pasan de 14 a
+0 con cualquiera de los tres métodos.
 
 ### H-03 · `NP1` sin inicializar — Baja
 
@@ -119,20 +123,24 @@ se rechaza con un mensaje claro. También se ha quitado el reparto uniforme para
 que ya no es alcanzable. Prueba:
 `tests/test_fixes.py::test_h05_particles_per_side_limited_to_six`.
 
-### H-06 · Reparto de partículas incoherente — Baja (diseño)
+### H-06 · Reparto de partículas según NPC — Baja (sin cambios)
 
-NPC=2 y 3 usan subceldas uniformes (±0.5; ±2/3, 0), NPC=4…6 usan puntos de Gauss-Legendre
-(no uniformes, los valores uniformes están comentados) y NPC>10 vuelve a ser uniforme.
-Todas las partículas tienen el mismo volumen `VVP`, lo que solo es coherente con el reparto
-uniforme. Conviene decidir un único criterio.
+NPC es el número de filas y columnas de partículas dentro de cada elemento, así que hay
+NPC² partículas por elemento. NPC=2 y 3 las reparten de forma uniforme (±0.5; ±2/3, 0) y
+NPC=4…6 en los puntos de Gauss-Legendre. Es lo previsto, así que se deja como está; solo
+conviene tenerlo en cuenta al comparar análisis con distinto NPC.
 
 ### H-07 · Literales en simple precisión — Baja
 
 `9.81` (SOLMOV) frente a `9.81d0` (inicialización), `1.E-10` (INVAR2) y los puntos de
 Gauss se guardan como REAL*4: pierden precisión a partir de la 7.ª-8.ª cifra, y la energía
 potencial inicial y la de cada paso usan una gravedad distinta (9.81 frente a
-9.8100004196). El efecto es despreciable, pero si compilabas con `/real-size:64` los
-resultados cambian ligeramente. En Python se reproducen en `constants.py`.
+9.8100004196).
+
+**Corregido**: todas las constantes están en doble precisión (`constants.py`); las versiones
+antiguas se conservan con el prefijo `LEGACY_` para el modo compatibilidad. El cambio mueve
+los resultados en la séptima cifra (las posiciones iniciales de las partículas cambian del
+orden de 10⁻⁸ m).
 
 ### H-08 · Malla GiD con las posiciones del paso 1 — Media
 
@@ -164,14 +172,25 @@ Reproducido en `nodal.compute_nodal_momentum_v2`.
 ### H-11 · Resultado "NaNs" sin sentido — Media
 
 Imprime `ICOUNT_NO_NAN(I)` con `I` = número de partícula, pero `ICOUNT_NO_NAN` es un
-contador por nodo de la malla desplazada (y con IVERSION=1 vale siempre 0). Además no se
-filtran las partículas NaN. Si la idea era marcar las partículas sin datos, habría que
-imprimir `NaN_P`/`NaN_P2`. Reproducido en `gid_writer._nodal_count_by_particle`.
+contador por nodo de la malla desplazada (y con IVERSION=1 vale siempre 0).
+
+**Corregido**: "NaNs" indica ahora, para cada partícula, cuántos datos faltan a su
+alrededor: con IVERSION=1, cuántos de los 4 nodos de su elemento no tienen medida (0 a 4);
+con IVERSION=2, si el punto PIVlab del centro de su elemento no la tiene (0 o 1). Sirve
+para ver en GiD o ParaView qué zona del análisis se apoya en datos incompletos. Se calcula
+en `solver.count_nan_nodes`.
 
 ### H-12 · "E_kinetic" declarado escalar con dos componentes — Media
 
-La cabecera dice `Scalar` pero cada línea tiene dos valores (x, y). GiD lee solo el
-primero. Corrección: declararlo `Vector` o escribir la suma. Ver `gid_writer.RESULTS`.
+La cabecera dice `Scalar` pero cada línea tiene dos valores (½mvx² y ½mvy²), así que GiD lee
+solo el primero y la componente y se pierde.
+
+**Corregido**: se escribe la energía cinética como el escalar que es, la suma de las dos
+componentes. No se ha declarado `Vector` porque ½mvx² y ½mvy² no son las componentes de un
+vector (son cuadrados, no cambian como un vector al girar los ejes). Así, además, cuadra
+`E_total = E_potential + E_kinetic`, que es justo lo que comprueba
+`tests/test_fixes.py::test_h12_kinetic_energy_is_a_single_scalar`. Las dos componentes
+siguen disponibles en memoria (`particles.kinetic_energy`) y en el modo compatibilidad.
 
 ### H-13 · Reinicio con IVERSION=2 — Alta (solo en ese caso)
 
@@ -187,13 +206,28 @@ antiguo.
 
 ### H-14 · Reinicio (IREC=1) — Media
 
-* `TIEMPO` e `IP` vuelven a 0 y se leen otra vez `datos (1).TXT`… (si es intencionado,
-  hay que usar otra carpeta con los datos de la continuación).
+* `TIEMPO` e `IP` vuelven a 0 y se leen otra vez `datos (1).TXT`…
 * En el primer paso `UPO = UP + incremento`: "Inst_displacement" muestra el desplazamiento
   acumulado en lugar del incremento.
 * `.POST.RES` y `.POST.MSH` se sobrescriben: se pierden los resultados del análisis previo.
 * Si el `.REC` es de otra malla, el original lo cargaba igualmente; la versión Python lo
   rechaza con un error.
+
+**Corregido**: continuar un análisis ahora es equivalente a no haberlo interrumpido.
+
+* El `.REC` guarda además el instante, el número de paso, el estado nodal (velocidades,
+  cantidad de movimiento, humedad) y las posiciones iniciales, en **registros añadidos al
+  final** que el ejecutable Fortran original ignora, porque solo lee los siete primeros.
+* El tiempo y la numeración de pasos continúan donde se quedaron; los archivos PIVlab de la
+  continuación se siguen numerando desde 1 (en su propia carpeta o sobrescribiendo).
+* Los resultados se **añaden** al `.POST.RES` anterior en vez de borrarlo.
+* "Inst_displacement" del primer paso vuelve a ser solo el incremento de ese paso.
+
+Verificado en `tests/test_fixes.py::test_h14_restart_produces_the_same_results_file_as_a_single_run`:
+con los datos reales recortados, 8 pasos seguidos producen un `.POST.RES`, un `.POST.MSH` y
+un `.REC` **idénticos byte a byte** a 4 pasos + reinicio con los 4 siguientes. Con un `.REC`
+del Fortran original (sin esos registros) se empieza en el paso 0 y el instante 0, como
+antes.
 
 ### H-15 · Partículas PTV invisibles — Media
 
@@ -273,8 +307,7 @@ Medido en el primer instante del ensayo de la centrífuga con IVERSION=2:
 * En esas partículas, la velocidad es de media el **74 %** de la correcta, y baja hasta el
   **19 %** en el peor caso.
 
-Corrección propuesta: normalizar por el peso acumulado, es decir, velocidad nodal =
-Σ wᵢ vᵢ / Σ wᵢ, con Σ wᵢ = 1 en el interior (no cambia nada allí) y el reparto correcto en
-el borde. Es el mismo problema de fondo que resuelve la corrección de contorno para
-IVERSION=1, así que conviene decidir los dos a la vez. **Pendiente de tu decisión**: cambia
-desplazamientos y deformaciones de los análisis con IVERSION=2.
+**Se corrige activando la corrección de contorno** (`ICONTOUR` distinto de 0), que además de
+reconstruir los puntos sin dato normaliza el reparto: velocidad nodal = Σ wᵢ vᵢ / Σ wᵢ, con
+Σ wᵢ = 1 en el interior (allí no cambia nada) y el reparto correcto en el borde. Con
+`ICONTOUR=0` se mantiene el comportamiento del original.

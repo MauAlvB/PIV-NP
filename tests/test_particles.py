@@ -30,10 +30,12 @@ def test_seed_positions_match_legacy_bitwise(npc, staggered):
     np.testing.assert_array_equal(seed_positions(grid, npc), expected)
 
 
-def test_local_coordinates_keep_single_precision_literals():
-    g3 = local_coordinates(3)
-    assert g3[0] == as_fortran_real4(-0.66666666666667) != -2.0 / 3.0
+def test_local_coordinates_use_double_precision():
+    assert local_coordinates(3)[0] == -2.0 / 3.0  # H-07 corregido
     assert local_coordinates(2).tolist() == [-0.5, 0.5]
+    # el modo compatibilidad conserva los literales REAL*4 del original
+    assert local_coordinates(3, legacy_compat=True)[0] == as_fortran_real4(-0.66666666666667)
+    assert local_coordinates(4, legacy_compat=True)[0] != local_coordinates(4)[0]
 
 
 def test_cell_centers_are_pivlab_points_in_staggered_grid():

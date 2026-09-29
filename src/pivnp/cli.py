@@ -26,9 +26,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prefetch", type=int, default=4,
                         help="archivos PIVlab leídos por adelantado (0 = sin lectura anticipada)")
     parser.add_argument("--contour-min-neighbors", type=int, default=3,
-                        help="con ICONTOUR=1: vecinos con datos necesarios para rellenar un nodo")
+                        help="con ICONTOUR=1: vecinos con dato necesarios para reconstruir")
     parser.add_argument("--contour-layers", type=int, default=1,
-                        help="con ICONTOUR=1: capas de nodos a rellenar hacia el exterior")
+                        help="con ICONTOUR=1 y 3: capas de puntos a reconstruir hacia fuera")
+    parser.add_argument("--contour-min-particles", type=int, default=1,
+                        help="con ICONTOUR=2: partículas necesarias alrededor del punto")
     parser.add_argument("--legacy-compat", action="store_true",
                         help="reproducir los errores del Fortran original (H-01, H-04, H-08 "
                              "y H-13) para repetir análisis antiguos")
@@ -54,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         prefetch=args.prefetch,
         contour_min_neighbors=args.contour_min_neighbors,
         contour_layers=args.contour_layers,
+        contour_min_particles=args.contour_min_particles,
         legacy_compat=args.legacy_compat,
     )
     log = logging.getLogger("pivnp")

@@ -18,7 +18,7 @@ from pivnp.mesh import particle_grid
 from pivnp.nodal import load_measurements
 from pivnp.particles import create_particles, local_coordinates
 from pivnp.pivlab_io import Frame, pivlab_to_node
-from pivnp.restart import read_restart
+from pivnp.restart import read_restart, write_restart
 from pivnp.simulation import RunOptions, Simulation, run_case
 from pivnp.solver import output_mask
 from pivnp.state import Nodes
@@ -202,9 +202,118 @@ def test_h13_legacy_restart_sends_everything_to_the_first_cell(workdir: Path):
     assert (np.abs(sim_fixed.nodes.momentum[:, 0]) > 0).sum() > 4
 
 
+# --- H-14: reinicio continuo ------------------------------------------------------------------
+def _mini_case(directory: Path, steps: int, restart: bool, first_frame: int = 1) -> Path:
+    """Caso con los datos reales recortados, empezando en el instante ``first_frame``."""
+    regression = Path(__file__).parent / "data" / "regression"
+    directory.mkdir(parents=True, exist_ok=True)
+    for k in range(steps):
+        shutil.copy(regression / "frames" / f"datos ({first_frame + k}).txt",
+                    directory / f"datos ({k + 1}).txt")
+    (directory / "PIV-NP.TXT").write_text("mini\n")
+    par = (regression / "v1_npc3" / "mini.PAR").read_text().splitlines()
+    par[4] = f"0.8 {steps} 1 0 1 1 0 {int(restart)} 0"
+    (directory / "mini.PAR").write_text("\n".join(par) + "\n")
+    return directory
+
+
+def test_h14_restart_produces_the_same_results_file_as_a_single_run(workdir: Path):
+    full = _mini_case(workdir / "completo", steps=8, restart=False)
+    run_case(full)
+
+    part = _mini_case(workdir / "parcial", steps=4, restart=False)
+    run_case(part)
+    _mini_case(part, steps=4, restart=True, first_frame=5)  # instantes 5..8 renumerados
+    run_case(part)
+
+    assert (part / "mini.POST.RES").read_bytes() == (full / "mini.POST.RES").read_bytes()
+    assert (part / "mini.POST.MSH").read_bytes() == (full / "mini.POST.MSH").read_bytes()
+    assert (part / "mini.REC").read_bytes() == (full / "mini.REC").read_bytes()
+
+
+def test_h14_instant_displacement_after_restart_is_only_the_step(workdir: Path):
+    part = _mini_case(workdir / "caso", steps=2, restart=False)
+    run_case(part)
+    _mini_case(part, steps=1, restart=True, first_frame=3)
+    sim = Simulation.from_directory(part)
+    sim.run()
+    p = sim.particles
+    active = output_mask(p, sim.grid, sim.config.total_steps) & (p.nan_initial == 0)
+    assert np.abs(p.step_displacement[active]).max() < np.abs(p.displacement[active]).max()
+
+
+def test_restart_file_keeps_the_original_fortran_records(workdir: Path):
+    case = _mini_case(workdir / "caso", steps=2, restart=False)
+    run_case(case)
+    extended = read_restart(case / "mini.REC")
+    assert extended.step == 2 and extended.time == pytest.approx(1.6)
+    assert extended.nodes is not None and extended.initial_position is not None
+
+    # el archivo extendido empieza exactamente por los 7 registros que lee el Fortran
+    write_restart(workdir / "solo_legacy.REC", extended, extended=False)
+    write_restart(workdir / "extendido.REC", extended, extended=True)
+    legacy_bytes = (workdir / "solo_legacy.REC").read_bytes()
+    assert (workdir / "extendido.REC").read_bytes().startswith(legacy_bytes)
+
+    # y al leerlo sin extensión se obtiene el estado de partícula, sin el nodal
+    plain = read_restart(workdir / "solo_legacy.REC")
+    assert plain.nodes is None and plain.step == 0 and plain.time == 0.0
+    np.testing.assert_array_equal(plain.position, extended.position)
+
+
+# --- H-11: resultado "NaNs" --------------------------------------------------------------------
+@pytest.mark.parametrize(("version", "maximum"), [(1, 4), (2, 1)])
+def test_h11_missing_data_counts_what_is_missing(version, maximum, workdir: Path):
+    regression = Path(__file__).parent / "data" / "regression"
+    shutil.copytree(regression / "frames", workdir, dirs_exist_ok=True)
+    par = (regression / "v1_npc3" / "mini.PAR").read_text().splitlines()
+    par[4] = f"0.8 2 1 0 {version} 1 0 0 0"
+    (workdir / "mini.PAR").write_text("\n".join(par) + "\n")
+    (workdir / "PIV-NP.TXT").write_text("mini\n")
+
+    sim = Simulation.from_directory(workdir)
+    sim.run()
+    counts = sim.particles.missing_data
+    located = output_mask(sim.particles, sim.grid, 2)
+    assert counts[located].max() == maximum
+    assert counts[located].min() == 0
+    # las partículas marcadas desde el primer paso son las que no tienen ningún dato
+    if version == 1:
+        assert (counts[sim.particles.nan_initial == 1] == 4).all()
+
+
+# --- H-12: energía cinética ------------------------------------------------------------------
+def test_h12_kinetic_energy_is_a_single_scalar(workdir: Path):
+    case = _mini_case(workdir / "caso", steps=3, restart=False)
+    sim = Simulation.from_directory(case)
+    sim.run()
+
+    blocks = list(iter_time_steps(case / "mini.POST.RES"))[-1][1]
+    kinetic = blocks["E_kinetic"]
+    assert kinetic.values.shape[1] == 1  # un valor por línea, como dice la cabecera
+    p = sim.particles
+    expected = p.kinetic_energy.sum(axis=1)[kinetic.ids - 1]
+    np.testing.assert_allclose(kinetic.values[:, 0], expected, rtol=1e-5)
+    # y ahora cuadra la suma de energías
+    total = blocks["E_total"].values[:, 0]
+    potential = blocks["E_potential"].values[:, 0]
+    np.testing.assert_allclose(total, potential + kinetic.values[:, 0], rtol=1e-5)
+
+
+def test_h12_legacy_mode_keeps_both_components(workdir: Path):
+    case = _mini_case(workdir / "caso", steps=2, restart=False)
+    run_case(case, options=RunOptions(legacy_compat=True))
+    kinetic = dict(list(iter_time_steps(case / "mini.POST.RES"))[-1][1])["E_kinetic"]
+    assert kinetic.values.shape[1] == 2
+
+
 # --- comprobación cruzada --------------------------------------------------------------------
 def test_fixed_and_legacy_modes_differ_only_where_expected(workdir: Path):
-    """Con IVERSION=1 y sin reinicio, solo cambian la aceleración y la malla."""
+    """Con IVERSION=1 y sin reinicio solo cambian la aceleración, la malla y el redondeo.
+
+    Las posiciones y deformaciones difieren únicamente en las últimas cifras, por las
+    constantes que el original guardaba en simple precisión (H-07).
+    """
     regression = Path(__file__).parent / "data" / "regression"
     for name in ("PIV-NP.TXT", "mini.PAR"):
         shutil.copy(regression / "v1_npc3" / name, workdir)
@@ -216,8 +325,8 @@ def test_fixed_and_legacy_modes_differ_only_where_expected(workdir: Path):
     legacy.run()
 
     for field in ("position", "displacement", "strain", "eq_strain", "velocity"):
-        np.testing.assert_array_equal(getattr(fixed.particles, field),
-                                      getattr(legacy.particles, field))
+        np.testing.assert_allclose(getattr(fixed.particles, field),
+                                   getattr(legacy.particles, field), rtol=1e-4, atol=1e-9)
     assert not np.array_equal(fixed.particles.acceleration, legacy.particles.acceleration)
 
 

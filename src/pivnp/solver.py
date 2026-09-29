@@ -13,7 +13,15 @@ import numpy as np
 from numba import njit, prange
 
 from .config import CaseConfig
-from .constants import GRAVITY_STEP, J2_THRESHOLD, MACHINE_EPSILON, NODE_SIGN_X, NODE_SIGN_Y
+from .constants import (
+    GRAVITY,
+    J2_THRESHOLD,
+    LEGACY_GRAVITY_STEP,
+    LEGACY_J2_THRESHOLD,
+    MACHINE_EPSILON,
+    NODE_SIGN_X,
+    NODE_SIGN_Y,
+)
 from .mesh import Grid, cell_node
 from .nodal import grid_locate
 from .particles import update_lost_flags
@@ -24,12 +32,12 @@ ACTIVE, NAN_AT_START = 0, 1
 
 
 @njit(cache=True, nogil=True, inline="always")
-def deviatoric_q(sx, sy, sz, sxy):
-    """Tensión (o deformación) desviadora q = sqrt(3·J2); 0 si J2 <= 1e-10 (``INVAR2``)."""
+def deviatoric_q(sx, sy, sz, sxy, threshold=J2_THRESHOLD):
+    """Tensión (o deformación) desviadora q = sqrt(3·J2); 0 si J2 <= ``threshold`` (``INVAR2``)."""
     mean = (sx + sy + sz) / 3.0
     dx, dy, dz = sx - mean, sy - mean, sz - mean
     j2 = (dx * dx + dy * dy + dz * dz) / 2.0 + sxy * sxy
-    return math.sqrt(3.0 * j2) if j2 > J2_THRESHOLD else 0.0
+    return math.sqrt(3.0 * j2) if j2 > threshold else 0.0
 
 
 @njit(parallel=True, cache=True)
@@ -38,7 +46,7 @@ def _advance_kernel(lost, cells, cell_x, cell_y, n_cols, dx, dy, dt,
                     nodal_moisture, nodal_saturation,
                     position, velocity, acceleration, increment, displacement, step_disp,
                     moisture, saturation, nan_initial, nan_step,
-                    step, restart, with_moisture, mesh_version):
+                    step, restart, with_moisture, mesh_version, legacy_restart_displacement):
     for i in prange(position.shape[0]):
         if not lost[i]:
             cell = cells[i]
@@ -52,7 +60,9 @@ def _advance_kernel(lost, cells, cell_x, cell_y, n_cols, dx, dy, dt,
             nan_step[i] = 0
             if step == 1 and not restart:
                 nan_initial[i] = 0
-            if step == 1 and restart:
+            if step == 1 and legacy_restart_displacement:
+                # H-14: el original sumaba el desplazamiento acumulado al "instantáneo" en
+                # el primer paso tras un reinicio.
                 step_disp[i, 0] = displacement[i, 0]
                 step_disp[i, 1] = displacement[i, 1]
             nan_corners = 0
@@ -99,7 +109,7 @@ def _advance_kernel(lost, cells, cell_x, cell_y, n_cols, dx, dy, dt,
 
 
 def advance_particles(particles: Particles, nodes: Nodes, grid: Grid, config: CaseConfig,
-                      step: int) -> None:
+                      step: int, legacy_compat: bool = False) -> None:
     """Interpola velocidad, aceleración y desplazamiento de las partículas desde los nodos.
 
     Primera mitad de ``SOLMOV``. Marca como ``NAN_AT_START`` las partículas que en el primer
@@ -116,6 +126,7 @@ def advance_particles(particles: Particles, nodes: Nodes, grid: Grid, config: Ca
         p.position, p.velocity, p.acceleration, p.position_increment, p.displacement,
         p.step_displacement, p.moisture, p.saturation, p.nan_initial, p.nan_step,
         step, config.restart, config.moisture, config.mesh_version,
+        config.restart and legacy_compat,
     )
 
 
@@ -123,7 +134,7 @@ def advance_particles(particles: Particles, nodes: Nodes, grid: Grid, config: Ca
 def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
                    position, increment, velocity, mass, strain, strain_inc,
                    vol_strain, vol_strain_inc, potential, kinetic, total, moisture,
-                   eq_strain, eq_strain_inc, legacy_divide_by_mass):
+                   eq_strain, eq_strain_inc, legacy_divide_by_mass, gravity, j2_threshold):
     for i in prange(position.shape[0]):
         if lost[i]:
             continue
@@ -168,7 +179,7 @@ def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
 
         vol_strain[i] = strain[i, 0] + strain[i, 1]
         vol_strain_inc[i] = d0 + d1
-        potential[i] = mass[i] * GRAVITY_STEP * position[i, 1]
+        potential[i] = mass[i] * gravity * position[i, 1]
         kinetic[i, 0] = 0.5 * mass[i] * velocity[i, 0] * velocity[i, 0]
         kinetic[i, 1] = 0.5 * mass[i] * velocity[i, 1] * velocity[i, 1]
         total[i] = potential[i] + kinetic[i, 0] + kinetic[i, 1]
@@ -180,8 +191,8 @@ def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
 
         # Deformación de corte equivalente: 2/3·q (con la deformación de corte ingenieril / 2)
         eq_strain[i] = 2.0 * deviatoric_q(strain[i, 0], strain[i, 1], strain[i, 3],
-                                          strain[i, 2] / 2.0) / 3.0
-        eq_strain_inc[i] = 2.0 * deviatoric_q(d0, d1, 0.0, d2 / 2.0) / 3.0
+                                          strain[i, 2] / 2.0, j2_threshold) / 3.0
+        eq_strain_inc[i] = 2.0 * deviatoric_q(d0, d1, 0.0, d2 / 2.0, j2_threshold) / 3.0
 
 
 def update_strains(particles: Particles, nodes: Nodes, grid: Grid, config: CaseConfig,
@@ -196,6 +207,8 @@ def update_strains(particles: Particles, nodes: Nodes, grid: Grid, config: CaseC
         p.position, p.position_increment, p.velocity, p.mass, p.strain, p.strain_increment,
         p.vol_strain, p.vol_strain_increment, p.potential_energy, p.kinetic_energy,
         p.total_energy, p.moisture, p.eq_strain, p.eq_strain_increment, legacy_compat,
+        LEGACY_GRAVITY_STEP if legacy_compat else GRAVITY,
+        LEGACY_J2_THRESHOLD if legacy_compat else J2_THRESHOLD,
     )
 
 
@@ -205,3 +218,29 @@ def output_mask(particles: Particles, grid: Grid, step: int) -> np.ndarray:
     cells, _, _ = grid_locate(particles.position, grid)
     update_lost_flags(particles.lost[:n], cells, step)
     return ~particles.lost[:n]
+
+
+@njit(parallel=True, cache=True)
+def _count_nan_kernel(lost, cells, n_cols, node_is_nan, mesh_version, out):
+    for i in prange(lost.size):
+        if lost[i]:
+            out[i] = 0
+            continue
+        if mesh_version == 1:  # nodos del elemento sin dato (0 a 4)
+            total = 0
+            for j in range(4):
+                total += node_is_nan[cell_node(cells[i], n_cols, j)]
+            out[i] = total
+        else:  # el punto PIVlab del centro del elemento no tiene dato (0 o 1)
+            out[i] = node_is_nan[cells[i]]
+
+
+def count_nan_nodes(particles: Particles, nodes: Nodes, grid: Grid, mesh_version: int,
+                    step: int) -> np.ndarray:
+    """Cuántos datos faltan alrededor de cada partícula (resultado ``NaNs``, ver H-11)."""
+    n = particles.position.shape[0]
+    cells, _, _ = grid_locate(particles.position, grid)
+    update_lost_flags(particles.lost[:n], cells, step)
+    _count_nan_kernel(particles.lost[:n], cells, grid.n_cols, nodes.is_nan, mesh_version,
+                      particles.missing_data)
+    return particles.missing_data

@@ -128,7 +128,8 @@ def compute_nodal_momentum_v1(nodes: Nodes) -> None:
 @njit(cache=True, nogil=True)
 def _distribute_to_staggered(velocity, previous_velocity, has_velocity, lost, cells, n_cols,
                              moisture_measured, saturation_measured,
-                             momentum, momentum_increment, active_count, moisture, saturation):
+                             momentum, momentum_increment, active_count, moisture, saturation,
+                             normalize):
     momentum[:] = 0.0
     momentum_increment[:] = 0.0
     active_count[:] = 0
@@ -150,9 +151,24 @@ def _distribute_to_staggered(velocity, previous_velocity, has_velocity, lost, ce
             moisture[node] = moisture[node] + moisture_measured[i] * weight
             saturation[node] = saturation[node] + saturation_measured[i] * weight
 
+    if normalize:
+        # H-23: un nodo del borde recibe menos de 4 aportaciones y se quedaría con una
+        # fracción de la velocidad. Dividir por el peso acumulado (1 en el interior, donde
+        # por tanto no cambia nada) lo convierte en la media de los puntos que sí aportan.
+        for node in range(momentum.shape[0]):
+            total = weight * active_count[node]
+            if total > 0.0 and total != 1.0:
+                momentum[node, 0] /= total
+                momentum[node, 1] /= total
+                momentum_increment[node, 0] /= total
+                momentum_increment[node, 1] /= total
+                moisture[node] /= total
+                saturation[node] /= total
+
 
 def compute_nodal_momentum_v2(nodes: Nodes, grid: Grid, centers: np.ndarray,
-                              particles: Particles, step: int) -> None:
+                              particles: Particles, step: int,
+                              normalize: bool = False) -> None:
     """IVERSION = 2: cada punto PIVlab reparte 1/4 de su velocidad a los nodos de la celda
     desplazada que lo contiene.
 
@@ -166,5 +182,5 @@ def compute_nodal_momentum_v2(nodes: Nodes, grid: Grid, centers: np.ndarray,
         nodes.velocity, nodes.previous_velocity, _has_velocity(nodes), particles.lost, cells,
         grid.n_cols, nodes.moisture_measured, nodes.saturation_measured,
         nodes.momentum, nodes.momentum_increment, nodes.active_count,
-        nodes.moisture, nodes.saturation,
+        nodes.moisture, nodes.saturation, normalize,
     )

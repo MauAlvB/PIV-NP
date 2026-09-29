@@ -45,10 +45,23 @@ def _nodal_count_by_particle(p: Particles, nodes: Nodes) -> np.ndarray:
     return counts
 
 
+#: Resultado "NaNs": datos que faltan alrededor de la partícula. Con IVERSION=1, cuántos de
+#: los 4 nodos de su elemento no tienen medida; con IVERSION=2, si el punto PIVlab del centro
+#: de su elemento no la tiene (ver H-11).
+MISSING_DATA = ResultSpec("NaNs", "Scalar", lambda p, n: p.missing_data,
+                          only_active=False, integer=True)
+LEGACY_MISSING_DATA = ResultSpec("NaNs", "Scalar", _nodal_count_by_particle,
+                                 only_active=False, integer=True)
+
+#: Energía cinética: un escalar, la suma de las dos componentes. El original las escribía
+#: por separado bajo una cabecera "Scalar", así que GiD solo leía la componente x (H-12).
+KINETIC_ENERGY = ResultSpec("E_kinetic", "Scalar", lambda p, n: p.kinetic_energy.sum(axis=1))
+LEGACY_KINETIC_ENERGY = ResultSpec("E_kinetic", "Scalar", lambda p, n: p.kinetic_energy)
+
 RESULTS: tuple[ResultSpec, ...] = (
     ResultSpec("Displacement", "Vector", lambda p, n: p.displacement),
     ResultSpec("Inst_displacement", "Vector", lambda p, n: p.step_displacement),
-    ResultSpec("NaNs", "Scalar", _nodal_count_by_particle, only_active=False, integer=True),
+    MISSING_DATA,
     ResultSpec("Velocity", "Vector", lambda p, n: p.velocity),
     ResultSpec("Acceleration", "Vector", lambda p, n: p.acceleration),
     ResultSpec("Total_strain", "Vector", lambda p, n: p.strain[:, :3]),
@@ -58,11 +71,23 @@ RESULTS: tuple[ResultSpec, ...] = (
     ResultSpec("Ins_vol_strain", "Scalar", lambda p, n: p.vol_strain_increment),
     ResultSpec("In_E_strain", "Scalar", lambda p, n: p.eq_strain_increment),
     ResultSpec("E_potential", "Scalar", lambda p, n: p.potential_energy),
-    ResultSpec("E_kinetic", "Scalar", lambda p, n: p.kinetic_energy),  # 2 valores (H-12)
+    KINETIC_ENERGY,
     ResultSpec("E_total", "Scalar", lambda p, n: p.total_energy),
     ResultSpec("Moisture", "Scalar", lambda p, n: p.moisture, needs_moisture=True),
     ResultSpec("Saturation", "Scalar", lambda p, n: p.saturation, needs_moisture=True),
 )
+
+
+def result_specs(legacy_compat: bool = False) -> tuple[ResultSpec, ...]:
+    """Bloques del ``.POST.RES``.
+
+    En modo compatibilidad, "NaNs" vuelve a ser el contador nodal del original (H-11) y
+    "E_kinetic" sus dos componentes (H-12).
+    """
+    if not legacy_compat:
+        return RESULTS
+    replacements = {MISSING_DATA: LEGACY_MISSING_DATA, KINETIC_ENERGY: LEGACY_KINETIC_ENERGY}
+    return tuple(replacements.get(spec, spec) for spec in RESULTS)
 
 
 def result_header(name: str, kind: str, time: float) -> str:
@@ -73,10 +98,12 @@ def result_header(name: str, kind: str, time: float) -> str:
 class GidWriter:
     """Escribe ``<caso>.POST.MSH`` y ``<caso>.POST.RES`` en ``directory``."""
 
-    def __init__(self, directory: Path, case_name: str, eol: str = os.linesep) -> None:
+    def __init__(self, directory: Path, case_name: str, eol: str = os.linesep,
+                 legacy_compat: bool = False) -> None:
         self.mesh_path = Path(directory) / f"{case_name}.POST.MSH"
         self.results_path = Path(directory) / f"{case_name}.POST.RES"
         self.eol = eol
+        self.specs = result_specs(legacy_compat)
         self._eol_bytes = eol.encode()
         self._file = None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gid-writer")
@@ -102,8 +129,15 @@ class GidWriter:
             f.write(self._lines(["End Elements"]))
 
     # --- resultados ----------------------------------------------------------------------
-    def start_results(self) -> None:
-        """Crea (o vacía) el archivo de resultados y escribe la cabecera GiD."""
+    def start_results(self, append: bool = False) -> None:
+        """Abre el archivo de resultados.
+
+        ``append`` continúa uno existente (reinicio) en vez de vaciarlo; si no existe, se
+        crea con su cabecera GiD.
+        """
+        if append and self.results_path.exists():
+            self._file = open(self.results_path, "ab")  # noqa: SIM115 (se cierra en close())
+            return
         self._file = open(self.results_path, "wb")  # noqa: SIM115 (se cierra en close())
         self._submit(self._lines([RES_HEADER]))
 
@@ -114,7 +148,7 @@ class GidWriter:
             raise RuntimeError("Llama a start_results() antes de write_step()")
         active = located & (particles.nan_initial == ACTIVE)
         chunks = []
-        for spec in RESULTS:
+        for spec in self.specs:
             if spec.needs_moisture and not with_moisture:
                 continue
             mask = active if spec.only_active else located

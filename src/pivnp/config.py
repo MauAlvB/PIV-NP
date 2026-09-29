@@ -90,6 +90,8 @@ class CaseConfig:
             errors.append(f"IVERSION={self.mesh_version} debe ser 1 o 2")
         if self.print_every < 1:
             errors.append("IMPPAS debe ser >= 1")
+        if self.contour not in (0, 1, 2, 3):
+            errors.append(f"ICONTOUR={self.contour} debe estar entre 0 y 3")
         if errors:
             raise ConfigError("; ".join(errors))
 

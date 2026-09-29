@@ -74,9 +74,10 @@ Opciones:
 | `--case NOMBRE` | nombre del caso (si no, se lee de `PIV-NP.TXT`) |
 | `--threads N` | hilos de cálculo (por defecto, todos los núcleos) |
 | `--prefetch N` | archivos PIVlab leídos por adelantado (por defecto 4) |
-| `--contour-min-neighbors N` | con `ICONTOUR=1`: vecinos con datos necesarios (por defecto 3) |
-| `--contour-layers N` | con `ICONTOUR=1`: capas de nodos a rellenar (por defecto 1) |
-| `--legacy-compat` | reproducir los errores del Fortran original (H-01, H-04, H-08 y H-13) |
+| `--contour-min-neighbors N` | con `ICONTOUR=1`: vecinos con dato necesarios (por defecto 3) |
+| `--contour-layers N` | con `ICONTOUR=1` y `3`: capas de puntos a reconstruir (por defecto 1) |
+| `--contour-min-particles N` | con `ICONTOUR=2`: partículas necesarias alrededor (por defecto 1) |
+| `--legacy-compat` | reproducir el comportamiento del Fortran original |
 | `--vtk` | exportar también a VTK para ParaView (ver [Visualización](#visualización)) |
 | `-q` | solo mostrar errores |
 
@@ -136,7 +137,7 @@ BLOQUE 4: S_DENSITY POROSITY
 | `MOISTER` | 1 = leer también `Moist_<n>.TXT` (humedad y saturación) |
 | `IVERSION` | 1 = malla PIV-NP igual a la de PIVlab; 2 = malla desplazada media celda |
 | `IPIVLAB` | 1 = archivos de 4 columnas (PIVlab antiguo); otro = 5 columnas |
-| `ICONTOUR` | 0 = sin corrección de contorno; 1 = corrección por media de vecinos (nuevo) |
+| `ICONTOUR` | corrección de contorno: 0 = ninguna, 1 = media de vecinos, 2 = media de partículas, 3 = extrapolación |
 | `IREC` | 0 = análisis nuevo; 1 = continuar desde `<caso>.REC` |
 | `ITR` | debe ser 0: las partículas de seguimiento PTV se eliminaron (H-15) |
 | `S_DENSITY`, `POROSITY` | se leen pero no intervienen en el cálculo |
@@ -168,12 +169,12 @@ Resultados del `.POST.RES`:
 |---|---|---|
 | `Displacement` | vector | desplazamiento acumulado |
 | `Inst_displacement` | vector | desplazamiento del último paso |
-| `NaNs` | escalar | contador heredado del original (ver H-11) |
+| `NaNs` | escalar | datos que faltan alrededor: nodos sin medida del elemento (IVERSION=1) o punto central sin medida (IVERSION=2) |
 | `Velocity`, `Acceleration` | vector | velocidad y aceleración de la partícula |
 | `Total_strain`, `Inc_strain` | 3 comp. | εxx, εyy, γxy acumuladas / del paso |
 | `Equi_strain`, `In_E_strain` | escalar | deformación de corte equivalente acumulada / del paso |
 | `Vol_strain`, `Ins_vol_strain` | escalar | deformación volumétrica acumulada / del paso |
-| `E_potential`, `E_kinetic`, `E_total` | escalar | energías por unidad de masa |
+| `E_potential`, `E_kinetic`, `E_total` | escalar | energías por unidad de masa (`E_total` = potencial + cinética) |
 | `Moisture`, `Saturation` | escalar | solo con `MOISTER=1` |
 
 ## Cómo funciona
@@ -234,35 +235,50 @@ Después, en ParaView: **File → Open → `zapatak_vtk/zapatak.pvd` → Apply**
 
 ## Corrección de contorno (CONTOUR)
 
-En el borde del material PIVlab no da velocidad (NaN) en los puntos cuya ventana de
-interrogación cae parcialmente fuera. Esos nodos entran en la interpolación con velocidad 0
-(o la del paso anterior), y las partículas del borde se mueven menos de lo que deberían.
+En el borde del material, PIVlab no da velocidad (NaN) en los puntos cuya ventana de
+interrogación cae parcialmente fuera. Eso provoca dos efectos: las partículas del borde
+interpolan con nodos a velocidad 0 y se mueven menos de lo que deberían, y algunas siguen
+moviéndose con la velocidad del último paso con dato, que es lo que hace que "salgan
+volando" (H-02). Con la malla desplazada hay además un tercer efecto: los nodos del borde
+reciben menos aportaciones y se quedan con una fracción de su velocidad (H-23).
 
-La propuesta implementada (`pivnp/contour.py`), que se activa con `ICONTOUR=1`:
+`ICONTOUR` elige cómo reconstruir la velocidad de los puntos sin dato:
 
-1. A cada nodo sin datos con al menos `min_neighbors` vecinos con datos (de sus 8 vecinos)
-   se le asigna la **media de sus velocidades**.
-2. Se puede repetir `layers` veces para avanzar hacia el exterior.
-3. Las marcas de "sin datos" originales no cambian, así que **no se activan partículas
-   en el aire**: solo mejora la velocidad interpolada de las partículas del borde.
+| ICONTOUR | Método | Parámetros |
+|---|---|---|
+| 0 | ninguno (comportamiento del original) | — |
+| 1 | media de los nodos vecinos con dato (8 vecinos) | `--contour-min-neighbors`, `--contour-layers` |
+| 2 | media de las velocidades de las partículas de los elementos de alrededor | `--contour-min-particles` |
+| 3 | extrapolación lineal desde el interior hacia el exterior | `--contour-layers` |
 
-Se promedian nodos y no partículas porque la velocidad de las partículas se interpola desde
-los nodos: promediar partículas sería circular y más caro.
+Con cualquier método distinto de 0, la malla desplazada normaliza además el reparto de cada
+punto entre los nodos de su celda, que es la corrección de H-23.
 
-Efecto en el caso de la centrífuga (149 pasos, 810 partículas de borde de 9378 activas):
+Los puntos reconstruidos se marcan aparte y **no** cambian las marcas de "sin dato", así que
+la corrección no activa partículas en el aire: solo mejora la velocidad interpolada de las
+partículas del borde.
 
-| Configuración | Desplazamiento medio de las partículas de borde |
-|---|---|
-| Sin corrección (original) | 1.533 m |
-| 3 vecinos, 1 capa | 1.621 m (+6 %) |
-| 2 vecinos, 2 capas | 1.518 m (−1 %) |
+Efecto en el caso de la centrífuga (149 pasos, 9378 partículas activas):
 
-Estos números son solo orientativos: conviene validarlos con marcadores PTV o con
-fotografías del ensayo. Para añadir otro método basta con escribir una clase con el método
-`apply(nodes, n_cols, n_rows)`.
+| Configuración | Partículas aisladas al final | Desplazamiento máximo |
+|---|---|---|
+| Sin corrección (original) | 14 | 3.61 m |
+| ICONTOUR=1, 3 vecinos, 1 capa | 0 | 3.67 m |
+| ICONTOUR=2, media de partículas | 0 | 3.10 m |
+| ICONTOUR=3, extrapolación | 0 | 3.39 m |
 
-> El original lee `ICONTOUR` pero lo ignora. Con `ICONTOUR=0` esta versión reproduce
-> exactamente el original.
+"Partículas aisladas" son las que acaban sin vecinas a menos de una celda, es decir, las que
+se han despegado del material: son las que se ven flotando sobre el talud en la primera
+imagen.
+
+![Comparación de los métodos de corrección de contorno](docs/img/contorno_comparativa.png)
+
+Cuál es el mejor es una cuestión física, no de programación: conviene contrastarlo con
+marcadores PTV o con fotografías del ensayo. Para añadir otro método basta con escribir una
+clase con un método `apply(ctx)` en `pivnp/contour.py`.
+
+> El original lee `ICONTOUR` pero lo ignora, porque la subrutina `CONTOUR` no llegó a
+> escribirse. Con `ICONTOUR=0` esta versión reproduce exactamente el original.
 
 ## Rendimiento
 
@@ -351,7 +367,9 @@ piv-np/
 
 ## Hallazgos y propuestas
 
-Durante la migración se encontraron **23 puntos** en el código original. Corregidos:
+Durante la migración se encontraron **23 puntos** en el código original. Corregidos, además
+de H-07 (constantes en simple precisión), H-11 (resultado "NaNs" sin sentido), H-12
+(energía cinética mal declarada) y H-14 (reinicio):
 
 * **H-01**: la aceleración usaba una "velocidad anterior" equivocada en el 50 % de los nodos.
 * **H-04**: con `IVERSION=2` las deformaciones salían divididas por NPC².
@@ -362,10 +380,10 @@ Durante la migración se encontraron **23 puntos** en el código original. Corre
 * **H-15**: las partículas de seguimiento PTV (`ITR`) nunca llegaban a los resultados
   (opción eliminada).
 
-Los cuatro primeros cambian resultados, así que se pueden revertir con `--legacy-compat`.
-Quedan puntos pendientes de decisión, entre ellos **H-23** (con `IVERSION=2`, los nodos del
-borde reciben una velocidad infravalorada) y **H-02** (los nodos que pasan a NaN conservan
-la velocidad del paso anterior). La lista completa está en
+Los que cambian resultados se pueden revertir con `--legacy-compat`, y en ese modo las
+salidas siguen siendo idénticas byte a byte a las del Fortran. **H-02** (nodos que pasan a
+NaN) y **H-23** (reparto en el borde con `IVERSION=2`) se corrigen activando la corrección
+de contorno. La lista completa está en
 [`docs/HALLAZGOS.md`](docs/HALLAZGOS.md), y las propuestas de arquitectura en
 [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
 

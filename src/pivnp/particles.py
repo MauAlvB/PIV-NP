@@ -6,19 +6,20 @@ import numpy as np
 from numba import njit, prange
 
 from .config import MAX_PARTICLES_PER_SIDE, CaseConfig
-from .constants import GRAVITY_INITIAL, PARTICLE_LOCAL_COORDS
+from .constants import GRAVITY, LEGACY_PARTICLE_LOCAL_COORDS, PARTICLE_LOCAL_COORDS
 from .mesh import Grid
 from .state import Particles
 
 
-def local_coordinates(npc: int) -> np.ndarray:
+def local_coordinates(npc: int, legacy_compat: bool = False) -> np.ndarray:
     """Coordenadas locales en [-1, 1] de las partículas de cada lado de la celda."""
-    if npc not in PARTICLE_LOCAL_COORDS:
+    table = LEGACY_PARTICLE_LOCAL_COORDS if legacy_compat else PARTICLE_LOCAL_COORDS
+    if npc not in table:
         raise ValueError(f"NPC={npc} debe estar entre 1 y {MAX_PARTICLES_PER_SIDE}")
-    return np.array(PARTICLE_LOCAL_COORDS[npc])
+    return np.array(table[npc])
 
 
-def seed_positions(grid: Grid, npc: int) -> np.ndarray:
+def seed_positions(grid: Grid, npc: int, legacy_compat: bool = False) -> np.ndarray:
     """Posiciones (n_cells * npc², 2) de las partículas iniciales.
 
     Orden: fila de celdas, celda dentro de la fila, fila de partículas, columna de partículas
@@ -29,7 +30,7 @@ def seed_positions(grid: Grid, npc: int) -> np.ndarray:
     cell_left = grid.x0 + cols * grid.dx  # XF + (J - NCF) * AXC
     cell_bottom = grid.row_y[:-1]  # YF
 
-    g = local_coordinates(npc)
+    g = local_coordinates(npc, legacy_compat)
     x = (cell_left + grid.dx / 2.0)[:, None] + (g * grid.dx) / 2.0
     y = (cell_bottom + grid.dy / 2.0)[:, None] + (g * grid.dy) / 2.0
 
@@ -47,16 +48,18 @@ def cell_centers(grid: Grid) -> np.ndarray:
     return np.stack([xx.ravel(), yy.ravel()], axis=1)
 
 
-def create_particles(config: CaseConfig, grid: Grid) -> Particles:
+def create_particles(config: CaseConfig, grid: Grid,
+                     legacy_compat: bool = False) -> Particles:
     """Crea e inicializa las partículas (parte de ``PIVLAB_DATA``).
 
     En un reinicio (IREC = 1) las posiciones se cargan después desde el archivo ``.REC``.
     """
     particles = Particles.zeros(config.n_particles, n_lost=config.n_nodes)
     if not config.restart:
-        particles.position[:] = seed_positions(grid, config.particles_per_side)
+        particles.position[:] = seed_positions(grid, config.particles_per_side, legacy_compat)
+        particles.initial_position[:] = particles.position
 
-    particles.potential_energy[:] = particles.mass * GRAVITY_INITIAL * particles.position[:, 1]
+    particles.potential_energy[:] = particles.mass * GRAVITY * particles.position[:, 1]
     particles.total_energy[:] = particles.potential_energy + 0.0 + 0.0
     return particles
 

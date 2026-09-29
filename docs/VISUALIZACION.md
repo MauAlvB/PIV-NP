@@ -75,9 +75,8 @@ falta *Warp By Vector*). Arrays por punto:
 | `Displacement`, `Inst_displacement`, `Velocity`, `Acceleration` | vector (x, y, 0) |
 | `Total_strain`, `Inc_strain` | xx, yy, xy (γxy ingenieril) |
 | `Equi_strain`, `In_E_strain`, `Vol_strain`, `Ins_vol_strain` | escalar |
-| `E_potential`, `E_total` | escalar |
-| `E_kinetic` | x, y |
-| `NaNs` | contador heredado (ver HALLAZGOS H-11) |
+| `E_potential`, `E_kinetic`, `E_total` | escalar |
+| `NaNs` | datos que faltan alrededor de la partícula (0 a 4 con IVERSION=1; 0 o 1 con IVERSION=2) |
 | `Moisture`, `Saturation` | escalar (solo con `MOISTER=1`) |
 
 ## 4. Desde Python (opcional)

@@ -15,6 +15,7 @@ class Particles(NamedTuple):
     """Variables por partícula numérica. ``n`` = número de partículas (NP)."""
 
     position: np.ndarray  # XP (n, 2)
+    initial_position: np.ndarray  # posición al empezar el análisis (malla GiD, ver H-08)
     displacement: np.ndarray  # UP (n, 2): desplazamiento acumulado
     step_displacement: np.ndarray  # UPO (n, 2): desplazamiento del paso
     position_increment: np.ndarray  # XPP (n, 2)
@@ -32,8 +33,9 @@ class Particles(NamedTuple):
     total_energy: np.ndarray  # E_Total
     moisture: np.ndarray  # SMOIST_NP
     saturation: np.ndarray  # SATURA_NP
-    nan_initial: np.ndarray  # NaN_P: 0 activa, 1 sin datos en el paso 1, 2 seguimiento PTV
+    nan_initial: np.ndarray  # NaN_P: 0 activa, 1 sin datos en el paso 1
     nan_step: np.ndarray  # NaN_P2: sin datos en el paso actual (solo informativo)
+    missing_data: np.ndarray  # resultado "NaNs": datos que faltan alrededor (ver H-11)
     lost: np.ndarray  # IDONDE == -1 (tamaño max(n, nodos PIVlab), ver H-10)
 
     @classmethod
@@ -42,13 +44,15 @@ class Particles(NamedTuple):
             return np.zeros((n, k) if k else n, dtype=np.float64)
 
         return cls(
-            position=vec(2), displacement=vec(2), step_displacement=vec(2),
+            position=vec(2), initial_position=vec(2), displacement=vec(2),
+            step_displacement=vec(2),
             position_increment=vec(2), velocity=vec(2), acceleration=vec(2),
             strain=vec(4), strain_increment=vec(3), eq_strain=vec(), eq_strain_increment=vec(),
             vol_strain=vec(), vol_strain_increment=vec(), mass=np.ones(n),
             potential_energy=vec(), kinetic_energy=vec(2), total_energy=vec(),
             moisture=vec(), saturation=vec(),
             nan_initial=np.zeros(n, dtype=np.int8), nan_step=np.zeros(n, dtype=np.int8),
+            missing_data=np.zeros(n, dtype=np.int64),
             lost=np.zeros(max(n, n_lost), dtype=np.bool_),
         )
 
