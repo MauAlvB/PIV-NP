@@ -21,9 +21,22 @@ número de partículas activas al final es menor que el inicial.
 
 ## Sobre la rotación
 
-Una rotación de sólido rígido no deforma el material, pero acumular incrementos de
-deformación lineales sí produce una deformación aparente, que crece con el ángulo girado
-(unos 0.044 tras 50°) y no depende del número de partículas por celda. Es una limitación de
-la formulación, no un problema de esta implementación: eliminarla requeriría una medida de
-deformación finita (a partir del gradiente de deformación). La prueba correspondiente fija
-el valor actual para detectar si algún cambio lo empeora.
+Una rotación de sólido rígido no deforma el material, así que toda la deformación que sale
+es error. Midiendo el caso se ve que tiene **dos orígenes distintos**:
+
+| | Deformación de corte equivalente (media) |
+|---|---|
+| Sin corrección de contorno | 0.0169 |
+| Media de los nodos vecinos | 0.0111 |
+| Media de las partículas de alrededor | 0.0125 |
+| Extrapolación desde el interior | **0.0051, igual en todas las partículas** |
+
+El caso tiene instantes con 24 de sus 49 nodos sin dato, así que **dos tercios del error
+venían del contorno**. Al reconstruir esos nodos por extrapolación, el error restante es
+uniforme en todo el sólido y coincide con el que predice la teoría: acumular incrementos de
+deformación lineales durante un giro finito deja εxx = εyy = n·(cos Δθ − 1), que para 50
+pasos de 1° da una deformación de corte equivalente de 0.00508, frente a los 0.0051 medidos.
+
+Ese residuo sí es una limitación de la formulación, no de esta implementación: eliminarlo
+requeriría una medida de deformación finita (a partir del gradiente de deformación). Las
+pruebas fijan los dos valores para detectar si algún cambio los empeora.

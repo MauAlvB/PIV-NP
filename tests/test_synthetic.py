@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from pivnp.contour import make_contour_correction
 from pivnp.particles import seed_positions
 from pivnp.pivlab_io import FrameSource, pivlab_to_node
 from pivnp.simulation import Simulation
@@ -150,6 +151,34 @@ def test_rotacion_de_solido_rigido(nombre: str, workdir: Path):
     # el giro es simétrico respecto al centro: los desplazamientos también
     np.testing.assert_allclose(p.displacement[vivas, 0].min(), -p.displacement[vivas, 0].max(),
                                rtol=1e-9)
+
+
+def test_rotacion_con_correccion_de_contorno_deja_solo_el_error_de_formulacion(workdir: Path):
+    """Con el contorno corregido queda exactamente el error teórico de la formulación.
+
+    En el caso de rotación hay instantes con 24 de los 49 nodos sin dato, así que la mayor
+    parte de la deformación aparente viene del contorno. Al reconstruir esos nodos por
+    extrapolación, todas las partículas quedan con la misma deformación aparente, que
+    coincide con la que predice la teoría: acumular incrementos lineales durante un giro
+    finito deja εxx = εyy = n·(cos Δθ − 1).
+    """
+    sim = ejecutar("rotacion_1P", workdir / "rotacion")
+    sim_corregida = Simulation.from_directory(workdir / "rotacion")
+    sim_corregida.contour = make_contour_correction(3)
+    sim_corregida.run()
+
+    pasos = sim.config.total_steps - 1  # el primer instante no gira
+    eps = pasos * (math.cos(math.radians(1.0)) - 1.0)
+    media = 2 * eps / 3
+    j2 = (2 * (eps - media) ** 2 + media**2) / 2
+    teorico = 2 * math.sqrt(3 * j2) / 3
+
+    vivas = activas(sim_corregida)
+    eq = sim_corregida.particles.eq_strain[vivas]
+    assert eq.max() - eq.min() < 1e-6  # uniforme en todo el sólido
+    assert eq.mean() == pytest.approx(teorico, rel=0.02)
+    # sin corregir, el contorno multiplica por tres el error
+    assert sim.particles.eq_strain[activas(sim)].mean() > 3 * teorico
 
 
 def test_la_deformacion_no_depende_de_las_particulas_por_celda(workdir: Path):
