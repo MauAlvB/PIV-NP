@@ -68,6 +68,18 @@ def test_par_with_density_inside_block_three():
     assert cfg.pivlab_format == 1 and cfg.contour == 0 and not cfg.restart
 
 
+def test_moister_selects_where_the_moisture_comes_from():
+    """0 sin humedad, 1 de los Moist_<n>.TXT, 2 calculada desde las imágenes."""
+    def con_moister(valor):
+        return parse_par(PAR.replace("0.8\t149\t1\t0\t1", f"0.8\t149\t1\t{valor}\t1"))
+
+    assert not con_moister(0).moisture and not con_moister(0).moisture_from_images
+    assert con_moister(1).moisture and not con_moister(1).moisture_from_images
+    assert con_moister(2).moisture and con_moister(2).moisture_from_images
+    with pytest.raises(ConfigError, match="MOISTER"):
+        con_moister(3)
+
+
 def test_incomplete_analysis_block_is_rejected():
     lineas = PAR.splitlines()
     with pytest.raises(ConfigError, match="bloque 3"):

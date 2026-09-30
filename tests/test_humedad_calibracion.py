@@ -35,6 +35,15 @@ def test_pchip_es_exacto_con_datos_lineales():
                                atol=1e-12)
 
 
+def test_pchip_con_dos_puntos_es_la_recta():
+    """Es lo que hace MATLAB, y es la tabla mínima que admite una calibración."""
+    x = np.array([10.0, 30.0])
+    y = np.array([4.0, 0.0])
+    consulta = np.array([10.0, 15.0, 20.0, 30.0])
+    np.testing.assert_allclose(interpolar_pchip(x, y, consulta), [4.0, 3.0, 2.0, 0.0],
+                               atol=1e-12)
+
+
 def test_pchip_no_se_pasa_de_los_datos():
     """A diferencia de un spline normal, no inventa máximos entre los puntos."""
     x = np.arange(6.0)

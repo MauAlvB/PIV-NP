@@ -22,7 +22,8 @@ MINIMO = "CALIBRACION = cal.csv\n"
 # --- configuración ----------------------------------------------------------------------
 def test_valores_por_defecto_como_el_matlab():
     cfg = analizar(MINIMO)
-    assert cfg.canal == 1 and cfg.sigma == 40
+    # El canal por defecto es el gris, que es con el que se hizo el análisis de referencia.
+    assert cfg.canal == 0 and cfg.sigma == 40
     assert (cfg.desplazamiento_seco, cfg.desplazamiento_saturado) == (5, -6)
     assert cfg.umbral_saturacion == 0.8 and cfg.incremental
     assert cfg.referencia_seca == "ref2.jpg"

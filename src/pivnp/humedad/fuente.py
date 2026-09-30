@@ -7,18 +7,21 @@ trabajaba el código MATLAB y sirve para comparar resultados.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
 from .calibracion import Calibracion
-from .configuracion import ConfiguracionHumedad
+from .configuracion import ConfiguracionHumedad, leer
 from .imagenes import desenfoque_gaussiano, leer_imagen
 from .modelo import Estado, ModeloHumedad, Referencias, normalizar, referencias_por_desplazamiento
 from .muestreo import Registro, coordenadas_en_pixeles, fuera_de_la_imagen, muestrear
 
 CABECERA_MOIST = "x_m,y_m,moisture,saturation_degree"
+
+log = logging.getLogger("pivnp")
 
 
 @dataclass(frozen=True)
@@ -79,17 +82,55 @@ class FuenteHumedad:
         return desenfoque_gaussiano(imagen, self.configuracion.sigma,
                                     self.configuracion.redondeo_legado)
 
-    def instante(self, paso: int, con_dato: np.ndarray) -> Estado:
-        """Humedad y saturación de un instante."""
-        estado = self.modelo.evaluar(self.gris_normalizado(paso, con_dato))
+    def desde_gris(self, paso: int, normalizado: np.ndarray) -> Estado:
+        """Humedad y saturación a partir del gris ya normalizado.
+
+        Separado de la lectura de la imagen porque esta parte lleva memoria: la saturación no
+        baja, así que los instantes tienen que pasar por aquí en orden. Lo de antes no la
+        lleva y puede calcularse por adelantado en otro hilo.
+        """
+        estado = self.modelo.evaluar(normalizado)
         if paso == 1 and self.configuracion.primer_instante == "legado":
             # El MATLAB dejaba la humedad a cero en el primer instante.
             estado = Estado(estado.saturacion, np.zeros_like(estado.humedad),
                             estado.recortados)
         return estado
 
+    def instante(self, paso: int, con_dato: np.ndarray) -> Estado:
+        """Humedad y saturación de un instante."""
+        return self.desde_gris(paso, self.gris_normalizado(paso, con_dato))
+
     def reiniciar(self) -> None:
         self.modelo.reiniciar()
+
+
+def fuente_de_caso(case_dir: Path, case_name: str, malla: Malla,
+                   con_dato: np.ndarray) -> FuenteHumedad:
+    """Prepara la fuente de humedad de un caso a partir de su ``<caso>.HUM``.
+
+    El archivo de calibración se busca junto al del caso, salvo que se dé una ruta absoluta.
+    """
+    from ..config import find_file  # aquí para no crear una dependencia circular
+
+    case_dir = Path(case_dir)
+    configuracion = leer(find_file(case_dir, f"{case_name}.HUM"))
+    if configuracion.desconocidas:
+        log.warning("%s: claves que no se reconocen y se ignoran: %s", configuracion.origen,
+                    ", ".join(configuracion.desconocidas))
+    ruta_calibracion = Path(configuracion.calibracion)
+    if not ruta_calibracion.is_absolute():
+        ruta_calibracion = find_file(case_dir, configuracion.calibracion)
+    fuente = FuenteHumedad(case_dir, configuracion, Calibracion.desde_csv(ruta_calibracion),
+                           malla)
+    fuente.preparar(con_dato)
+    if fuente.nodos_fuera:
+        log.warning("%d nodos de la malla caen fuera de la imagen de humedad: revisa el "
+                    "registro (ESCALA_X, ORIGEN_X, ESCALA_Y, ORIGEN_Y) del .HUM",
+                    fuente.nodos_fuera)
+    log.info("Humedad desde las imágenes: %s, canal %d, sigma %g, calibración %s",
+             configuracion.patron_imagenes, configuracion.canal, configuracion.sigma,
+             Path(ruta_calibracion).name)
+    return fuente
 
 
 def escribir_moist(ruta: Path, malla: Malla, estado: Estado) -> None:

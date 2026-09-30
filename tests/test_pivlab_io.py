@@ -75,3 +75,58 @@ def test_frame_source_without_prefetch_or_moisture(workdir: Path):
     (workdir / "datos (1).txt").write_text(HEADER + "0,0,1,0\n")
     frame = next(FrameSource(workdir, n_nodes=1, prefetch=0).frames(range(1, 2)))
     assert frame.moisture.tolist() == [0.0] and frame.saturation.tolist() == [0.0]
+
+
+CABECERA_CON_FACTORES = ("PIVlab\nFactor de conversion (px -> m): 0.004, "
+                         "(px/frame -> m/s): 0.004\nx,y,u,v\n")
+
+
+def test_mesh_in_metres(workdir: Path):
+    (workdir / "datos (1).txt").write_text(CABECERA_CON_FACTORES + "0.1,0.2,1,0\n0.3,0.4,NaN,0\n")
+    x, y, factor, con_dato = FrameSource(workdir, n_nodes=2).mesh_in_metres()
+    assert x.tolist() == [0.1, 0.3] and y.tolist() == [0.2, 0.4]
+    assert factor == 0.004 and con_dato.tolist() == [True, False]
+
+
+def test_header_without_conversion_factor(workdir: Path):
+    (workdir / "datos (1).txt").write_text(HEADER + "0,0,1,0\n")
+    with pytest.raises(ValueError, match="píxeles a metros"):
+        FrameSource(workdir, n_nodes=1).mesh_in_metres()
+
+
+class _HumedadDePrueba:
+    """Doble de FuenteHumedad: anota en qué orden se le piden las cosas."""
+
+    def __init__(self) -> None:
+        self.grises: list[int] = []
+        self.modelo: list[int] = []
+
+    def gris_normalizado(self, paso, con_dato):
+        self.grises.append(paso)
+        return np.array([10.0 * paso])
+
+    def desde_gris(self, paso, normalizado):
+        self.modelo.append(paso)
+
+        class Estado:
+            humedad = normalizado / 100
+            saturacion = normalizado / 10
+
+        return Estado()
+
+
+@pytest.mark.parametrize("prefetch", [0, 3])
+def test_moisture_from_images_is_applied_in_order(workdir: Path, prefetch):
+    """El modelo lleva memoria, así que tiene que ver los instantes en orden aunque las
+    imágenes se hayan leído por adelantado en varios hilos."""
+    for step in (1, 2, 3):
+        (workdir / f"datos ({step}).txt").write_text(HEADER + f"0,0,{step},0\n")
+    humedad = _HumedadDePrueba()
+    source = FrameSource(workdir, n_nodes=1, moisture=True, prefetch=prefetch, images=humedad)
+    frames = list(source.frames(range(1, 4)))
+
+    assert humedad.modelo == [1, 2, 3]
+    assert sorted(humedad.grises) == [1, 2, 3]
+    assert [f.saturation[0] for f in frames] == [1.0, 2.0, 3.0]
+    assert [f.moisture[0] for f in frames] == [0.1, 0.2, 0.3]
+    assert not source.moisture  # no se leen los Moist_<n>.TXT, que aquí ni existen

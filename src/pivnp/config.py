@@ -8,6 +8,9 @@ por espacios, tabuladores o comas y pueden repartirse en varias líneas)::
               NC  NN  NPC  NFIL  AXC  AYC
     Bloque 3  línea de comentario
               DT  TOTAL_STEPS  IMPPAS  MOISTER  IVERSION  IPIVLAB  ICONTOUR  IREC  ITR
+
+MOISTER vale 0 (sin humedad), 1 (leerla de los ``Moist_<n>.TXT``) o 2 (calcularla desde las
+imágenes del ensayo, con la configuración de ``<caso>.HUM``).
     Bloque 4  línea de comentario
               S_DENSITY  POROSITY
 
@@ -52,7 +55,10 @@ class CaseConfig:
     dt: float  # DT: tiempo entre imágenes
     total_steps: int  # TOTAL_STEPS: número de archivos PIVlab
     print_every: int  # IMPPAS: pasos entre resultados impresos
-    moisture: bool  # MOISTER: leer archivos Moist_<n>.TXT
+    moisture: bool  # MOISTER >= 1: el análisis lleva humedad y saturación
+    #: MOISTER = 2: la humedad se calcula desde las imágenes del ensayo, con la
+    #: configuración de ``<caso>.HUM``, en vez de leerse de los ``Moist_<n>.TXT``.
+    moisture_from_images: bool
     mesh_version: int  # IVERSION: 1 = malla PIV-NP = malla PIVlab; 2 = malla desplazada
     pivlab_format: int  # IPIVLAB: 1 = 4 columnas (PIVlab antiguo); otro = 5 columnas
     contour: int  # ICONTOUR: corrección de velocidades en el contorno (0 = no)
@@ -206,6 +212,11 @@ def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
     if irec_value not in (0, 1):
         raise ConfigError(f"IREC={irec_value} debe ser 0 o 1")
 
+    moister_value = _to_int(moister, "MOISTER")
+    if moister_value not in (0, 1, 2):
+        raise ConfigError(f"MOISTER={moister_value} debe ser 0 (sin humedad), 1 (leerla de "
+                          "los Moist_<n>.TXT) o 2 (calcularla desde las imágenes)")
+
     config = CaseConfig(
         title=title,
         n_cells=_to_int(nc, "NC"),
@@ -218,7 +229,8 @@ def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
         # TOTAL_STEPS es REAL en el original: el bucle DO trunca su valor.
         total_steps=max(0, math.trunc(_to_float(steps, "TOTAL_STEPS"))),
         print_every=_to_int(imppas, "IMPPAS"),
-        moisture=_to_int(moister, "MOISTER") == 1,
+        moisture=moister_value >= 1,
+        moisture_from_images=moister_value == 2,
         mesh_version=_to_int(iversion, "IVERSION"),
         pivlab_format=_to_int(ipivlab, "IPIVLAB"),
         contour=_to_int(icontour, "ICONTOUR"),

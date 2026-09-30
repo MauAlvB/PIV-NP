@@ -31,6 +31,8 @@ def _pendientes_pchip(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     h = np.diff(x)
     delta = np.diff(y) / h
     d = np.zeros_like(y)
+    if len(y) == 2:  # con dos puntos MATLAB interpola linealmente
+        return np.full(2, delta[0])
 
     interior = slice(1, len(y) - 1)
     mismo_signo = delta[:-1] * delta[1:] > 0

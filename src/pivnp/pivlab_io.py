@@ -10,10 +10,14 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:  # solo para los tipos: la humedad no depende de este módulo
+    from .humedad.fuente import FuenteHumedad as MoistureFromImages
 
 VELOCITY_PATTERN = "datos ({step}).TXT"
 MOISTURE_PATTERN = "Moist_{step}.TXT"
@@ -33,6 +37,10 @@ class Frame:
     v: np.ndarray  # velocidad y, eje de imagen (hacia abajo)
     moisture: np.ndarray
     saturation: np.ndarray
+    #: Gris de la imagen del ensayo, ya normalizado, cuando la humedad se calcula desde las
+    #: imágenes. Es el paso intermedio: la humedad sale de aplicarle el modelo, que lleva
+    #: memoria de los instantes anteriores y por eso no puede calcularse aquí.
+    normalized_gray: np.ndarray | None = None
 
 
 def pivlab_to_node(n_cols: int, n_rows: int) -> np.ndarray:
@@ -43,6 +51,16 @@ def pivlab_to_node(n_cols: int, n_rows: int) -> np.ndarray:
     """
     col, row_from_top = np.divmod(np.arange((n_cols + 1) * (n_rows + 1)), n_rows + 1)
     return (n_rows - row_from_top) * (n_cols + 1) + col
+
+
+def xy_factor_in_header(path: Path) -> float:
+    """Metros por píxel con los que PIVlab exportó el archivo (segunda línea)."""
+    lineas = Path(path).read_text(encoding="latin-1").splitlines()
+    encontrado = _XY_FACTOR.search(lineas[1]) if len(lineas) >= 2 else None
+    if not encontrado:
+        raise ValueError(f"{path}: la cabecera no trae el factor de píxeles a metros, que "
+                         "hace falta para situar los nodos en la imagen")
+    return float(encontrado.group(1))
 
 
 def frame_interval_in_header(path: Path) -> float | None:
@@ -107,12 +125,15 @@ class FrameSource:
         pivlab_format: int = 1,
         moisture: bool = False,
         prefetch: int = 4,
+        images: MoistureFromImages | None = None,
     ) -> None:
         self.directory = Path(directory)
         self.n_nodes = n_nodes
         self.pivlab_format = pivlab_format
-        self.moisture = moisture
+        #: Leer la humedad de los ``Moist_<n>.TXT``; incompatible con calcularla.
+        self.moisture = moisture and images is None
         self.prefetch = max(0, prefetch)
+        self.images = images
         self._index = {p.name.lower(): p for p in self.directory.iterdir()}
 
     def _path(self, pattern: str, step: int) -> Path:
@@ -126,7 +147,14 @@ class FrameSource:
         """Archivo PIVlab del instante ``step``."""
         return self._path(VELOCITY_PATTERN, step)
 
+    def mesh_in_metres(self, step: int = 1) -> tuple[np.ndarray, np.ndarray, float, np.ndarray]:
+        """Nodos en metros, metros por píxel y qué nodos midió PIVlab, de un archivo."""
+        path = self._path(VELOCITY_PATTERN, step)
+        x, y, u, _ = read_velocity_file(path, self.n_nodes, self.pivlab_format)
+        return x, y, xy_factor_in_header(path), np.isfinite(u)
+
     def read(self, step: int) -> Frame:
+        """Lee un instante. No aplica el modelo de humedad: eso va en orden, en ``frames``."""
         path = self._path(VELOCITY_PATTERN, step)
         _, _, u, v = read_velocity_file(path, self.n_nodes, self.pivlab_format)
         if self.moisture:
@@ -135,12 +163,20 @@ class FrameSource:
             )
         else:
             moisture = saturation = np.zeros(self.n_nodes)
-        return Frame(step, path, u, v, moisture, saturation)
+        gris = self.images.gris_normalizado(step, np.isfinite(u)) if self.images else None
+        return Frame(step, path, u, v, moisture, saturation, gris)
+
+    def _with_moisture(self, frame: Frame) -> Frame:
+        """Aplica el modelo de humedad, que necesita los instantes en orden."""
+        if self.images is None or frame.normalized_gray is None:
+            return frame
+        estado = self.images.desde_gris(frame.step, frame.normalized_gray)
+        return replace(frame, moisture=estado.humedad, saturation=estado.saturacion)
 
     def frames(self, steps: range) -> Iterator[Frame]:
         """Devuelve los instantes en orden, leyendo los siguientes en segundo plano."""
         if self.prefetch == 0:
-            yield from (self.read(step) for step in steps)
+            yield from (self._with_moisture(self.read(step)) for step in steps)
             return
         with ThreadPoolExecutor(max_workers=self.prefetch) as pool:
             pending = [pool.submit(self.read, s) for s in steps[: self.prefetch]]
@@ -150,4 +186,4 @@ class FrameSource:
                 if ahead < len(steps):
                     pending.append(pool.submit(self.read, steps[ahead]))
                 pending[k] = None  # libera memoria
-                yield frame
+                yield self._with_moisture(frame)

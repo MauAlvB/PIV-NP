@@ -5,7 +5,7 @@ Cada valor va identificado por su nombre, el orden no importa y los comentarios 
 
     ! Configuración de la medición de humedad
     IMAGENES   = vis_{n}.jpg      ! {n} se sustituye por el número de instante
-    CANAL      = 1                ! 1 rojo, 2 verde, 3 azul, 0 gris
+    CANAL      = gris             ! 1 rojo, 2 verde, 3 azul, 0 o "gris" para escala de grises
     SIGMA      = 40               ! radio de promediado, en píxeles
     REFERENCIA_SECA = ref2.jpg
     CALIBRACION = calibracion_slope_rgb.csv
@@ -24,10 +24,11 @@ from pathlib import Path
 from .imagenes import numero_de_canal
 
 #: Valor por defecto de cada clave. Son los del código MATLAB original salvo donde se acordó
-#: cambiar de criterio (PRIMER_INSTANTE y REDONDEO_LEGADO).
+#: cambiar de criterio: CANAL (el análisis de referencia se hizo en escala de grises, no con
+#: el canal rojo), PRIMER_INSTANTE y REDONDEO_LEGADO.
 PREDETERMINADOS: dict[str, str] = {
     "IMAGENES": "vis_{n}.jpg",
-    "CANAL": "1",
+    "CANAL": "gris",
     "SIGMA": "40",
     "REFERENCIA_SECA": "ref2.jpg",
     "DESPLAZAMIENTO_SECO": "5",

@@ -97,6 +97,9 @@ class Simulation:
         name, config = load_case(case_dir, case_name)
         frames = FrameSource(case_dir, config.n_nodes, config.pivlab_format,
                              config.moisture, prefetch=options.prefetch)
+        if config.moisture_from_images:
+            frames.images = moisture_source(case_dir, name, frames)
+            frames.moisture = False
         contour = make_contour_correction(config.contour, options.contour_min_neighbors,
                                           options.contour_layers,
                                           options.contour_min_particles)
@@ -242,6 +245,18 @@ class Simulation:
             time=t, step=step, nodes=NodalState.from_nodes(self.nodes),
             initial_position=p.initial_position[:n],
         ), extended=not self.options.legacy_compat)
+
+
+def moisture_source(case_dir: Path, case_name: str, frames: FrameSource):
+    """Fuente de humedad calculada desde las imágenes del ensayo (MOISTER=2).
+
+    La malla de PIV-NP se sitúa en la imagen con las coordenadas y el factor de conversión
+    del primer archivo PIVlab, y con la máscara de nodos que PIVlab midió.
+    """
+    from .humedad.fuente import Malla, fuente_de_caso
+
+    x, y, metros_por_pixel, con_dato = frames.mesh_in_metres(1)
+    return fuente_de_caso(case_dir, case_name, Malla(x, y, metros_por_pixel), con_dato)
 
 
 def run_case(case_dir: Path, case_name: str | None = None,
