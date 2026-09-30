@@ -26,8 +26,11 @@ class Registro:
     origen_y: float = 0.0
 
 
+SIN_REGISTRO = Registro()
+
+
 def coordenadas_en_pixeles(x_m: np.ndarray, y_m: np.ndarray, metros_por_pixel: float,
-                           registro: Registro = Registro()) -> tuple[np.ndarray, np.ndarray]:
+                           registro: Registro = SIN_REGISTRO) -> tuple[np.ndarray, np.ndarray]:
     """Columna y fila (base 0) de cada nodo dentro de la imagen.
 
     Se redondea al píxel más cercano, como hacía el MATLAB, y se resta 1 porque allí los
