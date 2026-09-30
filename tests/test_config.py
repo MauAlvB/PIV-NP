@@ -127,7 +127,8 @@ def test_old_moister_two_means_read_the_files():
     """En las versiones anteriores cualquier valor distinto de 0 leía los archivos; el 2 de
     'calcular desde las imágenes' solo existe en el dialecto actual."""
     bloque, _ = DIALECTOS["centrifuga 2022"]
-    cfg = parse_par("\n".join(PAR.splitlines()[:3]) + "\n" + bloque.replace("\t1\t0\t0", "\t2\t0\t0"))
+    bloque = bloque.replace("\t1\t0\t0", "\t2\t0\t0")
+    cfg = parse_par("\n".join(PAR.splitlines()[:3]) + "\n" + bloque)
     assert cfg.moisture and not cfg.moisture_from_images
 
 
