@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from .config import ConfigError
-from .simulation import RunOptions, run_case
+from .simulation import RunOptions, run_case, write_moisture_files
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +36,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "original, para repetir análisis hechos con él")
     parser.add_argument("--vtk", action="store_true",
                         help="al terminar, exportar también a VTK para ParaView (<caso>_vtk/)")
+    parser.add_argument("--write-moisture", action="store_true",
+                        help="calcular la humedad desde las imágenes del ensayo, escribirla "
+                             "en los Moist_<n>.TXT y salir sin hacer el análisis")
     parser.add_argument("-q", "--quiet", action="store_true", help="solo errores")
     return parser
 
@@ -61,6 +64,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     log = logging.getLogger("pivnp")
     try:
+        if args.write_moisture:
+            write_moisture_files(args.case_dir, args.case, options)
+            return 0
         summary = run_case(args.case_dir, args.case, options)
         if args.vtk:
             from .vtk_export import export_vtk

@@ -259,6 +259,34 @@ def moisture_source(case_dir: Path, case_name: str, frames: FrameSource):
     return fuente_de_caso(case_dir, case_name, Malla(x, y, metros_por_pixel), con_dato)
 
 
+def write_moisture_files(case_dir: Path, case_name: str | None = None,
+                         options: RunOptions = DEFAULT_OPTIONS) -> int:
+    """Calcula la humedad desde las imágenes y la escribe en ``Moist_<n>.TXT``.
+
+    No ejecuta el análisis: sirve para revisar los campos de humedad por separado, o para
+    compararlos con los de análisis anteriores. Devuelve cuántos archivos se han escrito.
+    """
+    from .humedad.fuente import Malla, escribir_moist
+
+    name, config = load_case(case_dir, case_name)
+    case_dir = Path(case_dir)
+    frames = FrameSource(case_dir, config.n_nodes, config.pivlab_format,
+                         prefetch=options.prefetch)
+    x, y, metros_por_pixel, _ = frames.mesh_in_metres(1)
+    malla = Malla(x, y, metros_por_pixel)
+    frames.images = moisture_source(case_dir, name, frames)
+
+    escritos = 0
+    for frame in frames.frames(range(1, config.total_steps + 1)):
+        destino = case_dir / f"Moist_{frame.step}.TXT"
+        escribir_moist(destino, malla, frame.moisture, frame.saturation)
+        escritos += 1
+        if frame.step == 1 or frame.step % options.log_every == 0:
+            log.info("ESCRITO %s", destino.name)
+    log.info("%d archivos de humedad escritos en %s", escritos, case_dir)
+    return escritos
+
+
 def run_case(case_dir: Path, case_name: str | None = None,
              options: RunOptions = DEFAULT_OPTIONS) -> RunSummary:
     """Ejecuta el caso descrito por ``PIV-NP.TXT`` (o ``case_name``) en ``case_dir``."""

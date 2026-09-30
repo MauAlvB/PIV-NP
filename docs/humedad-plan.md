@@ -158,11 +158,39 @@ distingue, porque la imagen es la propia referencia. Comparando los instantes si
 los cuatro canales, el gris es el que reproduce los datos (diferencia media 0,025 en el
 instante 2, frente a 0,034 del verde, 0,089 del azul y 0,113 del rojo).
 
+## Integración en el análisis (fase 3)
+
+`MOISTER`, en el bloque 3 del `.PAR`, pasa a admitir tres valores: 0 sin humedad, 1 leerla de
+los `Moist_<n>.TXT` (lo de siempre) y 2 calcularla desde las imágenes con la configuración de
+`<caso>.HUM`. El `.PAR` no cambia de formato.
+
+La lectura y el filtrado de cada imagen van con la lectura anticipada de los archivos PIVlab,
+en varios hilos. El modelo lleva memoria —la saturación no baja—, así que se aplica después,
+con los instantes ya en orden: el instante transporta el gris normalizado y la humedad se
+calcula al entregarlo. Con `pivnp <caso> --write-moisture` se generan los `Moist_<n>.TXT` sin
+ejecutar el análisis, para revisarlos o compararlos con los de análisis anteriores.
+
+### Comprobación de que la integración no cambia nada más
+
+Se analizó el caso completo (149 pasos, 18054 partículas) por los dos caminos, con la misma
+configuración salvo el origen de la humedad, y se compararon los `.POST.RES` resultado a
+resultado:
+
+| Resultado | Filas | Distintas | Diferencia máxima |
+|---|---|---|---|
+| Desplazamientos, velocidades, deformaciones, energías, NaNs (14 resultados) | 54507 cada uno | **0** | 0 |
+| Moisture | 54507 | 44404 | 24,0 |
+| Saturation | 54507 | 21892 | 0,85 |
+
+La malla también sale idéntica. Los dos únicos resultados que cambian son los que tienen que
+cambiar: la humedad, porque en los archivos del caso está casi toda a cero por el fallo del
+MATLAB, y la saturación, en la medida ya conocida del nivel de gris.
+
 ## Estado
 
-* Rama `humedad` con la cadena completa implementada y 253 pruebas en verde.
-* Fase 1 (calibración) y fase 2 (imágenes, muestreo, modelo) terminadas, probadas y
-  validadas contra el caso; el residuo está explicado y acotado.
-* Falta: integrar la fuente en el análisis y el comando propio (fase 3), y el umbral a 0,95
-  cuando terminen las comparaciones a 0,8.
+* Rama `humedad` con la cadena completa implementada y 267 pruebas en verde.
+* Fases 1 (calibración), 2 (imágenes, muestreo, modelo) y 3 (integración y comando)
+  terminadas, probadas y validadas contra el caso; el residuo está explicado y acotado.
+* Falta: el umbral a 0,95 cuando terminen las comparaciones a 0,8, y decidir cómo se fija la
+  banda seca-saturada (ahora sigue siendo la del MATLAB, referencia por nodo con +5 y −6).
 * Nada subido a GitHub; `main` tiene un commit local por delante del remoto.

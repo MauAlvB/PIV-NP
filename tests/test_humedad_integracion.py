@@ -13,7 +13,7 @@ import pytest
 
 from pivnp.config import ConfigError
 from pivnp.humedad.fuente import Malla, fuente_de_caso
-from pivnp.simulation import Simulation
+from pivnp.simulation import Simulation, write_moisture_files
 
 CABECERA = ("PIVlab\nFactor de conversion (px -> m): 0.001, (px/frame -> m/s): 0.001\n"
             "x [m],y [m],u [m/s],v [m/s]\n")
@@ -128,6 +128,25 @@ def test_moister_1_sigue_leyendo_los_archivos(workdir: Path):
     assert simulacion.frames.images is None and simulacion.frames.moisture
     simulacion.run()
     assert (simulacion.nodes.saturation_measured == 0.5).all()
+
+
+def test_escribir_los_archivos_de_humedad(workdir: Path):
+    caso = montar_caso(workdir / "caso")
+    assert write_moisture_files(caso) == 3
+
+    lineas = (caso / "Moist_2.TXT").read_text().splitlines()
+    assert lineas[0] == "x_m,y_m,moisture,saturation_degree"
+    assert len(lineas) == 1 + len(NODOS)
+    x, y, humedad, saturacion = (float(v) for v in lineas[1].split(","))
+    assert (x, y) == NODOS[0]
+    assert saturacion == pytest.approx(1 - normalizado(197) / 100, abs=1e-9)
+    assert humedad == pytest.approx(30 * saturacion, abs=1e-9)
+
+    # los archivos escritos sirven luego como entrada de un análisis con MOISTER=1
+    (caso / "prueba.PAR").write_text(PAR.format(moister=1))
+    simulacion = Simulation.from_directory(caso)
+    simulacion.run()
+    assert (simulacion.particles.moisture > 0).all()
 
 
 def test_moister_desconocido(workdir: Path):

@@ -133,13 +133,13 @@ def fuente_de_caso(case_dir: Path, case_name: str, malla: Malla,
     return fuente
 
 
-def escribir_moist(ruta: Path, malla: Malla, estado: Estado) -> None:
+def escribir_moist(ruta: Path, malla: Malla, humedad: np.ndarray,
+                   saturacion: np.ndarray) -> None:
     """Escribe un archivo ``Moist_<n>.TXT`` con el formato del código MATLAB."""
     lineas = [CABECERA_MOIST]
-    for x, y, humedad, saturacion in zip(malla.x_m, malla.y_m, estado.humedad,
-                                         estado.saturacion, strict=True):
+    for x, y, h, s in zip(malla.x_m, malla.y_m, humedad, saturacion, strict=True):
         lineas.append(f"{_numero(x, 10)},{_numero(y, 10)},"
-                      f"{_numero(humedad, 17)},{_numero(saturacion, 15)}")
+                      f"{_numero(h, 17)},{_numero(s, 15)}")
     Path(ruta).write_text("\n".join(lineas) + "\n", encoding="ascii")
 
 
