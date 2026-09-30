@@ -66,7 +66,7 @@ class Conversion:
         return f"{self.path.name}: {estado}" + "".join(f"\n    - {n}" for n in self.notes)
 
 
-def _bloque(titulo: str, nombres: tuple[str, ...], valores: list[str]) -> list[str]:
+def bloque(titulo: str, nombres: tuple[str, ...], valores: list[str]) -> list[str]:
     """Dos líneas alineadas: los nombres de los campos y sus valores debajo."""
     anchos = [max(len(n), len(v)) for n, v in zip(nombres, valores, strict=True)]
     cabecera = " ".join(n.ljust(a) for n, a in zip(nombres, anchos, strict=True))
@@ -81,9 +81,9 @@ def to_canonical(crudo: RawPar, moister: int, pivlab_format: int) -> str:
     analisis["IPIVLAB"] = str(pivlab_format)
     valores = [analisis.get(campo, crudo.value(campo)) for campo in ANALYSIS_FIELDS]
     lineas = [crudo.title]
-    lineas += _bloque("BLOQUE 2:", GEOMETRY_NAMES, list(crudo.geometry))
-    lineas += _bloque("BLOQUE 3:", ANALYSIS_NAMES, valores)
-    lineas += _bloque("BLOQUE 4:", SOIL_NAMES, [crudo.density, crudo.porosity])
+    lineas += bloque("BLOQUE 2:", GEOMETRY_NAMES, list(crudo.geometry))
+    lineas += bloque("BLOQUE 3:", ANALYSIS_NAMES, valores)
+    lineas += bloque("BLOQUE 4:", SOIL_NAMES, [crudo.density, crudo.porosity])
     return "\n".join(lineas) + "\n"
 
 

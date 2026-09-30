@@ -1,7 +1,7 @@
 Caso de regresion PIV-NP
-BLOQUE 2: NC NN NPC NFIL AXC AYC
-99 120 2 11 0.212115 0.212115
-BLOQUE 3: DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR
-0.8 12 6 1 1 2 0 0 0
-BLOQUE 4: S_DENSITY POROSITY
-2650.0 0.4
+BLOQUE 2: N_cel N_nod N_part_celda N_fil Ancho    Alto
+          99    120   2            11    0.212115 0.212115
+BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
+          0.8   12          6         1       1       2      0       0   0
+BLOQUE 4: s_density porosity
+          2650.0    0.4

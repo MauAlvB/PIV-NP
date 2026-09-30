@@ -76,18 +76,20 @@ def _write_moisture(path: Path, rows: list[str], step: int) -> None:
 
 
 def par_text(spec: dict, n_cols: int, n_rows: int, size: float, restart: bool) -> str:
-    lines = [
-        "Caso de regresion PIV-NP",
-        "BLOQUE 2: NC NN NPC NFIL AXC AYC",
-        f"{n_cols * n_rows} {(n_cols + 1) * (n_rows + 1)} {spec['npc']} {n_rows} {size} {size}",
-        "BLOQUE 3: DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR",
-        f"0.8 {spec['restart_steps'] if restart else spec['steps']} {spec['print_every']} "
-        f"{int(spec.get('moisture', False))} {spec['version']} {spec.get('pivlab_format', 1)} "
-        f"0 {int(restart)} 0",
-        "BLOQUE 4: S_DENSITY POROSITY",
-        "2650.0 0.4",
-    ]
-    return "\n".join(lines) + "\n"
+    """El ``.PAR`` en el formato único, el mismo que escribe ``pivnp --convert-par``."""
+    from pivnp.par_migrate import ANALYSIS_NAMES, GEOMETRY_NAMES, SOIL_NAMES, bloque
+
+    geometria = [str(n_cols * n_rows), str((n_cols + 1) * (n_rows + 1)), str(spec["npc"]),
+                 str(n_rows), str(size), str(size)]
+    analisis = ["0.8", str(spec["restart_steps"] if restart else spec["steps"]),
+                str(spec["print_every"]), str(int(spec.get("moisture", False))),
+                str(spec["version"]), str(spec.get("pivlab_format", 1)), "0",
+                str(int(restart)), "0"]
+    lineas = ["Caso de regresion PIV-NP"]
+    lineas += bloque("BLOQUE 2:", GEOMETRY_NAMES, geometria)
+    lineas += bloque("BLOQUE 3:", ANALYSIS_NAMES, analisis)
+    lineas += bloque("BLOQUE 4:", SOIL_NAMES, ["2650.0", "0.4"])
+    return "\n".join(lineas) + "\n"
 
 
 def run_legacy(exe: Path, workdir: Path) -> None:
