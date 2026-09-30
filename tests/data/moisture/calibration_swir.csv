@@ -1,10 +1,10 @@
-# Calibración del suelo del ensayo del artículo "Digital image-based measurement of
+# Calibration of the soil of the test in the paper "Digital image-based measurement of
 # degree of saturation on moving soil".
-# Procede de calibration_curve.m del código MATLAB del grupo (carpeta SWIR_SR): la
-# saturación y la humedad salen de interpolar la curva de retención del suelo en la
-# altura asociada a cada valor de gris de la columna de calibración.
-# gris: valor normalizado entre la referencia saturada (0) y la seca (100).
-gris,saturacion,humedad
+# Taken from calibration_curve.m of the group's MATLAB code (folder SWIR_SR): the
+# saturation and the water content come from interpolating the retention curve of the
+# soil at the height associated with each gray value of the calibration column.
+# gray: value normalized between the saturated reference (0) and the dry one (100).
+gray,saturation,moisture
 0,0.992847807,24.0297732
 0.0001,0.992501499,23.7521959
 0.5,0.990634621,23.4054367

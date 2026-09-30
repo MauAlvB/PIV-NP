@@ -107,39 +107,39 @@ def test_header_without_conversion_factor(workdir: Path):
         FrameSource(workdir, n_nodes=1).mesh_in_metres()
 
 
-class _HumedadDePrueba:
-    """Doble de FuenteHumedad: anota en qué orden se le piden las cosas."""
+class _FakeMoistureSource:
+    """Stand-in for MoistureSource: records the order in which it is asked for things."""
 
     def __init__(self) -> None:
-        self.grises: list[int] = []
-        self.modelo: list[int] = []
+        self.grays: list[int] = []
+        self.model: list[int] = []
 
-    def gris_normalizado(self, paso, con_dato):
-        self.grises.append(paso)
-        return np.array([10.0 * paso])
+    def normalized_gray(self, step, has_data):
+        self.grays.append(step)
+        return np.array([10.0 * step])
 
-    def desde_gris(self, paso, normalizado):
-        self.modelo.append(paso)
+    def from_gray(self, step, normalized):
+        self.model.append(step)
 
-        class Estado:
-            humedad = normalizado / 100
-            saturacion = normalizado / 10
+        class State:
+            moisture = normalized / 100
+            saturation = normalized / 10
 
-        return Estado()
+        return State()
 
 
 @pytest.mark.parametrize("prefetch", [0, 3])
 def test_moisture_from_images_is_applied_in_order(workdir: Path, prefetch):
-    """El modelo lleva memoria, así que tiene que ver los instantes en orden aunque las
-    imágenes se hayan leído por adelantado en varios hilos."""
+    """The model carries memory, so it has to see the steps in order even though the images
+    were read ahead of time on several threads."""
     for step in (1, 2, 3):
         (workdir / f"datos ({step}).txt").write_text(HEADER + f"0,0,{step},0\n")
-    humedad = _HumedadDePrueba()
-    source = FrameSource(workdir, n_nodes=1, moisture=True, prefetch=prefetch, images=humedad)
+    moisture = _FakeMoistureSource()
+    source = FrameSource(workdir, n_nodes=1, moisture=True, prefetch=prefetch, images=moisture)
     frames = list(source.frames(range(1, 4)))
 
-    assert humedad.modelo == [1, 2, 3]
-    assert sorted(humedad.grises) == [1, 2, 3]
+    assert moisture.model == [1, 2, 3]
+    assert sorted(moisture.grays) == [1, 2, 3]
     assert [f.saturation[0] for f in frames] == [1.0, 2.0, 3.0]
     assert [f.moisture[0] for f in frames] == [0.1, 0.2, 0.3]
-    assert not source.moisture  # no se leen los Moist_<n>.TXT, que aquí ni existen
+    assert not source.moisture  # the Moist_<n>.TXT are not read, and do not exist here

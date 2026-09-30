@@ -1,9 +1,9 @@
-# Calibración del suelo del ensayo Slope_RGB.
-# Procede de calibration_curve_JC.m del código MATLAB del grupo: la saturación es
-# medida y la humedad sale de interpolar la curva de retención del suelo en la
-# altura asociada a cada valor de gris.
-# gris: valor normalizado entre la referencia saturada (0) y la seca (100).
-gris,saturacion,humedad
+# Calibration of the soil of the Slope_RGB test.
+# Taken from calibration_curve_JC.m of the group's MATLAB code: the saturation is
+# measured and the water content comes from interpolating the retention curve of the
+# soil at the height associated with each gray value.
+# gray: value normalized between the saturated reference (0) and the dry one (100).
+gray,saturation,moisture
 5e-05,1,24.02977315
 0.0001,1,23.75219594
 0.5,1,23.40543671

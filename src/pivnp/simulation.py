@@ -179,7 +179,7 @@ class Simulation:
 
         self._save_restart(step, t)
         if self.frames.images is not None:
-            log.info("Humedad: %s", self.frames.images.resumen_de_calidad())
+            log.info("Moisture: %s", self.frames.images.quality_summary())
         summary.elapsed_s = time.perf_counter() - started
         log.info("ANALYSIS FINISHED en %.1f s", summary.elapsed_s)
         return summary
@@ -269,10 +269,10 @@ def moisture_source(case_dir: Path, case_name: str, frames: FrameSource):
     La malla de PIV-NP se sitúa en la imagen con las coordenadas y el factor de conversión
     del primer archivo PIVlab, y con la máscara de nodos que PIVlab midió.
     """
-    from .humedad.fuente import Malla, fuente_de_caso
+    from .moisture.source import Mesh, source_for_case
 
-    x, y, metros_por_pixel, con_dato = frames.mesh_in_metres(1)
-    return fuente_de_caso(case_dir, case_name, Malla(x, y, metros_por_pixel), con_dato)
+    x, y, metres_per_pixel, has_data = frames.mesh_in_metres(1)
+    return source_for_case(case_dir, case_name, Mesh(x, y, metres_per_pixel), has_data)
 
 
 def write_moisture_files(case_dir: Path, case_name: str | None = None,
@@ -282,26 +282,26 @@ def write_moisture_files(case_dir: Path, case_name: str | None = None,
     No ejecuta el análisis: sirve para revisar los campos de humedad por separado, o para
     compararlos con los de análisis anteriores. Devuelve cuántos archivos se han escrito.
     """
-    from .humedad.fuente import Malla, escribir_moist
+    from .moisture.source import Mesh, write_moist
 
     name, config = load_case(case_dir, case_name)
     case_dir = Path(case_dir)
     frames = FrameSource(case_dir, config.n_nodes, config.pivlab_format,
                          prefetch=options.prefetch)
-    x, y, metros_por_pixel, _ = frames.mesh_in_metres(1)
-    malla = Malla(x, y, metros_por_pixel)
+    x, y, metres_per_pixel, _ = frames.mesh_in_metres(1)
+    mesh = Mesh(x, y, metres_per_pixel)
     frames.images = moisture_source(case_dir, name, frames)
 
-    escritos = 0
+    written = 0
     for frame in frames.frames(range(1, config.total_steps + 1)):
-        destino = case_dir / f"Moist_{frame.step}.TXT"
-        escribir_moist(destino, malla, frame.moisture, frame.saturation)
-        escritos += 1
+        target = case_dir / f"Moist_{frame.step}.TXT"
+        write_moist(target, mesh, frame.moisture, frame.saturation)
+        written += 1
         if frame.step == 1 or frame.step % options.log_every == 0:
-            log.info("ESCRITO %s", destino.name)
-    log.info("%d archivos de humedad escritos en %s", escritos, case_dir)
-    log.info("Humedad: %s", frames.images.resumen_de_calidad())
-    return escritos
+            log.info("WRITTEN %s", target.name)
+    log.info("%d moisture files written in %s", written, case_dir)
+    log.info("Moisture: %s", frames.images.quality_summary())
+    return written
 
 
 def run_case(case_dir: Path, case_name: str | None = None,

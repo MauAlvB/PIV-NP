@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-if TYPE_CHECKING:  # solo para los tipos: la humedad no depende de este módulo
-    from .humedad.fuente import FuenteHumedad as MoistureFromImages
+if TYPE_CHECKING:  # types only: the moisture package does not depend on this module
+    from .moisture.source import MoistureSource
 
 VELOCITY_PATTERN = "datos ({step}).TXT"
 MOISTURE_PATTERN = "Moist_{step}.TXT"
@@ -140,7 +140,7 @@ class FrameSource:
         pivlab_format: int = 1,
         moisture: bool = False,
         prefetch: int = 4,
-        images: MoistureFromImages | None = None,
+        images: MoistureSource | None = None,
     ) -> None:
         self.directory = Path(directory)
         self.n_nodes = n_nodes
@@ -178,15 +178,15 @@ class FrameSource:
             )
         else:
             moisture = saturation = np.zeros(self.n_nodes)
-        gris = self.images.gris_normalizado(step, np.isfinite(u)) if self.images else None
-        return Frame(step, path, u, v, moisture, saturation, gris)
+        gray = self.images.normalized_gray(step, np.isfinite(u)) if self.images else None
+        return Frame(step, path, u, v, moisture, saturation, gray)
 
     def _with_moisture(self, frame: Frame) -> Frame:
-        """Aplica el modelo de humedad, que necesita los instantes en orden."""
+        """Apply the moisture model, which needs the steps in order."""
         if self.images is None or frame.normalized_gray is None:
             return frame
-        estado = self.images.desde_gris(frame.step, frame.normalized_gray)
-        return replace(frame, moisture=estado.humedad, saturation=estado.saturacion)
+        state = self.images.from_gray(frame.step, frame.normalized_gray)
+        return replace(frame, moisture=state.moisture, saturation=state.saturation)
 
     def frames(self, steps: range) -> Iterator[Frame]:
         """Devuelve los instantes en orden, leyendo los siguientes en segundo plano."""
