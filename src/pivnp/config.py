@@ -11,6 +11,10 @@ por espacios, tabuladores o comas y pueden repartirse en varias líneas)::
 
 MOISTER vale 0 (sin humedad), 1 (leerla de los ``Moist_<n>.TXT``) o 2 (calcularla desde las
 imágenes del ensayo, con la configuración de ``<caso>.HUM``).
+
+El bloque 3 ha cambiado de orden entre versiones del programa, y hay dialectos con el mismo
+número de valores en distinto orden. Por eso se lee primero su línea de comentario, donde
+cada archivo nombra sus propios campos, y solo si no se entiende se recurre a la posición.
     Bloque 4  línea de comentario
               S_DENSITY  POROSITY
 
@@ -22,6 +26,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -120,7 +125,12 @@ class _ListDirectedReader:
         return line
 
     def text(self) -> str:
+        """Una línea de texto, truncada a 80 columnas como el formato A80 del original."""
         return self._next_line()[:80].rstrip()
+
+    def comment(self) -> str:
+        """Una línea de comentario, entera: aquí el original no lee nada, solo salta."""
+        return self._next_line().rstrip()
 
     def values(self, count: int) -> list[str]:
         """Lee ``count`` valores; el resto de la última línea leída se descarta."""
@@ -153,14 +163,69 @@ def _to_float(token: str, name: str) -> float:
         raise ConfigError(f"{name}: se esperaba un número y se leyó {token!r}") from None
 
 
-def _analysis_block(reader: _ListDirectedReader) -> tuple[list[str], str | None, str | None]:
-    """Bloque 3, admitiendo también los ``.PAR`` de versiones anteriores.
+#: Nombre de campo que corresponde a cada palabra de la línea de comentario del bloque 3.
+#: Se busca como subcadena, sin acentos y en minúsculas, en el orden de esta lista.
+_BLOCK3_NAMES: tuple[tuple[str, str], ...] = (
+    ("del_t", "DT"), ("delt", "DT"), ("dt", "DT"),
+    ("total", "TOTAL_STEPS"), ("steps", "TOTAL_STEPS"), ("pasos", "TOTAL_STEPS"),
+    ("impres", "IMPPAS"), ("salto", "IMPPAS"), ("print", "IMPPAS"),
+    ("moist", "MOISTER"), ("humedad", "MOISTER"),
+    ("densi", "S_DENSITY"),
+    ("porosi", "POROSITY"),
+    ("pivlab", "IPIVLAB"),
+    ("pivnp", "IVERSION"), ("version", "IVERSION"),
+    ("contour", "ICONTOUR"), ("contorno", "ICONTOUR"),
+    ("rec", "IREC"),
+    ("ptv", "ITR"), ("ptr", "ITR"), ("track", "ITR"), ("segui", "ITR"),
+)
 
-    Devuelve los 9 valores del formato actual y, si el ``.PAR`` los trae dentro del bloque 3,
-    la densidad y la porosidad. Formatos reconocidos:
+#: Valor por defecto de lo que un ``.PAR`` puede no traer.
+_BLOCK3_DEFAULTS = {"MOISTER": "0", "IVERSION": "1", "IPIVLAB": "1", "ICONTOUR": "0",
+                    "IREC": "0", "ITR": "0"}
 
-    * 9 valores: ``DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR``
-      (el actual), con la densidad y la porosidad en el bloque 4.
+_PARENTHESES = re.compile(r"\([^)]*\)")
+
+
+def _strip_accents(text: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", text)
+                   if unicodedata.category(c) != "Mn")
+
+
+def _names_in_header(header: str) -> list[str] | None:
+    """Campos que nombra la línea de comentario del bloque 3, o ``None`` si no se entiende.
+
+    Cada ``.PAR`` documenta su propio orden en esa línea (``del_t total_steps
+    salto_impresion v.pivnp v.pivlab moister REC PTR``), que es la única forma fiable de
+    saberlo: hay dialectos con los mismos ocho valores en distinto orden.
+    """
+    texto = _PARENTHESES.sub(" ", header)
+    _, _, despues = texto.partition(":")  # quita el "BLOQUE 3:" de delante
+    palabras = _strip_accents(despues or texto).lower().split()
+    if not palabras:
+        return None
+
+    campos: list[str] = []
+    for palabra in palabras:
+        for clave, campo in _BLOCK3_NAMES:
+            if clave in palabra:
+                if campo in campos:  # un campo repetido delata que no es una lista de nombres
+                    return None
+                campos.append(campo)
+                break
+        else:
+            return None  # una palabra que no se reconoce invalida toda la línea
+    return campos
+
+
+def _analysis_block(reader: _ListDirectedReader,
+                    header: str) -> tuple[dict[str, str], bool]:
+    """Bloque 3, admitiendo los ``.PAR`` de todas las versiones.
+
+    Devuelve los valores por nombre y si el archivo está en el dialecto actual. Primero se
+    intenta leer la línea de comentario, que dice el orden; si no se entiende, se recurre a
+    la posición, que solo distingue los formatos que además difieren en número de valores:
+
+    * 9 valores: ``DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR``.
     * 8 valores: ``DT TOTAL_STEPS IMPPAS MOISTER S_DENSITY POROSITY IVERSION PTV``.
     * 3 o 4 valores: ``DT TOTAL_STEPS IMPPAS [MOISTER]``.
 
@@ -168,20 +233,31 @@ def _analysis_block(reader: _ListDirectedReader) -> tuple[list[str], str | None,
     de 4 columnas, sin corrección de contorno y análisis nuevo.
     """
     values = reader.line_values()
+    campos = _names_in_header(header)
+    if campos is not None and len(campos) == len(values):
+        log.info("%s: bloque 3 leído por su cabecera (%s)", reader.source, " ".join(campos))
+        return dict(zip(campos, values, strict=True)), "ICONTOUR" in campos
+
+    orden: list[str]
     if len(values) >= 9:
-        return values[:9], None, None
+        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "IVERSION", "IPIVLAB", "ICONTOUR",
+                 "IREC", "ITR"]
+        return dict(zip(orden, values[:9], strict=True)), True
     if len(values) == 8:
         log.info("%s: .PAR con densidad y porosidad en el bloque 3", reader.source)
-        dt, steps, imppas, moister, density, porosity, iversion, itr = values
-        return [dt, steps, imppas, moister, iversion, "1", "0", "0", itr], density, porosity
+        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "S_DENSITY", "POROSITY",
+                 "IVERSION", "ITR"]
+        return dict(zip(orden, values, strict=True)), False
     if len(values) in (3, 4):
         log.info("%s: .PAR en formato antiguo (%d valores en el bloque 3); se asumen "
                  "IVERSION=1, IPIVLAB=1, ICONTOUR=0, IREC=0 e ITR=0", reader.source, len(values))
-        return [*values, *["0"] * (4 - len(values)), "1", "1", "0", "0", "0"], None, None
+        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER"]
+        return dict(zip(orden, values, strict=False)), False
     raise ConfigError(
-        f"{reader.source}: el bloque 3 tiene {len(values)} valores; se esperaban 9 "
-        "(DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR), 8 con la "
-        "densidad y la porosidad, o los 3 del formato antiguo (DT TOTAL_STEPS IMPPAS)"
+        f"{reader.source}: el bloque 3 tiene {len(values)} valores y su línea de comentario "
+        "no dice qué es cada uno. Se esperaban 9 valores (DT TOTAL_STEPS IMPPAS MOISTER "
+        "IVERSION IPIVLAB ICONTOUR IREC ITR), 8 con la densidad y la porosidad, o los 3 del "
+        "formato antiguo (DT TOTAL_STEPS IMPPAS)"
     )
 
 
@@ -190,16 +266,21 @@ def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
     reader = _ListDirectedReader(text.splitlines(), source)
 
     title = reader.text()
-    reader.text()
+    reader.comment()
     nc, nn, npc, nfil, axc, ayc = reader.values(6)
-    reader.text()
-    bloque3, density, porosity = _analysis_block(reader)
-    dt, steps, imppas, moister, iversion, ipivlab, icontour, irec, itr = bloque3
+    bloque3, dialecto_actual = _analysis_block(reader, reader.comment())
+    valor = {**_BLOCK3_DEFAULTS, **bloque3}.get
+    dt, steps, imppas = bloque3["DT"], bloque3["TOTAL_STEPS"], bloque3["IMPPAS"]
+    moister, iversion = valor("MOISTER"), valor("IVERSION")
+    ipivlab, icontour = valor("IPIVLAB"), valor("ICONTOUR")
+    irec, itr = valor("IREC"), valor("ITR")
+
+    density, porosity = bloque3.get("S_DENSITY"), bloque3.get("POROSITY")
     if density is None:
         if reader.at_end():  # los .PAR antiguos no traen el bloque 4
             density = porosity = "0"
         else:
-            reader.text()
+            reader.comment()
             density, porosity = reader.values(2)
 
     if _to_int(itr, "ITR") != 0:
@@ -213,6 +294,12 @@ def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
         raise ConfigError(f"IREC={irec_value} debe ser 0 o 1")
 
     moister_value = _to_int(moister, "MOISTER")
+    if not dialecto_actual and moister_value > 1:
+        # En las versiones anteriores cualquier valor distinto de 0 activaba la lectura de
+        # los archivos de humedad; el 2 de "calcular desde las imágenes" es nuevo.
+        log.info("%s: MOISTER=%d en un .PAR de una versión anterior; se entiende como 1, "
+                 "leer los Moist_<n>.TXT", source, moister_value)
+        moister_value = 1
     if moister_value not in (0, 1, 2):
         raise ConfigError(f"MOISTER={moister_value} debe ser 0 (sin humedad), 1 (leerla de "
                           "los Moist_<n>.TXT) o 2 (calcularla desde las imágenes)")

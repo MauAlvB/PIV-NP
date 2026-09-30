@@ -80,6 +80,67 @@ def test_moister_selects_where_the_moisture_comes_from():
         con_moister(3)
 
 
+#: Dialectos reales del bloque 3. El orden cambió entre versiones del programa y hay dos con
+#: los mismos ocho valores en distinto orden, así que se distinguen por su cabecera.
+DIALECTOS = {
+    "centrifuga 2022": (
+        "BLOQUE 3: del_t\t total_steps  salto_impresión  v.pivnp  v.pivlab  moister  REC  "
+        "PTR\t(ANALYSIS TYPE DATA)\n2\t149\t1\t2\t2\t1\t0\t0\n"
+        "BLOQUE 4: s_density(kg/m3)  initial_porosity\n3600\t0.5\n",
+        {"dt": 2.0, "mesh_version": 2, "pivlab_format": 2, "moisture": True,
+         "restart": False, "soil_density": 3600.0, "porosity": 0.5},
+    ),
+    "artículo, pruebas": (
+        "BLOQUE 3: del_t Total_steps Salto_de_impresión Humedad Version  IPIVLAB  IREC  PTV\n"
+        "1\t20\t1\t1\t2\t2\t1\t0\n"
+        "BLOQUE 4: S_density (kg/m3) porosity \n1385.46\t0.506\n",
+        {"dt": 1.0, "mesh_version": 2, "pivlab_format": 2, "moisture": True,
+         "restart": True, "soil_density": 1385.46, "porosity": 0.506},
+    ),
+    "artículo, etapas": (
+        "BLOQUE 3: del_t Total_steps Salto_de_impresión Humedad S_density (kg/m3) porosity "
+        "Version PTV  IREC\n0.04\t20\t1\t1\t1385.46\t0.506\t1\t0\t1\n",
+        {"dt": 0.04, "mesh_version": 1, "pivlab_format": 1, "moisture": True,
+         "restart": True, "soil_density": 1385.46, "porosity": 0.506},
+    ),
+    "2024, el actual": (
+        "BLOQUE 3: del_t Total_steps Impresion Moister Version PIVlab Contour Rec Track\n"
+        "0.8\t149\t1\t1\t2\t2\t3\t1\t0\n"
+        "BLOQUE 4: Densidad Porosidad\n2650.0  0.4\n",
+        {"dt": 0.8, "mesh_version": 2, "pivlab_format": 2, "moisture": True,
+         "restart": True, "contour": 3, "soil_density": 2650.0, "porosity": 0.4},
+    ),
+}
+
+
+@pytest.mark.parametrize("nombre", list(DIALECTOS))
+def test_block_three_is_read_from_its_own_header(nombre):
+    """Cada .PAR documenta en su comentario qué es cada valor; hay que hacerle caso."""
+    bloque, esperado = DIALECTOS[nombre]
+    cfg = parse_par("\n".join(PAR.splitlines()[:3]) + "\n" + bloque)
+    for campo, valor in esperado.items():
+        assert getattr(cfg, campo) == valor, campo
+    assert cfg.total_steps in (20, 149) and cfg.print_every == 1
+
+
+def test_old_moister_two_means_read_the_files():
+    """En las versiones anteriores cualquier valor distinto de 0 leía los archivos; el 2 de
+    'calcular desde las imágenes' solo existe en el dialecto actual."""
+    bloque, _ = DIALECTOS["centrifuga 2022"]
+    cfg = parse_par("\n".join(PAR.splitlines()[:3]) + "\n" + bloque.replace("\t1\t0\t0", "\t2\t0\t0"))
+    assert cfg.moisture and not cfg.moisture_from_images
+
+
+def test_unreadable_header_falls_back_to_positions():
+    """Con una cabecera que no nombra los campos se recurre al número de valores."""
+    lineas = PAR.splitlines()
+    texto = "\n".join(lineas[:4] + ["1. 11 1 1"]) + "\n"
+    assert parse_par(texto).moisture
+    # una cabecera con un campo repetido tampoco es fiable
+    texto = texto.replace(lineas[3], "BLOQUE 3: del_t Total_steps Salto de impresión (Datos)")
+    assert parse_par(texto).moisture
+
+
 def test_incomplete_analysis_block_is_rejected():
     lineas = PAR.splitlines()
     with pytest.raises(ConfigError, match="bloque 3"):
