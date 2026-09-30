@@ -57,8 +57,7 @@ class FuenteHumedad:
     def preparar(self, con_dato: np.ndarray) -> Referencias:
         """Calcula las referencias seca y saturada a partir de la imagen de referencia."""
         ruta = self.directorio / self.configuracion.referencia_seca
-        imagen = leer_imagen(ruta, self.configuracion.canal)
-        filtrada = desenfoque_gaussiano(imagen, self.configuracion.sigma)
+        filtrada = self._imagen_filtrada(ruta)
         self.nodos_fuera = fuera_de_la_imagen(filtrada, self.columna, self.fila)
         gris = muestrear(filtrada, self.columna, self.fila, con_dato)
         self.referencias = referencias_por_desplazamiento(
@@ -71,11 +70,14 @@ class FuenteHumedad:
         """Gris del instante, en la escala 0 (saturado) - 100 (seco)."""
         if self.referencias is None:
             raise RuntimeError("hay que llamar a preparar() antes del primer instante")
-        ruta = self.configuracion.ruta_imagen(self.directorio, paso)
-        imagen = leer_imagen(ruta, self.configuracion.canal)
-        filtrada = desenfoque_gaussiano(imagen, self.configuracion.sigma)
+        filtrada = self._imagen_filtrada(self.configuracion.ruta_imagen(self.directorio, paso))
         gris = muestrear(filtrada, self.columna, self.fila, con_dato)
         return normalizar(gris, self.referencias)
+
+    def _imagen_filtrada(self, ruta: Path) -> np.ndarray:
+        imagen = leer_imagen(ruta, self.configuracion.canal)
+        return desenfoque_gaussiano(imagen, self.configuracion.sigma,
+                                    self.configuracion.redondeo_legado)
 
     def instante(self, paso: int, con_dato: np.ndarray) -> Estado:
         """Humedad y saturación de un instante."""

@@ -11,7 +11,9 @@ Cada valor va identificado por su nombre, el orden no importa y los comentarios 
     CALIBRACION = calibracion_slope_rgb.csv
 
 Los valores que no aparezcan toman el valor por defecto, que es el del código MATLAB
-original, para que los análisis sean comparables con los anteriores.
+original, para que los análisis sean comparables con los anteriores. Las dos excepciones son
+``PRIMER_INSTANTE`` y ``REDONDEO_LEGADO``: el criterio nuevo es el de por defecto y el
+antiguo se recupera poniéndolas a ``legado`` y a ``1``.
 """
 
 from __future__ import annotations
@@ -21,7 +23,8 @@ from pathlib import Path
 
 from .imagenes import numero_de_canal
 
-#: Valor por defecto de cada clave. Son los del código MATLAB original.
+#: Valor por defecto de cada clave. Son los del código MATLAB original salvo donde se acordó
+#: cambiar de criterio (PRIMER_INSTANTE y REDONDEO_LEGADO).
 PREDETERMINADOS: dict[str, str] = {
     "IMAGENES": "vis_{n}.jpg",
     "CANAL": "1",
@@ -33,6 +36,7 @@ PREDETERMINADOS: dict[str, str] = {
     "UMBRAL_SATURACION": "0.8",
     "INCREMENTAL": "1",
     "PRIMER_INSTANTE": "igual",
+    "REDONDEO_LEGADO": "0",
     "ESCALA_X": "1.0",
     "ORIGEN_X": "0.0",
     "ESCALA_Y": "1.0",
@@ -62,6 +66,7 @@ class ConfiguracionHumedad:
     umbral_saturacion: float
     incremental: bool
     primer_instante: str
+    redondeo_legado: bool
     escala_x: float
     origen_x: float
     escala_y: float
@@ -122,6 +127,9 @@ def analizar(texto: str, origen: str = "<memoria>") -> ConfiguracionHumedad:
             raise ConfiguracionError(f"{origen}: {clave} debe ser un número y vale "
                                      f"{valores[clave]!r}") from None
 
+    def afirmativo(clave: str) -> bool:
+        return valores[clave].strip().lower() in ("1", "si", "sí", "true")
+
     try:
         canal = numero_de_canal(valores["CANAL"] if not valores["CANAL"].lstrip("-").isdigit()
                                 else int(valores["CANAL"]))
@@ -137,8 +145,9 @@ def analizar(texto: str, origen: str = "<memoria>") -> ConfiguracionHumedad:
         desplazamiento_saturado=numero_real("DESPLAZAMIENTO_SATURADO"),
         calibracion=valores["CALIBRACION"],
         umbral_saturacion=numero_real("UMBRAL_SATURACION"),
-        incremental=valores["INCREMENTAL"].strip().lower() in ("1", "si", "sí", "true"),
+        incremental=afirmativo("INCREMENTAL"),
         primer_instante=valores["PRIMER_INSTANTE"].strip().lower(),
+        redondeo_legado=afirmativo("REDONDEO_LEGADO"),
         escala_x=numero_real("ESCALA_X"),
         origen_x=numero_real("ORIGEN_X"),
         escala_y=numero_real("ESCALA_Y"),

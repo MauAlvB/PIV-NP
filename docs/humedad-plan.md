@@ -58,7 +58,12 @@ repetición del borde; las coordenadas de los nodos se redondean al píxel.
 | 1 | Umbral de saturación de 0.8 a **0.95**, manteniendo el comportamiento incremental | acordado |
 | 2 | El **primer instante se calcula como los demás** (hoy devuelve humedad 0 y saturación constante) | acordado |
 | 3 | Referencias seca y saturada como **parámetros**, con estudio de sensibilidad (−6 frente a −8 mueve la saturación inicial un 45 %) | acordado, valor por decidir con pruebas |
-| 4 | **Recortar** en vez de extrapolar fuera del rango de calibración (origen de los −1710 % de `Moist_40.txt`) | acordado, forma por confirmar |
+| 4 | **Recortar** en vez de extrapolar fuera del rango de calibración (origen de los −1710 % de `Moist_40.txt`) | hecho |
+| 5 | El filtro **deja de redondear** a niveles enteros de gris; `REDONDEO_LEGADO = 1` recupera el comportamiento antiguo | hecho |
+
+La forma de fijar la banda seca-saturada (los desplazamientos +5 y −6 frente a una banda de
+laboratorio en intensidades absolutas) queda **como está** de momento, a la espera de tenerla
+mejor definida.
 
 Más adelante: permitir medir también en secado, quitando el carácter incremental.
 
@@ -100,13 +105,15 @@ después se activan los cambios, para poder separar lo que es traducción de lo 
 Con la cadena completa implementada (imagen → canal → filtro → muestreo → normalización →
 calibración → política incremental) y comparando con los `Moist_n.txt` del caso:
 
-| Instante | Nodos comparables | Saturación idéntica | Difieren |
-|---|---|---|---|
-| 1 | 1045 | 1045 (error 3·10⁻¹⁶) | 0 |
-| 2 | 1045 | 930 | 11 % |
-| 5 | 1045 | 797 | 24 % |
-| 10 | 1023 | 704 | 31 % |
-| 149 | 784 | 610 | 22 % |
+Reproduciendo el camino de MATLAB (canal gris, `REDONDEO_LEGADO = 1`):
+
+| Instante | Nodos comparables | Saturación idéntica | Difieren | Diferencia media |
+|---|---|---|---|---|
+| 1 | 1045 | 1045 (error 3·10⁻¹⁶) | 0 | 0 |
+| 2 | 1045 | 930 | 11 % | 0,025 |
+| 5 | 1045 | 797 | 24 % | 0,054 |
+| 10 | 1023 | 704 | 31 % | 0,085 |
+| 149 | 784 | 610 | 22 % | 0,090 |
 
 Entre el 69 % y el 100 % de los nodos coinciden **exactamente**. Los que difieren lo hacen
 en saltos de un nivel de gris.
@@ -127,22 +134,35 @@ código pretendía hacer.
 
 **2. El método es muy sensible al redondeo del filtro.** La banda entre el gris seco y el
 saturado son solo **11 niveles de gris** (+5 y −6), así que **un nivel de diferencia equivale
-al 9 % de toda la escala** y puede cambiar la saturación de un nodo hasta en 0,85. Las
-diferencias que quedan tienen exactamente ese tamaño: un nivel de gris.
+al 9 % de toda la escala** y puede cambiar la saturación de un nodo hasta en 0,85.
 
-La causa más probable es que `imgaussfilt` de MATLAB, con un núcleo de 161 puntos, filtre en
-el dominio de la frecuencia (lo hace automáticamente con núcleos grandes), y su redondeo a
-entero no coincida con el de la convolución directa en algunos píxeles.
+Se midió el tamaño del residuo invirtiendo la curva de calibración: de la saturación de los
+archivos del caso se deduce qué gris tenía MATLAB y se compara con el nuestro. Sale
+**exactamente un nivel de gris** (mediana 0,99, p90 1,02). No hay diferencia de algoritmo.
 
-Queda por decidir cómo tratarlo, y es una decisión de fondo: o se replica el camino exacto
-de MATLAB, o se acepta la diferencia y se documenta, o se evita el problema trabajando en
-coma flotante sin redondear a entero tras el filtro (lo que además elimina esta fragilidad
-de raíz, pero deja de reproducir los valores antiguos).
+Se descartó que `imgaussfilt` filtrase en el dominio de la frecuencia: filtrando por FFT con
+el mismo relleno se obtiene la misma imagen que por convolución directa, con una diferencia
+máxima de 4·10⁻¹³, y los mismos nodos exactos. La causa que queda es una diferencia
+sistemática de menos de un nivel entre la descodificación del JPEG de MATLAB y la de Pillow,
+que el redondeo del filtro convierte en un nivel entero. Encaja con que el instante 1
+coincida al 100 %: allí la imagen y la referencia son la misma, y cualquier sesgo se cancela
+al normalizar.
+
+**Decisión tomada:** quitar el redondeo. No empeora el parecido con los datos antiguos —la
+diferencia media de saturación pasa de 0,0249 a 0,0220 en el instante 2 y de 0,0850 a 0,0886
+en el 10—, simplemente deja de caer en los mismos valores discretos, y elimina de raíz la
+fragilidad.
+
+**3. El caso se procesó en escala de grises, no con un canal.** El instante 1 no lo
+distingue, porque la imagen es la propia referencia. Comparando los instantes siguientes con
+los cuatro canales, el gris es el que reproduce los datos (diferencia media 0,025 en el
+instante 2, frente a 0,034 del verde, 0,089 del azul y 0,113 del rojo).
 
 ## Estado
 
-* Rama `humedad` con la cadena completa implementada y 251 pruebas en verde.
-* Fase 1 (calibración) y fase 2 (imágenes, muestreo, modelo) terminadas y probadas.
-* Falta: decidir lo del redondeo del filtro, integrar la fuente en el análisis y el comando
-  propio, y aplicar los cambios acordados (umbral 0,95 y primer instante).
+* Rama `humedad` con la cadena completa implementada y 253 pruebas en verde.
+* Fase 1 (calibración) y fase 2 (imágenes, muestreo, modelo) terminadas, probadas y
+  validadas contra el caso; el residuo está explicado y acotado.
+* Falta: integrar la fuente en el análisis y el comando propio (fase 3), y el umbral a 0,95
+  cuando terminen las comparaciones a 0,8.
 * Nada subido a GitHub; `main` tiene un commit local por delante del remoto.

@@ -28,6 +28,12 @@ def test_valores_por_defecto_como_el_matlab():
     assert cfg.referencia_seca == "ref2.jpg"
     assert cfg.registro_es_identidad
     assert cfg.primer_instante == "igual"
+    assert not cfg.redondeo_legado
+
+
+def test_se_puede_pedir_el_redondeo_antiguo():
+    assert analizar(MINIMO + "REDONDEO_LEGADO = si\n").redondeo_legado
+    assert not analizar(MINIMO + "REDONDEO_LEGADO = 0\n").redondeo_legado
 
 
 def test_lee_claves_comentarios_y_orden(workdir: Path):
