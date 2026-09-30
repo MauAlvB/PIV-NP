@@ -7,6 +7,7 @@ arriba, por eso se reordenan los nodos y se cambia el signo de la velocidad vert
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -21,6 +22,11 @@ if TYPE_CHECKING:  # solo para los tipos: la humedad no depende de este módulo
 
 VELOCITY_PATTERN = "datos ({step}).TXT"
 MOISTURE_PATTERN = "Moist_{step}.TXT"
+
+log = logging.getLogger("pivnp")
+
+#: Separadores de los archivos PIVlab: comas, espacios o tabuladores.
+_TOKENS = re.compile(r"[,\s]+")
 
 #: Factores de conversión que PIVlab escribe en la segunda línea de cada archivo.
 _XY_FACTOR = re.compile(r"px\s*->\s*m\)\s*:\s*([0-9.eE+-]+)")
@@ -90,21 +96,30 @@ def _parse_values(lines: list[str], count: int, path: Path) -> np.ndarray:
     return np.array(tokens[:count], dtype=np.float64)
 
 
-def read_velocity_file(path: Path, n_nodes: int, pivlab_format: int) -> tuple[np.ndarray, ...]:
+def read_velocity_file(path: Path, n_nodes: int = 0,
+                       pivlab_format: int = 0) -> tuple[np.ndarray, ...]:
     """Lee ``x, y, u, v`` de un archivo PIVlab (3 líneas de cabecera).
 
-    ``pivlab_format == 1``: 4 columnas, lectura libre de 4*NN valores.
-    Otro valor: 5 columnas por línea (la quinta es un indicador que no se usa).
+    El formato se deduce del propio archivo y no del ``IPIVLAB`` del ``.PAR``: si cada nodo
+    ocupa una línea con cuatro valores o más, se toman los cuatro primeros de cada una; si no,
+    se leen 4·NN valores seguidos, sin hacer caso de los saltos de línea. Los dos caminos dan
+    lo mismo con archivos de cuatro columnas, y es la única forma de no equivocarse con los de
+    cinco: leerlos como si fueran de cuatro descoloca todos los valores a partir del primero.
+
+    ``pivlab_format`` solo se usa para avisar cuando el ``.PAR`` dice otra cosa.
     """
-    lines = Path(path).read_text(encoding="latin-1").splitlines()[3:]
-    if pivlab_format == 1:
-        data = _parse_values(lines, 4 * n_nodes, path).reshape(n_nodes, 4)
+    lines = [line for line in Path(path).read_text(encoding="latin-1").splitlines()[3:]
+             if line.strip()]
+    por_lineas = (len(lines) >= n_nodes > 0
+                  and all(len(_TOKENS.split(line.strip())) >= 4 for line in lines[:n_nodes]))
+    if por_lineas:
+        if pivlab_format == 1:
+            log.warning("%s: el .PAR dice IPIVLAB=1 (una sola lista de valores), pero el "
+                        "archivo trae un nodo por línea; se lee por líneas", path.name)
+        data = np.array([_TOKENS.split(line.strip())[:4] for line in lines[:n_nodes]],
+                        dtype=np.float64)
     else:
-        if len(lines) < n_nodes:
-            raise ValueError(f"{path}: se esperaban {n_nodes} líneas y hay {len(lines)}")
-        data = np.array(
-            [line.replace(",", " ").split()[:4] for line in lines[:n_nodes]], dtype=np.float64
-        )
+        data = _parse_values(lines, 4 * n_nodes, path).reshape(n_nodes, 4)
     return data[:, 0], data[:, 1], data[:, 2], data[:, 3]
 
 

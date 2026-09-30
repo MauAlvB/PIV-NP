@@ -45,6 +45,19 @@ def test_read_five_column_file(workdir: Path):
     assert u.tolist() == [1.0, 3.0] and v.tolist() == [2.0, 4.0]
 
 
+def test_five_columns_are_detected_even_if_the_par_says_four(workdir: Path):
+    """Un .PAR con IPIVLAB=1 y un archivo de cinco columnas: manda el archivo.
+
+    Leer cinco columnas como si fueran cuatro descoloca todos los valores, y es lo que
+    ocurre con los .PAR antiguos, que no traen IPIVLAB y toman 1 por defecto.
+    """
+    path = workdir / "d.txt"
+    path.write_text(HEADER + "0.1,0.2,1.0,2.0,1\n0.1,0.4,3.0,4.0,0\n")
+    x, y, u, v = read_velocity_file(path, 2, pivlab_format=1)
+    assert x.tolist() == [0.1, 0.1] and y.tolist() == [0.2, 0.4]
+    assert u.tolist() == [1.0, 3.0] and v.tolist() == [2.0, 4.0]
+
+
 def test_missing_values_raise(workdir: Path):
     path = workdir / "d.txt"
     path.write_text(HEADER + "0.1,0.2,1.0,2.0\n")
