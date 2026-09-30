@@ -1,11 +1,11 @@
-"""Escritura de resultados para GiD (antes subrutina ``IMPRES_GiD``).
+"""Writing results for GiD (formerly the ``IMPRES_GiD`` subroutine).
 
-* ``<caso>.POST.MSH``: malla de puntos (una por partícula) con su material.
-* ``<caso>.POST.RES``: resultados por partícula en cada instante impreso.
+* ``<case>.POST.MSH``: mesh of points (one per particle) with its material.
+* ``<case>.POST.RES``: per-particle results at every printed step.
 
-Los bloques de resultados se describen en la tabla :data:`RESULTS`; añadir o quitar un
-resultado es añadir o quitar una línea. El formateo se hace en paralelo (Numba) y la
-escritura a disco en un hilo aparte, para solaparla con el cálculo del paso siguiente.
+The result blocks are described in the :data:`RESULTS` table; adding or removing a result is
+adding or removing one line. Formatting runs in parallel (Numba) and writing to disk happens
+on a separate thread, so that it overlaps with the computation of the next step.
 """
 
 from __future__ import annotations
@@ -27,34 +27,34 @@ RES_HEADER = "GiD Post Results File 1.0"
 
 @dataclass(frozen=True)
 class ResultSpec:
-    """Un bloque ``Result`` del archivo ``.POST.RES``."""
+    """One ``Result`` block of the ``.POST.RES`` file."""
 
     name: str
-    kind: str  # "Vector" o "Scalar" (texto de la cabecera GiD)
+    kind: str  # "Vector" or "Scalar" (the text of the GiD header)
     values: Callable[[Particles, Nodes], np.ndarray]
-    only_active: bool = True  # excluye partículas con nan_initial != 0
-    integer: bool = False  # escritura list-directed de enteros (bloque NaNs)
+    only_active: bool = True  # leaves out particles with nan_initial != 0
+    integer: bool = False  # list-directed writing of integers (the NaNs block)
     needs_moisture: bool = False
 
 
 def _nodal_count_by_particle(p: Particles, nodes: Nodes) -> np.ndarray:
-    # Reproduce el original: imprime un contador nodal indexado por número de partícula.
+    # Reproduces the original: it prints a nodal counter indexed by particle number.
     counts = np.zeros(p.position.shape[0], dtype=np.int64)
     n = min(counts.size, nodes.active_count.size)
     counts[:n] = nodes.active_count[:n]
     return counts
 
 
-#: Resultado "NaNs": datos que faltan alrededor de la partícula. Con IVERSION=1, cuántos de
-#: los 4 nodos de su elemento no tienen medida; con IVERSION=2, si el punto PIVlab del centro
-#: de su elemento no la tiene.
+#: The "NaNs" result: data missing around the particle. With IVERSION=1, how many of the 4
+#: nodes of its element have no measurement; with IVERSION=2, whether the PIVlab point at the
+#: centre of its element has none.
 MISSING_DATA = ResultSpec("NaNs", "Scalar", lambda p, n: p.missing_data,
                           only_active=False, integer=True)
 LEGACY_MISSING_DATA = ResultSpec("NaNs", "Scalar", _nodal_count_by_particle,
                                  only_active=False, integer=True)
 
-#: Energía cinética: un escalar, la suma de las dos componentes. El original las escribía
-#: por separado bajo una cabecera "Scalar", así que GiD solo leía la componente x.
+#: Kinetic energy: a scalar, the sum of the two components. The original wrote them
+#: separately under a "Scalar" header, so GiD only read the x component.
 KINETIC_ENERGY = ResultSpec("E_kinetic", "Scalar", lambda p, n: p.kinetic_energy.sum(axis=1))
 LEGACY_KINETIC_ENERGY = ResultSpec("E_kinetic", "Scalar", lambda p, n: p.kinetic_energy)
 
@@ -109,7 +109,7 @@ class GidWriter:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gid-writer")
         self._pending: list[Future] = []
 
-    # --- malla ---------------------------------------------------------------------------
+    # --- mesh ----------------------------------------------------------------------------
     def write_mesh(self, positions: np.ndarray, nan_initial: np.ndarray) -> None:
         n = positions.shape[0]
         ids = np.arange(1, n + 1)
@@ -128,17 +128,17 @@ class GidWriter:
             f.write(format_int_rows(elements, 9, self._eol_bytes))
             f.write(self._lines(["End Elements"]))
 
-    # --- resultados ----------------------------------------------------------------------
+    # --- results -------------------------------------------------------------------------
     def start_results(self, append: bool = False) -> None:
-        """Abre el archivo de resultados.
+        """Open the results file.
 
-        ``append`` continúa uno existente (reinicio) en vez de vaciarlo; si no existe, se
-        crea con su cabecera GiD.
+        ``append`` continues an existing one (a restart) instead of emptying it; if there is
+        none, it is created with its GiD header.
         """
         if append and self.results_path.exists():
-            self._file = open(self.results_path, "ab")  # noqa: SIM115 (se cierra en close())
+            self._file = open(self.results_path, "ab")  # noqa: SIM115 (closed in close())
             return
-        self._file = open(self.results_path, "wb")  # noqa: SIM115 (se cierra en close())
+        self._file = open(self.results_path, "wb")  # noqa: SIM115 (closed in close())
         self._submit(self._lines([RES_HEADER]))
 
     def write_step(self, time: float, particles: Particles, nodes: Nodes,
@@ -178,7 +178,7 @@ class GidWriter:
     def __exit__(self, *exc) -> None:
         self.close()
 
-    # --- auxiliares ----------------------------------------------------------------------
+    # --- helpers -------------------------------------------------------------------------
     def _lines(self, lines: list[str]) -> bytes:
         return "".join(line + self.eol for line in lines).encode("ascii")
 

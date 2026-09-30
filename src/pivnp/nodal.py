@@ -1,13 +1,13 @@
-"""Campos nodales a partir de los datos PIVlab (antes subrutina ``VELOCIDADES``).
+"""Nodal fields from the PIVlab data (formerly the ``VELOCIDADES`` subroutine).
 
-El paso se divide en tres funciones para poder insertar entre ellas la corrección de
-contorno (``CONTOUR``):
+The step is split into three functions so that the boundary correction (``CONTOUR``) can be
+inserted between them:
 
-1. :func:`load_measurements`: vuelca velocidades, humedad y marcas NaN del instante en
-   los nodos PIV-NP.
-2. (opcional) corrección de contorno, ver :mod:`pivnp.contour`.
-3. :func:`compute_nodal_momentum_v1` / :func:`compute_nodal_momentum_v2`: cantidad de
-   movimiento y su incremento en los nodos de la malla de partículas.
+1. :func:`load_measurements`: pours the velocities, moisture and NaN marks of the step into
+   the PIV-NP nodes.
+2. (optional) boundary correction, see :mod:`pivnp.contour`.
+3. :func:`compute_nodal_momentum_v1` / :func:`compute_nodal_momentum_v2`: momentum and its
+   increment at the nodes of the particle grid.
 """
 
 from __future__ import annotations
@@ -28,10 +28,9 @@ def _load_measurements_kernel(u, v, moisture_in, saturation_in, point_to_node,
                               moisture_measured, saturation_measured, legacy_previous):
     for p in range(u.size):
         if legacy_previous:
-            # El original copiaba la "velocidad anterior" con el índice del punto
-            # PIVlab en vez del índice del nodo, dentro del mismo bucle que va
-            # sobrescribiendo las velocidades, así que en la mitad de los nodos
-            # guardaba la velocidad nueva.
+            # The original copied the "previous velocity" using the index of the PIVlab
+            # point instead of the index of the node, inside the same loop that keeps
+            # overwriting the velocities, so for half the nodes it stored the new velocity.
             previous_velocity[p, 0] = velocity[p, 0]
             previous_velocity[p, 1] = velocity[p, 1]
         node = point_to_node[p]
@@ -54,9 +53,9 @@ def _load_measurements_kernel(u, v, moisture_in, saturation_in, point_to_node,
 
 def load_measurements(frame: Frame, point_to_node: np.ndarray, nodes: Nodes,
                       legacy_compat: bool = False) -> None:
-    """Pasa las medidas del instante (orden PIVlab) a los nodos PIV-NP.
+    """Move the measurements of the step (in PIVlab order) to the PIV-NP nodes.
 
-    Guarda antes las velocidades del paso anterior, necesarias para la aceleración.
+    It first stores the velocities of the previous step, needed for the acceleration.
     """
     nodes.filled[:] = False
     if not legacy_compat:
@@ -71,7 +70,7 @@ def load_measurements(frame: Frame, point_to_node: np.ndarray, nodes: Nodes,
 @njit(cache=True, nogil=True)
 def _accumulate_particle_mass(position, mass, lost, cells, cell_x, cell_y,
                               n_cols, dx, dy, nodal_mass):
-    # Secuencial: la suma en el mismo orden que el original da el mismo redondeo.
+    # Sequential: summing in the same order as the original gives the same rounding.
     nodal_mass[:] = 0.0
     for i in range(position.shape[0]):
         if lost[i]:
@@ -86,10 +85,10 @@ def _accumulate_particle_mass(position, mass, lost, cells, cell_x, cell_y,
 
 def accumulate_particle_mass(particles: Particles, grid: Grid, nodes: Nodes, step: int,
                              accumulate: bool = True) -> None:
-    """Relocaliza las partículas y acumula su masa en los nodos de la malla.
+    """Relocate the particles and accumulate their mass at the grid nodes.
 
-    Con IVERSION = 1 la masa nodal se sobrescribe con 1 más adelante, así que basta con
-    ``accumulate=False``: solo se actualiza la marca ``lost``.
+    With IVERSION = 1 the nodal mass is overwritten with 1 further on, so ``accumulate=False``
+    is enough: only the ``lost`` flag is updated.
     """
     n = particles.position.shape[0]
     cells, cell_x, cell_y = grid_locate(particles.position, grid)
@@ -102,7 +101,7 @@ def accumulate_particle_mass(particles: Particles, grid: Grid, nodes: Nodes, ste
 
 
 def grid_locate(points: np.ndarray, grid: Grid):
-    """Localiza puntos en ``grid``: devuelve (celdas, x_izq, y_base)."""
+    """Locate points in ``grid``: returns (cells, x_left, y_base)."""
     return locate_points(points, grid.x0, grid.dx, grid.n_cols, grid.row_y)
 
 
@@ -111,9 +110,9 @@ def _has_velocity(nodes: Nodes) -> np.ndarray:
 
 
 def compute_nodal_momentum_v1(nodes: Nodes) -> None:
-    """IVERSION = 1: los nodos de cálculo son los propios puntos PIVlab (masa nodal = 1).
+    """IVERSION = 1: the computation nodes are the PIVlab points themselves (nodal mass = 1).
 
-    Los nodos sin velocidad conservan la cantidad de movimiento del paso anterior.
+    Nodes without velocity keep the momentum of the previous step.
     """
     n = nodes.is_nan.size
     nodes.mass[:n] = 1.0
@@ -125,10 +124,10 @@ def compute_nodal_momentum_v1(nodes: Nodes) -> None:
     nodes.saturation[:n][ok] = (nodes.saturation_measured * nodes.mass[:n])[ok]
 
 
-#: Qué hacer con los nodos de la malla desplazada que reciben menos de cuatro aportaciones.
-NO_AVERAGE = 0  #: dejar la suma de cuartos, como el Fortran de 2024
-AVERAGE = 1  #: media de los puntos que aportan, lo que hace la corrección de contorno
-AVERAGE_2023 = 2  #: la media de la versión de 2023, que no la aplicaba al incremento
+#: What to do with staggered-grid nodes that receive fewer than four contributions.
+NO_AVERAGE = 0  #: keep the sum of quarters, like the 2024 Fortran
+AVERAGE = 1  #: average of the contributing points, which is what the boundary correction does
+AVERAGE_2023 = 2  #: the average of the 2023 version, which did not apply it to the increment
 
 
 @njit(cache=True, nogil=True)
@@ -158,9 +157,9 @@ def _distribute_to_staggered(velocity, previous_velocity, has_velocity, lost, ce
             saturation[node] = saturation[node] + saturation_measured[i] * weight
 
     if normalize != NO_AVERAGE:
-        # Un nodo del borde recibe menos de 4 aportaciones y se quedaría con una
-        # fracción de la velocidad. Dividir por el peso acumulado (1 en el interior, donde
-        # por tanto no cambia nada) lo convierte en la media de los puntos que sí aportan.
+        # A boundary node receives fewer than 4 contributions and would keep only a fraction
+        # of the velocity. Dividing by the accumulated weight (1 in the interior, where it
+        # therefore changes nothing) turns it into the mean of the points that do contribute.
         for node in range(momentum.shape[0]):
             total = weight * active_count[node]
             if total > 0.0 and total != 1.0:
@@ -169,8 +168,8 @@ def _distribute_to_staggered(velocity, previous_velocity, has_velocity, lost, ce
                 moisture[node] /= total
                 saturation[node] /= total
                 if normalize != AVERAGE_2023:
-                    # La versión de 2023 dividía la cantidad de movimiento pero no su
-                    # incremento, así que su aceleración no era coherente con la velocidad.
+                    # The 2023 version divided the momentum but not its increment, so its
+                    # acceleration was not consistent with its velocity.
                     momentum_increment[node, 0] /= total
                     momentum_increment[node, 1] /= total
 
@@ -178,11 +177,11 @@ def _distribute_to_staggered(velocity, previous_velocity, has_velocity, lost, ce
 def compute_nodal_momentum_v2(nodes: Nodes, grid: Grid, centers: np.ndarray,
                               particles: Particles, step: int,
                               normalize: int = NO_AVERAGE) -> None:
-    """IVERSION = 2: cada punto PIVlab reparte 1/4 de su velocidad a los nodos de la celda
-    desplazada que lo contiene.
+    """IVERSION = 2: every PIVlab point gives 1/4 of its velocity to the nodes of the
+    staggered cell that contains it.
 
-    Reproduce que el original localiza los centros de celda (``XP2``) usando la marca de
-    partícula ``IDONDE`` del mismo índice.
+    It reproduces the fact that the original locates the cell centres (``XP2``) using the
+    particle flag ``IDONDE`` of the same index.
     """
     n_points = nodes.is_nan.size
     cells, _, _ = grid_locate(centers[:n_points], grid)

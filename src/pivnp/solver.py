@@ -1,8 +1,8 @@
-"""Actualización de las partículas en cada paso (antes subrutinas ``SOLMOV`` e ``INVAR2``).
+"""Update of the particles at every step (formerly the ``SOLMOV`` and ``INVAR2`` subroutines).
 
-Cada partícula se calcula de forma independiente, así que los bucles se ejecutan en
-paralelo con ``numba.prange``. Las expresiones mantienen el orden de operaciones del
-original para reproducir su redondeo.
+Every particle is computed independently, so the loops run in parallel with
+``numba.prange``. The expressions keep the operation order of the original in order to
+reproduce its rounding.
 """
 
 from __future__ import annotations
@@ -27,13 +27,13 @@ from .nodal import grid_locate
 from .particles import update_lost_flags
 from .state import Nodes, Particles
 
-#: Valores de ``Particles.nan_initial``.
+#: Values of ``Particles.nan_initial``.
 ACTIVE, NAN_AT_START = 0, 1
 
 
 @njit(cache=True, nogil=True, inline="always")
 def deviatoric_q(sx, sy, sz, sxy, threshold=J2_THRESHOLD):
-    """Tensión (o deformación) desviadora q = sqrt(3·J2); 0 si J2 <= ``threshold`` (``INVAR2``)."""
+    """Deviatoric stress (or strain) q = sqrt(3·J2); 0 if J2 <= ``threshold`` (``INVAR2``)."""
     mean = (sx + sy + sz) / 3.0
     dx, dy, dz = sx - mean, sy - mean, sz - mean
     j2 = (dx * dx + dy * dy + dz * dz) / 2.0 + sxy * sxy
@@ -61,8 +61,8 @@ def _advance_kernel(lost, cells, cell_x, cell_y, n_cols, dx, dy, dt,
             if step == 1 and not restart:
                 nan_initial[i] = 0
             if step == 1 and legacy_restart_displacement:
-                # El original sumaba el desplazamiento acumulado al "instantáneo" en el
-                # primer paso tras un reinicio.
+                # The original added the accumulated displacement to the "instantaneous" one
+                # on the first step after a restart.
                 step_disp[i, 0] = displacement[i, 0]
                 step_disp[i, 1] = displacement[i, 1]
             nan_corners = 0
@@ -110,10 +110,10 @@ def _advance_kernel(lost, cells, cell_x, cell_y, n_cols, dx, dy, dt,
 
 def advance_particles(particles: Particles, nodes: Nodes, grid: Grid, config: CaseConfig,
                       step: int, legacy_compat: bool = False) -> None:
-    """Interpola velocidad, aceleración y desplazamiento de las partículas desde los nodos.
+    """Interpolate particle velocity, acceleration and displacement from the nodes.
 
-    Primera mitad de ``SOLMOV``. Marca como ``NAN_AT_START`` las partículas que en el primer
-    paso están en celdas sin ningún dato (fuera del material).
+    First half of ``SOLMOV``. Marks as ``NAN_AT_START`` the particles that on the first step
+    sit in cells without any data (outside the material).
     """
     p = particles
     n = p.position.shape[0]
@@ -144,14 +144,14 @@ def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
         d2 = 0.0
         for j in range(4):
             node = cell_node(cell, n_cols, j)
-            # Derivadas de las funciones de forma en el centro del elemento: la deformación
-            # es uniforme en cada celda.
+            # Derivatives of the shape functions at the centre of the element: the strain is
+            # uniform within each cell.
             dndx = NODE_SIGN_X[j] * 0.5 / dx
             dndy = NODE_SIGN_Y[j] * 0.5 / dy
             if nodal_mass[node] >= MACHINE_EPSILON:
-                # El original dividía por la masa nodal, que con IVERSION=2 vale
-                # aproximadamente NPC² y deja las deformaciones a escala de la velocidad
-                # dividida por NPC². Solo se reproduce en modo compatibilidad.
+                # The original divided by the nodal mass, which with IVERSION=2 is about
+                # NPC² and leaves the strains scaled as the velocity divided by NPC². Only
+                # reproduced in compatibility mode.
                 if legacy_divide_by_mass:
                     fx = dndx * dt / nodal_mass[node]
                     fy = dndy * dt / nodal_mass[node]
@@ -189,7 +189,7 @@ def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
         position[i, 0] = position[i, 0] + increment[i, 0]
         position[i, 1] = position[i, 1] + increment[i, 1]
 
-        # Deformación de corte equivalente: 2/3·q (con la deformación de corte ingenieril / 2)
+        # Equivalent shear strain: 2/3·q (with the engineering shear strain / 2)
         eq_strain[i] = 2.0 * deviatoric_q(strain[i, 0], strain[i, 1], strain[i, 3],
                                           strain[i, 2] / 2.0, j2_threshold) / 3.0
         eq_strain_inc[i] = 2.0 * deviatoric_q(d0, d1, 0.0, d2 / 2.0, j2_threshold) / 3.0
@@ -197,7 +197,7 @@ def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
 
 def update_strains(particles: Particles, nodes: Nodes, grid: Grid, config: CaseConfig,
                    step: int, legacy_compat: bool = False) -> None:
-    """Deformaciones, energías y nueva posición de cada partícula (segunda mitad de SOLMOV)."""
+    """Strains, energies and new position of every particle (second half of SOLMOV)."""
     p = particles
     n = p.position.shape[0]
     cells, _, _ = grid_locate(p.position, grid)
@@ -213,7 +213,7 @@ def update_strains(particles: Particles, nodes: Nodes, grid: Grid, config: CaseC
 
 
 def output_mask(particles: Particles, grid: Grid, step: int) -> np.ndarray:
-    """Partículas localizadas en la malla al imprimir (``IDONDE /= -1`` en IMPRES_GiD)."""
+    """Particles located in the grid when printing (``IDONDE /= -1`` in IMPRES_GiD)."""
     n = particles.position.shape[0]
     cells, _, _ = grid_locate(particles.position, grid)
     update_lost_flags(particles.lost[:n], cells, step)
@@ -237,7 +237,7 @@ def _count_nan_kernel(lost, cells, n_cols, node_is_nan, mesh_version, out):
 
 def count_nan_nodes(particles: Particles, nodes: Nodes, grid: Grid, mesh_version: int,
                     step: int) -> np.ndarray:
-    """Cuántos datos faltan alrededor de cada partícula (resultado ``NaNs``)."""
+    """How much data is missing around each particle (the ``NaNs`` result)."""
     n = particles.position.shape[0]
     cells, _, _ = grid_locate(particles.position, grid)
     update_lost_flags(particles.lost[:n], cells, step)

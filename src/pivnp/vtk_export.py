@@ -1,18 +1,18 @@
-"""Conversión de resultados GiD (``.POST.MSH`` + ``.POST.RES``) a VTK para ParaView.
+"""Conversion of GiD results (``.POST.MSH`` + ``.POST.RES``) to VTK for ParaView.
 
-Genera un archivo ``.vtu`` por instante y una colección ``.pvd`` que ParaView abre como
-una animación. Funciona con los resultados de esta versión y con los del ejecutable
-Fortran original.
+It writes one ``.vtu`` file per step and a ``.pvd`` collection that ParaView opens as an
+animation. It works both with the results of this version and with those of the original
+Fortran executable.
 
-Uso::
+Usage::
 
-    pivnp-vtk ruta/caso.POST.RES            # busca caso.POST.MSH al lado
-    pivnp-vtk ruta/caso.POST.RES -o vtk --every 5
+    pivnp-vtk path/case.POST.RES            # looks for case.POST.MSH next to it
+    pivnp-vtk path/case.POST.RES -o vtk --every 5
 
-Las coordenadas de cada instante son las posiciones **actuales** de las partículas:
-``malla + Displacement``. Con ``--legacy-msh`` se resta además el desplazamiento del primer
-instante, necesario para resultados del Fortran original, donde la malla se escribía
-después del primer paso.
+The coordinates of every step are the **current** positions of the particles:
+``mesh + Displacement``. With ``--legacy-msh`` the displacement of the first step is also
+subtracted, which is needed for results of the original Fortran, where the mesh was written
+after the first step.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
-#: Resultados que son vectores físicos (se completan con z = 0 para poder usar flechas).
+#: Results that are physical vectors (padded with z = 0 so that arrows can be used).
 VECTORS = {"Displacement", "Inst_displaceme", "Inst_displacement", "Velocity", "Acceleration"}
 COMPONENT_NAMES = {
     "Total_strain": ("xx", "yy", "xy"),
@@ -52,7 +52,7 @@ class ResultBlock:
     values: np.ndarray  # (n, k)
 
 
-# --- lectura GiD -----------------------------------------------------------------------------
+# --- reading GiD -----------------------------------------------------------------------------
 def read_gid_mesh(path: Path) -> GidMesh:
     lines = Path(path).read_text(encoding="latin-1").splitlines()
     start, end = lines.index("Coordinates") + 2, lines.index("End Coordinates")
@@ -65,7 +65,7 @@ def read_gid_mesh(path: Path) -> GidMesh:
 
 
 def iter_gid_results(path: Path) -> Iterator[ResultBlock]:
-    """Recorre los bloques ``Result`` de un ``.POST.RES`` sin cargarlo entero en memoria."""
+    """Walk the ``Result`` blocks of a ``.POST.RES`` without loading it all into memory."""
     with open(path, encoding="latin-1") as f:
         header = None
         for line in f:
@@ -84,7 +84,7 @@ def iter_gid_results(path: Path) -> Iterator[ResultBlock]:
 
 
 def iter_time_steps(path: Path) -> Iterator[tuple[float, dict[str, ResultBlock]]]:
-    """Agrupa los bloques por instante."""
+    """Group the blocks by step."""
     current: dict[str, ResultBlock] = {}
     time = None
     for block in iter_gid_results(path):
@@ -97,7 +97,7 @@ def iter_time_steps(path: Path) -> Iterator[tuple[float, dict[str, ResultBlock]]
         yield time, current
 
 
-# --- escritura VTK ---------------------------------------------------------------------------
+# --- writing VTK -----------------------------------------------------------------------------
 def _encode(array: np.ndarray) -> str:
     """Datos binarios comprimidos con zlib en base64 (formato 'binary' de VTK XML)."""
     raw = np.ascontiguousarray(array).tobytes()
@@ -115,7 +115,7 @@ def _data_array(name: str, array: np.ndarray, components: tuple[str, ...] = ()) 
 
 
 def write_vtu(path: Path, points: np.ndarray, point_data: dict[str, np.ndarray]) -> None:
-    """Nube de puntos (celdas VTK_VERTEX) con datos por punto."""
+    """Point cloud (VTK_VERTEX cells) with per-point data."""
     n = points.shape[0]
     xyz = np.zeros((n, 3), dtype=np.float32)
     xyz[:, : points.shape[1]] = points
@@ -154,9 +154,9 @@ def write_pvd(path: Path, entries: list[tuple[float, str]]) -> None:
         f"{datasets}\n</Collection>\n</VTKFile>\n", encoding="ascii")
 
 
-# --- conversión ------------------------------------------------------------------------------
+# --- conversion ------------------------------------------------------------------------------
 def _align(block: ResultBlock, ids: np.ndarray, n_total: int) -> np.ndarray:
-    """Valores del bloque en el orden de ``ids`` (NaN si una partícula no aparece)."""
+    """Values of the block in the order of ``ids`` (NaN when a particle does not appear)."""
     if np.array_equal(block.ids, ids):
         return block.values
     dense = np.full((n_total + 1, block.values.shape[1]), np.nan)
@@ -166,10 +166,10 @@ def _align(block: ResultBlock, ids: np.ndarray, n_total: int) -> np.ndarray:
 
 def export_vtk(res_path: Path, msh_path: Path | None = None, out_dir: Path | None = None,
                every: int = 1, legacy_mesh: bool = False) -> Path:
-    """Convierte un caso GiD a VTK. Devuelve la ruta del ``.pvd``.
+    """Convert a GiD case to VTK. Returns the path of the ``.pvd``.
 
-    ``legacy_mesh``: la malla tiene las posiciones del primer paso en vez de las iniciales
-    (resultados del Fortran original o calculados con ``--legacy-compat``).
+    ``legacy_mesh``: the mesh holds the positions of the first step instead of the initial
+    ones (results of the original Fortran, or computed with ``--legacy-compat``).
     """
     res_path = Path(res_path)
     case = res_path.name.removesuffix(".POST.RES").removesuffix(".post.res")
@@ -209,17 +209,17 @@ def export_vtk(res_path: Path, msh_path: Path | None = None, out_dir: Path | Non
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="pivnp-vtk", description="Convierte resultados GiD de PIV-NP a VTK (ParaView).")
-    parser.add_argument("res", type=Path, help="archivo <caso>.POST.RES")
-    parser.add_argument("--msh", type=Path, help="archivo .POST.MSH (por defecto, junto al .RES)")
-    parser.add_argument("-o", "--out", type=Path, help="carpeta de salida (por defecto <caso>_vtk)")
-    parser.add_argument("--every", type=int, default=1, help="exportar 1 de cada N instantes")
+        prog="pivnp-vtk", description="Convert PIV-NP GiD results to VTK (ParaView).")
+    parser.add_argument("res", type=Path, help="the <case>.POST.RES file")
+    parser.add_argument("--msh", type=Path, help=".POST.MSH file (next to the .RES by default)")
+    parser.add_argument("-o", "--out", type=Path, help="output folder (<case>_vtk by default)")
+    parser.add_argument("--every", type=int, default=1, help="export 1 out of every N steps")
     parser.add_argument("--legacy-msh", action="store_true",
-                        help="la malla trae las posiciones del primer paso (resultados del "
-                             "Fortran original o calculados con --legacy-compat)")
+                        help="the mesh holds the positions of the first step (results of the "
+                             "original Fortran, or computed with --legacy-compat)")
     args = parser.parse_args(argv)
     pvd = export_vtk(args.res, args.msh, args.out, max(1, args.every), args.legacy_msh)
-    print(f"Abre en ParaView: {pvd}")
+    print(f"Open in ParaView: {pvd}")
     return 0
 
 
