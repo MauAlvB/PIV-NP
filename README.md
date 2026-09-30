@@ -125,7 +125,15 @@ BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
           0.8   149         1         0       1       1      0       0   0
 BLOQUE 4: s_density porosity
           2650.0    0.4
+!-----------------------------------------------------------------------
+! Qué significa cada valor. De aquí abajo no se lee nada.
+! ...
 ```
+
+A legend follows block 4 explaining what each number means and which options each variable
+takes (in Spanish, as the case files are). It is not read: it is there for whoever opens the
+file. The converter writes it, and the easiest way to set up a new case is to copy another
+case's `.PAR` and change the values.
 
 | Parameter | Meaning |
 |---|---|

@@ -5,3 +5,45 @@ BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
           1.    51          1         0       1       1      0       0   0
 BLOQUE 4: s_density porosity
           0         0
+!------------------------------------------------------------------------------------------
+! Qué significa cada valor. De aquí abajo no se lee nada.
+!
+! BLOQUE 2 - geometría de la malla PIVlab
+!   N_cel         celdas de la malla
+!   N_nod         nodos (puntos) de la malla; N_nod = (N_cel/N_fil + 1) * (N_fil + 1)
+!   N_part_celda  filas y columnas de partículas por celda, de 1 a 6 (su cuadrado por celda)
+!   N_fil         filas de celdas
+!   Ancho, Alto   tamaño de una celda, en metros
+!
+! BLOQUE 3 - qué análisis se hace
+!   del_t         tiempo entre imágenes, en segundos. Tiene que ser el mismo intervalo con
+!                 el que se exportó desde PIVlab; si no, los desplazamientos salen a otra
+!                 escala. El programa lo comprueba en la cabecera de los archivos y avisa.
+!   total_steps   cuántos archivos PIVlab se procesan
+!   impresion     se escriben resultados en el paso 1 y luego cada 'impresion' pasos
+!   moister       de dónde sale la humedad
+!                   0 = no se calcula humedad
+!                   1 = se lee de los archivos Moist_<n>.TXT
+!                   2 = se calcula desde las imágenes del ensayo, con la configuración
+!                       del archivo <caso>.HUM
+!   version       dónde están las velocidades que da PIVlab
+!                   1 = en los nodos de la malla
+!                   2 = en el centro de cada elemento (malla desplazada media celda)
+!   pivlab        versión de PIVlab con la que se exportaron los archivos "Datos", que
+!                 cambian de formato de una versión a otra
+!                   1 = exportación de 4 columnas (x, y, u, v)
+!                   2 = exportación de 5 columnas (añade el tipo de vector)
+!                 El programa mira el archivo y avisa si no concuerda con lo declarado.
+!   contour       corrección de la velocidad en el contorno del material
+!                   0 = ninguna
+!                   1 = media de los nodos vecinos que sí tienen dato
+!                   2 = media de las partículas que rodean al punto
+!                   3 = extrapolación desde el interior hacia el exterior
+!   rec           0 = análisis nuevo
+!                 1 = continuar desde <caso>.REC, por ejemplo una segunda etapa del ensayo
+!   track         debe ser 0; las partículas de seguimiento PTV ya no están soportadas
+!
+! BLOQUE 4 - el suelo
+!   s_density     densidad del suelo, en kg/m3
+!   porosity      porosidad inicial
+!------------------------------------------------------------------------------------------

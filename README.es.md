@@ -125,7 +125,14 @@ BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
           0.8   149         1         0       1       1      0       0   0
 BLOQUE 4: s_density porosity
           2650.0    0.4
+!-----------------------------------------------------------------------
+! Qué significa cada valor. De aquí abajo no se lee nada.
+! ...
 ```
+
+Después del bloque 4 va una leyenda con el significado de cada número y las opciones de cada
+variable. No se lee: está para quien abra el archivo. El conversor la escribe, y al crear un
+caso nuevo lo más cómodo es copiar el `.PAR` de otro y cambiar los valores.
 
 | Parámetro | Significado |
 |---|---|

@@ -136,7 +136,9 @@ def test_el_convertido_ya_no_necesita_adivinar_nada(workdir: Path, dialecto):
     assert lineas[3].startswith("BLOQUE 3:")
     assert lineas[3].split(":", 1)[1].split() == list(ANALYSIS_NAMES)
     assert len(lineas[4].split()) == len(ANALYSIS_NAMES)
-    assert len(lineas) == 7  # título y tres bloques de dos líneas
+    # título y tres bloques de dos líneas; de ahí en adelante, la leyenda
+    assert not any(linea.startswith("!") for linea in lineas[:7])
+    assert all(linea.startswith("!") for linea in lineas[7:]) and len(lineas) > 7
 
 
 def test_convertir_dos_veces_no_hace_nada_la_segunda(workdir: Path):
@@ -231,4 +233,18 @@ def test_el_formato_unico_se_puede_escribir_a_mano(workdir: Path):
     crudo = read_any_par_blocks(par_de("2024, el actual"))
     texto = to_canonical(crudo, moister=1, pivlab_format=2)
     assert parse_par(texto).pivlab_format == 2
-    assert texto.count("\n") == 7
+
+
+def test_la_leyenda_del_final_no_se_lee(workdir: Path):
+    """Explica qué significa cada número; el lector se detiene en el bloque 4."""
+    ruta = escribir(workdir, par_de("2024, el actual"))
+    convert_file(ruta)
+    texto = ruta.read_text(encoding="latin-1")
+    assert "moister" in texto and "2 = se calcula desde las imágenes" in texto
+    assert "1 = en los nodos de la malla" in texto
+    assert "4 columnas" in texto and "5 columnas" in texto
+
+    sin_leyenda = "\n".join(texto.splitlines()[:7]) + "\n"
+    assert parse_par(texto) == parse_par(sin_leyenda)
+    # y da igual lo que haya ahí abajo
+    assert parse_par(texto + "cualquier cosa\n1 2 3\n") == parse_par(sin_leyenda)
