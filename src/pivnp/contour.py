@@ -1,39 +1,49 @@
-"""Corrección de velocidades en el contorno del material (subrutina ``CONTOUR``).
+"""Velocity correction at the material boundary (the ``CONTOUR`` subroutine).
 
-PIVlab no da velocidad (NaN) en los puntos cuya ventana de interrogación cae parcialmente
-fuera del material. Eso provoca dos efectos en el borde:
+PIVlab reports no velocity (NaN) at points whose interrogation window falls partly outside
+the material. That has two effects along the boundary:
 
-* las partículas del borde interpolan con nodos a velocidad 0, así que se mueven menos de
-  lo que deberían (además, el original conserva ahí la velocidad del último paso con
-  dato, lo que hace que algunas partículas "salgan volando");
-* con IVERSION=2, los nodos que reciben menos de cuatro aportaciones se quedan con una
-  fracción de la velocidad que les corresponde.
+* boundary particles interpolate against nodes holding zero velocity, so they move less than
+  they should (and the original kept the last valid velocity there, which is what makes some
+  particles "fly off");
+* with IVERSION=2, nodes receiving fewer than four contributions keep only a fraction of the
+  velocity they should have.
 
-Este módulo implementa tres formas de reconstruir la velocidad de los puntos sin dato, para
-poder compararlas. Se eligen con ``ICONTOUR`` en el ``.PAR``:
+This module implements three ways of rebuilding the velocity of the points without data, so
+that they can be compared. They are selected with ``ICONTOUR`` in the ``.PAR``:
 
 ===========  ==========================================================================
-ICONTOUR     Método
+ICONTOUR     Method
 ===========  ==========================================================================
-0            Ninguno (comportamiento del original)
-1            Media de los nodos vecinos con dato (8 vecinos, ``layers`` capas)
-2            Media de las velocidades de las partículas de los elementos de alrededor
-3            Extrapolación lineal desde el interior hacia el exterior
+0            None (the original behaviour)
+1            Average of the neighbouring nodes that do have data (8 neighbours, ``layers``)
+2            Average of the particle velocities in the surrounding elements
+3            Linear extrapolation from the interior towards the exterior
 ===========  ==========================================================================
 
-Además, con cualquier método distinto de 0 la malla desplazada (IVERSION=2) normaliza las
-aportaciones de cada nodo entre los de su celda.
+With any method other than 0, the staggered grid (IVERSION=2) also averages the
+contributions each node receives instead of leaving the sum of quarters.
 
-Decisiones comunes a los tres métodos:
+Which one to use, measured on real cases (see ``docs/validacion-casos.md``): hide nodes that
+*do* have a measurement and sit next to the boundary, rebuild them with each method and
+compare against what PIVlab measured. Across five case/step combinations, **method 1 came
+out best every time**, getting closer to the truth than leaving the zero in 76 % to 98 % of
+the nodes. Method 3 follows closely on smooth fields and falls behind on abrupt ones. Method
+2 is the weakest and is often worse than no correction at all: it averages particle
+velocities that were themselves interpolated from the zeroed boundary nodes, so it feeds the
+error back in.
 
-* Los nodos reconstruidos se marcan en ``Nodes.filled`` pero **no** cambian ``Nodes.is_nan``:
-  la decisión de qué partículas están fuera del material (``nan_initial``) sigue usando los
-  datos medidos, así que la corrección no activa partículas en el aire.
-* Con ``ICONTOUR = 0`` el resultado es exactamente el del original.
+Decisions shared by the three methods:
+
+* Rebuilt nodes are flagged in ``Nodes.filled`` but do **not** change ``Nodes.is_nan``: which
+  particles lie outside the material (``nan_initial``) is still decided from the measured
+  data, so the correction never brings particles in mid-air to life.
+* With ``ICONTOUR = 0`` the result is exactly the original one.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -43,35 +53,37 @@ from .config import CaseConfig
 from .mesh import Grid
 from .state import Nodes, Particles
 
+log = logging.getLogger("pivnp")
+
 _NEIGHBOR_OFFSETS = [(dr, dc) for dr in (-1, 0, 1) for dc in (-1, 0, 1) if (dr, dc) != (0, 0)]
 
 
 @dataclass(frozen=True)
 class ContourContext:
-    """Todo lo que puede necesitar una corrección de contorno."""
+    """Everything a boundary correction may need."""
 
     nodes: Nodes
-    grid: Grid  # malla sobre la que se mueven las partículas
+    grid: Grid  # the grid the particles move on
     particles: Particles
     config: CaseConfig
 
     @property
     def measurement_shape(self) -> tuple[int, int]:
-        """Filas y columnas de la rejilla de puntos PIVlab."""
+        """Rows and columns of the PIVlab point grid."""
         return self.config.n_rows + 1, self.config.n_cols + 1
 
 
 class ContourCorrection(Protocol):
     def apply(self, ctx: ContourContext) -> None:
-        """Modifica ``ctx.nodes.velocity`` y ``ctx.nodes.filled`` in situ."""
+        """Modifies ``ctx.nodes.velocity`` and ``ctx.nodes.filled`` in place."""
 
     @property
     def normalizes_staggered(self) -> bool:
-        """Si normaliza también el reparto de la malla desplazada."""
+        """Whether it also averages the staggered-grid contributions."""
 
 
 class NoContourCorrection:
-    """Sin corrección (comportamiento del original)."""
+    """No correction (the original behaviour)."""
 
     normalizes_staggered = False
 
@@ -81,7 +93,11 @@ class NoContourCorrection:
 
 @dataclass(frozen=True)
 class NeighborAverageCorrection:
-    """ICONTOUR=1: media de las velocidades de los nodos vecinos con dato."""
+    """ICONTOUR=1: average of the velocities of the neighbouring nodes that have data.
+
+    The one that measured best on real cases: it got closer to the truth than leaving the
+    zero in 76 % to 98 % of the boundary nodes, depending on how smooth the field is there.
+    """
 
     min_neighbors: int = 3
     layers: int = 1
@@ -89,13 +105,13 @@ class NeighborAverageCorrection:
 
     def __post_init__(self) -> None:
         if not 1 <= self.min_neighbors <= 8:
-            raise ValueError("min_neighbors debe estar entre 1 y 8")
+            raise ValueError("min_neighbors must be between 1 and 8")
         if self.layers < 1:
-            raise ValueError("layers debe ser >= 1")
+            raise ValueError("layers must be >= 1")
 
     def apply(self, ctx: ContourContext) -> None:
         shape = ctx.measurement_shape
-        velocity = ctx.nodes.velocity.reshape(*shape, 2)  # vista: escribe en nodes.velocity
+        velocity = ctx.nodes.velocity.reshape(*shape, 2)  # a view: writes reach nodes.velocity
         valid = (ctx.nodes.is_nan == 0).reshape(shape).copy()
         filled = np.zeros(shape, dtype=bool)
 
@@ -113,12 +129,16 @@ class NeighborAverageCorrection:
 
 @dataclass(frozen=True)
 class ParticleAverageCorrection:
-    """ICONTOUR=2: media de las velocidades de las partículas de los elementos de alrededor.
+    """ICONTOUR=2: average of the particle velocities in the surrounding elements.
 
-    A un punto PIVlab sin dato se le asigna la velocidad media de las partículas que hay en
-    los elementos que lo rodean (con IVERSION=2, las del elemento del que es centro). Usa la
-    velocidad que las partículas traen del paso anterior, así que en el primer paso, cuando
-    todavía valen cero, no reconstruye nada.
+    A PIVlab point without data takes the mean velocity of the particles sitting in the
+    elements around it (with IVERSION=2, those of the element it is the centre of). It uses
+    the velocity the particles carry from the previous step, so on the first step, when those
+    are still zero, it rebuilds nothing.
+
+    Measured on real cases it is the weakest of the three, and often worse than applying no
+    correction at all: those particle velocities were themselves interpolated from the zeroed
+    boundary nodes, so the method feeds the boundary error back into the boundary.
     """
 
     min_particles: int = 1
@@ -126,7 +146,7 @@ class ParticleAverageCorrection:
 
     def __post_init__(self) -> None:
         if self.min_particles < 1:
-            raise ValueError("min_particles debe ser >= 1")
+            raise ValueError("min_particles must be >= 1")
 
     def apply(self, ctx: ContourContext) -> None:
         nodes, grid, p = ctx.nodes, ctx.grid, ctx.particles
@@ -140,8 +160,8 @@ class ParticleAverageCorrection:
         usable = alive & (cells >= 0)
         total = np.zeros((nodes.velocity.shape[0], 2))
         count = np.zeros(nodes.velocity.shape[0], dtype=np.int64)
-        # Cada partícula aporta a los puntos de medida de su elemento: los 4 nodos con
-        # IVERSION=1, el punto central (= número de celda) con IVERSION=2.
+        # Each particle contributes to the measurement points of its element: the 4 nodes
+        # with IVERSION=1, the central point (= the cell number) with IVERSION=2.
         if ctx.config.mesh_version == 1:
             targets = grid.cell_nodes(cells[usable])  # (n, 4)
             for k in range(4):
@@ -159,12 +179,16 @@ class ParticleAverageCorrection:
 
 @dataclass(frozen=True)
 class ExtrapolationCorrection:
-    """ICONTOUR=3: extrapolación lineal desde el interior hacia el exterior.
+    """ICONTOUR=3: linear extrapolation from the interior towards the exterior.
 
-    A cada punto sin dato con un vecino con dato que a su vez tiene otro vecino con dato en
-    la misma dirección se le asigna ``2·v₁ − v₂`` (continuación de la pendiente), promediando
-    todas las direcciones disponibles. Donde no hay dos puntos alineados se usa la media de
-    los vecinos, como en ICONTOUR=1.
+    Every point without data that has a neighbour with data which in turn has another one
+    with data in the same direction takes ``2·v₁ − v₂`` (the slope continued), averaged over
+    all available directions. Where no two aligned points exist it falls back to the
+    neighbour average of ICONTOUR=1.
+
+    On real cases it comes second: as good as the neighbour average where the field is
+    smooth, clearly behind where the motion is abrupt, since continuing a slope amplifies
+    whatever noise the boundary has.
     """
 
     layers: int = 1
@@ -172,7 +196,7 @@ class ExtrapolationCorrection:
 
     def __post_init__(self) -> None:
         if self.layers < 1:
-            raise ValueError("layers debe ser >= 1")
+            raise ValueError("layers must be >= 1")
 
     def apply(self, ctx: ContourContext) -> None:
         shape = ctx.measurement_shape
@@ -205,7 +229,7 @@ class ExtrapolationCorrection:
 
 
 def _shift(values: np.ndarray, valid: np.ndarray, dr: int, dc: int):
-    """Valores y validez del vecino en la dirección (dr, dc), con ceros fuera de la malla."""
+    """Values and validity of the neighbour at (dr, dc), zero-filled outside the grid."""
     rows, cols = valid.shape
     out = np.zeros_like(values)
     ok = np.zeros_like(valid)
@@ -217,7 +241,7 @@ def _shift(values: np.ndarray, valid: np.ndarray, dr: int, dc: int):
 
 
 def _neighbor_sums(velocity: np.ndarray, valid: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Suma de velocidades y número de vecinos con dato (8-conectividad) de cada punto."""
+    """Velocity sum and count of neighbours with data (8-connectivity) for every point."""
     total = np.zeros_like(velocity)
     count = np.zeros(valid.shape, dtype=np.int64)
     for dr, dc in _NEIGHBOR_OFFSETS:
@@ -229,13 +253,18 @@ def _neighbor_sums(velocity: np.ndarray, valid: np.ndarray) -> tuple[np.ndarray,
 
 def make_contour_correction(icontour: int, min_neighbors: int = 3, layers: int = 1,
                             min_particles: int = 1) -> ContourCorrection:
-    """Corrección según el parámetro ICONTOUR del ``.PAR``."""
+    """Build the correction named by the ``ICONTOUR`` parameter of the ``.PAR``."""
     if icontour == 0:
         return NoContourCorrection()
     if icontour == 1:
         return NeighborAverageCorrection(min_neighbors=min_neighbors, layers=layers)
     if icontour == 2:
+        log.warning(
+            "ICONTOUR=2 (particle average) measured worse than applying no correction at all "
+            "on the dam case, and rebuilds nothing on some steps: it averages particle "
+            "velocities that were themselves interpolated from the zeroed boundary nodes. "
+            "ICONTOUR=1 was the best of the three on every case tried.")
         return ParticleAverageCorrection(min_particles=min_particles)
     if icontour == 3:
         return ExtrapolationCorrection(layers=layers)
-    raise ValueError(f"ICONTOUR={icontour} debe estar entre 0 y 3")
+    raise ValueError(f"ICONTOUR={icontour} must be between 0 and 3")

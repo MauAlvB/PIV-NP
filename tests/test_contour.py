@@ -50,6 +50,36 @@ def test_no_correction_changes_nothing():
     assert not ctx.nodes.filled.any()
 
 
+# --- la propiedad que se midió sobre casos reales ----------------------------------------
+def test_rebuilding_a_hidden_node_beats_leaving_the_zero():
+    """Se oculta un nodo con dato y se mira si la reconstrucción se acerca más que el cero.
+
+    Es la prueba que se hizo sobre los casos reales, aquí en pequeño y con un campo suave:
+    ocultar nodos que sí tenían medida y comparar con lo que medía PIVlab. Sobre los cinco
+    casos probados, la media de vecinos ganó siempre; la media de partículas fue la peor.
+    """
+    filas, columnas = 5, 6
+    fila, columna = np.mgrid[0:filas, 0:columnas]
+    campo = (2.0 + 0.5 * columna + 0.25 * fila).ravel()  # campo suave, sin ruido
+    par = PAR.replace("6 12 2 2 1.0 1.0", f"{(filas - 1) * (columnas - 1)} {filas * columnas} "
+                                          f"2 {filas - 1} 1.0 1.0")
+    cfg = parse_par(par.format(version=1, contour=1))
+
+    oculto = filas * columnas // 2 + 1
+    for metodo, tolerancia in ((NeighborAverageCorrection(min_neighbors=1), 0.35),
+                               (ExtrapolationCorrection(), 0.35)):
+        grid = particle_grid(cfg)
+        nodes = Nodes.zeros(cfg.n_nodes, grid.n_nodes)
+        nodes.velocity[:, 0] = campo
+        nodes.velocity[oculto] = 0.0
+        nodes.is_nan[oculto] = 1
+        metodo.apply(ContourContext(nodes, grid, Particles.zeros(cfg.n_particles,
+                                                                 n_lost=cfg.n_nodes), cfg))
+        error = abs(nodes.velocity[oculto, 0] - campo[oculto])
+        assert nodes.filled[oculto], metodo
+        assert error < tolerancia * abs(campo[oculto]), metodo  # mejor que dejar el cero
+
+
 # --- ICONTOUR=1: media de los vecinos ---------------------------------------------------------
 def test_neighbor_average_fills_boundary_points():
     ctx = _context()

@@ -329,6 +329,47 @@ hoy no está escrita en ninguna parte**.
 Todo esto está medido sobre el caso SWIR, con banda de 40 niveles. En el flujo RGB, con 11,
 todas las sensibilidades son mayores.
 
+## CONTOUR sobre casos reales
+
+El problema de medir esto con datos reales es que en el borde no hay verdad con la que
+comparar: justo ahí es donde PIVlab no mide. La salida es **ocultar nodos que sí tienen
+medida y que además están pegados al borde** —su vecindario es tan incompleto como el de un
+nodo del contorno de verdad—, reconstruirlos con cada método y comparar con lo que medía
+PIVlab. Es la misma situación que la corrección tiene que resolver, pero con respuesta.
+
+La referencia es no corregir, que deja el nodo a cero: equivocarse en toda la velocidad que
+debía tener. La columna que decide es **en qué fracción de los nodos la reconstrucción se
+acerca más al valor real que ese cero**.
+
+| Caso | 1 · media de vecinos | 3 · extrapolación | 2 · media de partículas |
+|---|---|---|---|
+| Presa, etapa 1, paso 10, IVERSION=1 | **80 %** · 0,52× | 69 % · 0,66× | 29 % · 1,48× |
+| Presa, etapa 1, paso 10, IVERSION=2 | **80 %** · 0,52× | 69 % · 0,66× | 30 % · 1,46× |
+| Presa, etapa 2, paso 18 | **76 %** · 0,61× | 56 % · 0,74× | no reconstruye |
+| Centrífuga, paso 75 | **96 %** · 0,05× | 94 % · 0,10× | 92 % · 0,41× |
+| Slope_RGB, paso 80 | **98 %** · 0,13× | 97 % · 0,15× | 50 % · 0,75× |
+
+(el segundo número es el error mediano, en múltiplos de la velocidad típica del borde; sin
+corrección vale 1,00× por construcción)
+
+**La media de los vecinos gana en los cinco.** Acierta más que dejar el cero entre el 76 % y
+el 98 % de las veces, y reduce el error mediano a entre la mitad y la vigésima parte. Además
+reconstruye siempre: no se queda sin vecinos en ningún caso probado.
+
+**La extrapolación va segunda**, muy cerca donde el campo es suave (centrífuga, Slope_RGB) y
+claramente por detrás donde el movimiento es brusco (76 % frente a 56 % en la etapa 2 de la
+presa). Tiene sentido: continuar una pendiente amplifica el ruido que haya en el borde.
+
+**La media de partículas es la peor y a menudo hace daño.** En la presa acierta menos que no
+corregir en el 70 % de los nodos, y en la etapa 2 no reconstruye nada. El motivo es de fondo:
+promedia velocidades de partículas que se interpolaron, ellas mismas, con los nodos del borde
+puestos a cero. Es circular, y realimenta el error que se quería quitar. El programa avisa
+cuando se elige `ICONTOUR=2`.
+
+También se ve **de qué depende el beneficio**: cuanto más suave es el campo cerca del borde,
+más gana la corrección. En la centrífuga el error mediano baja a 0,05× de lo que costaba no
+corregir; en la rotura de presa, donde el movimiento es abrupto, se queda en 0,52×.
+
 ## Fase 3 — Mejoras del cálculo de humedad
 
 Se prueban sobre el caso del artículo, midiendo cada una:
