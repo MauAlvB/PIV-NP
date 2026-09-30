@@ -1,4 +1,4 @@
-"""Interfaz de línea de comandos: ``pivnp <directorio_del_caso>``."""
+"""Command-line interface: ``pivnp <case_directory>``."""
 
 from __future__ import annotations
 
@@ -14,38 +14,38 @@ from .simulation import RunOptions, run_case, write_moisture_files
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pivnp",
-        description="Desplazamientos y deformaciones de partículas numéricas a partir de "
-                    "campos de velocidad de PIVlab (PIV-NP).",
+        description="Displacements and strains of numerical particles from PIVlab velocity "
+                    "fields (PIV-NP).",
     )
     parser.add_argument("case_dir", type=Path, nargs="?", default=Path("."),
-                        help="directorio con PIV-NP.TXT, <caso>.PAR y los datos PIVlab "
-                             "(por defecto, el actual)")
-    parser.add_argument("--case", help="nombre del caso (si no, se lee de PIV-NP.TXT)")
+                        help="directory holding PIV-NP.TXT, <case>.PAR and the PIVlab data "
+                             "(the current one by default)")
+    parser.add_argument("--case", help="case name (otherwise it is read from PIV-NP.TXT)")
     parser.add_argument("--threads", type=int,
-                        help="hilos de cálculo (por defecto, todos los núcleos)")
+                        help="computation threads (all cores by default)")
     parser.add_argument("--prefetch", type=int, default=4,
-                        help="archivos PIVlab leídos por adelantado (0 = sin lectura anticipada)")
+                        help="PIVlab files read ahead (0 = no read-ahead)")
     parser.add_argument("--contour-min-neighbors", type=int, default=3,
-                        help="con ICONTOUR=1: vecinos con dato necesarios para reconstruir")
+                        help="with ICONTOUR=1: neighbours with data needed to rebuild a node")
     parser.add_argument("--contour-layers", type=int, default=1,
-                        help="con ICONTOUR=1 y 3: capas de puntos a reconstruir hacia fuera")
+                        help="with ICONTOUR=1 and 3: layers of points to rebuild outwards")
     parser.add_argument("--contour-min-particles", type=int, default=1,
-                        help="con ICONTOUR=2: partículas necesarias alrededor del punto")
+                        help="with ICONTOUR=2: particles needed around the point")
     parser.add_argument("--legacy-compat", action="store_true",
-                        help="reproducir exactamente el comportamiento del Fortran "
-                             "original, para repetir análisis hechos con él")
+                        help="reproduce exactly the behaviour of the original Fortran, to "
+                             "repeat analyses made with it")
     parser.add_argument("--legacy-2023-average", action="store_true",
-                        help="con IVERSION=2, promediar los nodos de la malla desplazada "
-                             "como la versión de 2023 (para repetir aquellos análisis)")
+                        help="with IVERSION=2, average the staggered-grid nodes the way the "
+                             "2023 version did (to repeat those analyses)")
     parser.add_argument("--vtk", action="store_true",
-                        help="al terminar, exportar también a VTK para ParaView (<caso>_vtk/)")
+                        help="when done, also export to VTK for ParaView (<case>_vtk/)")
     parser.add_argument("--write-moisture", action="store_true",
-                        help="calcular la humedad desde las imágenes del ensayo, escribirla "
-                             "en los Moist_<n>.TXT y salir sin hacer el análisis")
+                        help="compute the moisture from the test images, write it to the "
+                             "Moist_<n>.TXT files and exit without running the analysis")
     parser.add_argument("--convert-par", action="store_true",
-                        help="pasar al formato único los .PAR que haya en el directorio y "
-                             "por debajo, guardando cada original como <caso>.PAR.orig")
-    parser.add_argument("-q", "--quiet", action="store_true", help="solo errores")
+                        help="move to the single format every .PAR in the directory and "
+                             "below it, keeping each original as <case>.PAR.orig")
+    parser.add_argument("-q", "--quiet", action="store_true", help="errors only")
     return parser
 
 
@@ -74,15 +74,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.convert_par:
             from .par_migrate import convert_tree
 
-            resultados = convert_tree(args.case_dir)
-            for resultado in resultados:
-                (log.error if resultado.error else log.info)("%s", resultado)
-            convertidos = sum(r.changed for r in resultados)
-            fallidos = sum(r.error is not None for r in resultados)
-            log.info("%d archivos .PAR: %d convertidos, %d ya estaban, %d con problemas",
-                     len(resultados), convertidos,
-                     len(resultados) - convertidos - fallidos, fallidos)
-            return 1 if fallidos else 0
+            results = convert_tree(args.case_dir)
+            for result in results:
+                (log.error if result.error else log.info)("%s", result)
+            converted = sum(r.changed for r in results)
+            failed = sum(r.error is not None for r in results)
+            log.info("%d .PAR files: %d converted, %d already there, %d with problems",
+                     len(results), converted, len(results) - converted - failed, failed)
+            return 1 if failed else 0
         if args.write_moisture:
             write_moisture_files(args.case_dir, args.case, options)
             return 0
@@ -91,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             from .vtk_export import export_vtk
 
             res = Path(args.case_dir) / f"{summary.case_name}.POST.RES"
-            log.info("Resultados para ParaView: %s",
+            log.info("Results for ParaView: %s",
                      export_vtk(res, legacy_mesh=args.legacy_compat))
     except (ConfigError, FileNotFoundError, ValueError) as exc:
         log.error("%s", exc)

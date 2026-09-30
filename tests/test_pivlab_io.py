@@ -61,7 +61,7 @@ def test_five_columns_are_detected_even_if_the_par_says_four(workdir: Path):
 def test_missing_values_raise(workdir: Path):
     path = workdir / "d.txt"
     path.write_text(HEADER + "0.1,0.2,1.0,2.0\n")
-    with pytest.raises(ValueError, match="se esperaban 8"):
+    with pytest.raises(ValueError, match="expected 8 values"):
         read_velocity_file(path, 2, pivlab_format=1)
 
 
@@ -103,7 +103,7 @@ def test_mesh_in_metres(workdir: Path):
 
 def test_header_without_conversion_factor(workdir: Path):
     (workdir / "datos (1).txt").write_text(HEADER + "0,0,1,0\n")
-    with pytest.raises(ValueError, match="píxeles a metros"):
+    with pytest.raises(ValueError, match="pixels-to-metres"):
         FrameSource(workdir, n_nodes=1).mesh_in_metres()
 
 

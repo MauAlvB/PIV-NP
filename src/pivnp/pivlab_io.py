@@ -1,8 +1,8 @@
-"""Lectura de los archivos de PIVlab (``datos (n).txt``) y de humedad (``Moist_n.TXT``).
+"""Reading the PIVlab files (``datos (n).txt``) and the moisture ones (``Moist_n.TXT``).
 
-PIVlab guarda los puntos por columnas: x constante y y creciente *hacia abajo* (eje de la
-imagen). PIV-NP numera los nodos por filas desde abajo a la izquierda y usa el eje y hacia
-arriba, por eso se reordenan los nodos y se cambia el signo de la velocidad vertical.
+PIVlab stores the points by columns: constant x and y growing *downwards* (the image axis).
+PIV-NP numbers the nodes by rows from the bottom left and uses the y axis pointing up, which
+is why the nodes are reordered and the sign of the vertical velocity is flipped.
 """
 
 from __future__ import annotations
@@ -25,61 +25,61 @@ MOISTURE_PATTERN = "Moist_{step}.TXT"
 
 log = logging.getLogger("pivnp")
 
-#: Separadores de los archivos PIVlab: comas, espacios o tabuladores.
+#: Separators of the PIVlab files: commas, spaces or tabs.
 _TOKENS = re.compile(r"[,\s]+")
 
-#: Factores de conversión que PIVlab escribe en la segunda línea de cada archivo.
+#: Conversion factors PIVlab writes on the second line of every file.
 _XY_FACTOR = re.compile(r"px\s*->\s*m\)\s*:\s*([0-9.eE+-]+)")
 _UV_FACTOR = re.compile(r"px/frame\s*->\s*m/s\)\s*:\s*([0-9.eE+-]+)")
 
 
 @dataclass(frozen=True)
 class Frame:
-    """Datos de un instante, en el orden de los puntos del archivo PIVlab."""
+    """Data of one step, in the order of the points of the PIVlab file."""
 
     step: int
     source: Path
-    u: np.ndarray  # velocidad x (NaN si PIVlab no la midió)
-    v: np.ndarray  # velocidad y, eje de imagen (hacia abajo)
+    u: np.ndarray  # x velocity (NaN when PIVlab did not measure it)
+    v: np.ndarray  # y velocity, image axis (downwards)
     moisture: np.ndarray
     saturation: np.ndarray
-    #: Gris de la imagen del ensayo, ya normalizado, cuando la humedad se calcula desde las
-    #: imágenes. Es el paso intermedio: la humedad sale de aplicarle el modelo, que lleva
-    #: memoria de los instantes anteriores y por eso no puede calcularse aquí.
+    #: Gray of the test image, already normalized, when the moisture is computed from the
+    #: images. It is the intermediate step: the moisture comes from applying the model to it,
+    #: and the model carries memory of the previous steps, so it cannot be computed here.
     normalized_gray: np.ndarray | None = None
 
 
 def pivlab_to_node(n_cols: int, n_rows: int) -> np.ndarray:
-    """Nodo PIV-NP de cada punto PIVlab (``ICONECTIVIDAD`` en el original).
+    """PIV-NP node of every PIVlab point (``ICONECTIVIDAD`` in the original).
 
-    El punto ``p = col * (n_rows + 1) + fila_desde_arriba`` corresponde al nodo
-    ``(n_rows - fila_desde_arriba) * (n_cols + 1) + col``.
+    Point ``p = col * (n_rows + 1) + row_from_top`` corresponds to node
+    ``(n_rows - row_from_top) * (n_cols + 1) + col``.
     """
     col, row_from_top = np.divmod(np.arange((n_cols + 1) * (n_rows + 1)), n_rows + 1)
     return (n_rows - row_from_top) * (n_cols + 1) + col
 
 
 def xy_factor_in_header(path: Path) -> float:
-    """Metros por píxel con los que PIVlab exportó el archivo (segunda línea)."""
-    lineas = Path(path).read_text(encoding="latin-1").splitlines()
-    encontrado = _XY_FACTOR.search(lineas[1]) if len(lineas) >= 2 else None
-    if not encontrado:
-        raise ValueError(f"{path}: la cabecera no trae el factor de píxeles a metros, que "
-                         "hace falta para situar los nodos en la imagen")
-    return float(encontrado.group(1))
+    """Metres per pixel PIVlab exported the file with (second line)."""
+    lines = Path(path).read_text(encoding="latin-1").splitlines()
+    found = _XY_FACTOR.search(lines[1]) if len(lines) >= 2 else None
+    if not found:
+        raise ValueError(f"{path}: the header does not carry the pixels-to-metres factor, "
+                         "which is needed to place the nodes on the image")
+    return float(found.group(1))
 
 
 def frame_interval_in_header(path: Path) -> float | None:
-    """Intervalo entre imágenes con el que se exportó el archivo, o ``None`` si no consta.
+    """Interval between images the file was exported with, or ``None`` if it is not stated.
 
-    PIVlab escribe dos factores de conversión: uno de píxeles a metros y otro de píxeles por
-    imagen a metros por segundo. Su cociente es el tiempo entre imágenes que se le indicó,
-    que debería coincidir con el DT del ``.PAR``: si no, los desplazamientos salen escalados.
+    PIVlab writes two conversion factors: one from pixels to metres and another from pixels
+    per frame to metres per second. Their ratio is the time between images it was told about,
+    which should match the DT of the ``.PAR``: if it does not, displacements come out scaled.
     """
-    lineas = Path(path).read_text(encoding="latin-1").splitlines()
-    if len(lineas) < 2:
+    lines = Path(path).read_text(encoding="latin-1").splitlines()
+    if len(lines) < 2:
         return None
-    xy, uv = _XY_FACTOR.search(lineas[1]), _UV_FACTOR.search(lineas[1])
+    xy, uv = _XY_FACTOR.search(lines[1]), _UV_FACTOR.search(lines[1])
     if not xy or not uv:
         return None
     try:
@@ -92,30 +92,30 @@ def frame_interval_in_header(path: Path) -> float | None:
 def _parse_values(lines: list[str], count: int, path: Path) -> np.ndarray:
     tokens = " ".join(lines).replace(",", " ").split()
     if len(tokens) < count:
-        raise ValueError(f"{path}: se esperaban {count} valores y hay {len(tokens)}")
+        raise ValueError(f"{path}: expected {count} values, found {len(tokens)}")
     return np.array(tokens[:count], dtype=np.float64)
 
 
 def read_velocity_file(path: Path, n_nodes: int = 0,
                        pivlab_format: int = 0) -> tuple[np.ndarray, ...]:
-    """Lee ``x, y, u, v`` de un archivo PIVlab (3 líneas de cabecera).
+    """Read ``x, y, u, v`` from a PIVlab file (3 header lines).
 
-    El formato se deduce del propio archivo y no del ``IPIVLAB`` del ``.PAR``: si cada nodo
-    ocupa una línea con cuatro valores o más, se toman los cuatro primeros de cada una; si no,
-    se leen 4·NN valores seguidos, sin hacer caso de los saltos de línea. Los dos caminos dan
-    lo mismo con archivos de cuatro columnas, y es la única forma de no equivocarse con los de
-    cinco: leerlos como si fueran de cuatro descoloca todos los valores a partir del primero.
+    The format is deduced from the file itself and not from the ``IPIVLAB`` of the ``.PAR``:
+    if every node takes one line with four values or more, the first four of each are taken;
+    otherwise 4·NN values are read in a row, ignoring line breaks. Both paths give the same
+    thing with four-column files, and it is the only way not to get five-column ones wrong:
+    reading them as if they had four shifts every value from the first one on.
 
-    ``pivlab_format`` solo se usa para avisar cuando el ``.PAR`` dice otra cosa.
+    ``pivlab_format`` is only used to warn when the ``.PAR`` says otherwise.
     """
     lines = [line for line in Path(path).read_text(encoding="latin-1").splitlines()[3:]
              if line.strip()]
-    por_lineas = (len(lines) >= n_nodes > 0
-                  and all(len(_TOKENS.split(line.strip())) >= 4 for line in lines[:n_nodes]))
-    if por_lineas:
+    by_lines = (len(lines) >= n_nodes > 0
+                and all(len(_TOKENS.split(line.strip())) >= 4 for line in lines[:n_nodes]))
+    if by_lines:
         if pivlab_format == 1:
-            log.warning("%s: el .PAR dice IPIVLAB=1 (una sola lista de valores), pero el "
-                        "archivo trae un nodo por línea; se lee por líneas", path.name)
+            log.warning("%s: the .PAR says IPIVLAB=1 (a single list of values), but the file "
+                        "carries one node per line; it is read by lines", path.name)
         data = np.array([_TOKENS.split(line.strip())[:4] for line in lines[:n_nodes]],
                         dtype=np.float64)
     else:
@@ -124,14 +124,14 @@ def read_velocity_file(path: Path, n_nodes: int = 0,
 
 
 def read_moisture_file(path: Path, n_nodes: int) -> tuple[np.ndarray, np.ndarray]:
-    """Lee humedad y saturación de ``Moist_n.TXT`` (1 línea de cabecera, 4 columnas)."""
+    """Read moisture and saturation from ``Moist_n.TXT`` (1 header line, 4 columns)."""
     lines = Path(path).read_text(encoding="latin-1").splitlines()[1:]
     data = _parse_values(lines, 4 * n_nodes, path).reshape(n_nodes, 4)
     return data[:, 2].copy(), data[:, 3].copy()
 
 
 class FrameSource:
-    """Proveedor de instantes PIVlab con lectura anticipada en hilos."""
+    """Provider of PIVlab steps, reading ahead on threads."""
 
     def __init__(
         self,
@@ -145,7 +145,7 @@ class FrameSource:
         self.directory = Path(directory)
         self.n_nodes = n_nodes
         self.pivlab_format = pivlab_format
-        #: Leer la humedad de los ``Moist_<n>.TXT``; incompatible con calcularla.
+        #: Read the moisture from the ``Moist_<n>.TXT``; incompatible with computing it.
         self.moisture = moisture and images is None
         self.prefetch = max(0, prefetch)
         self.images = images
@@ -159,17 +159,18 @@ class FrameSource:
             raise FileNotFoundError(self.directory / name) from None
 
     def velocity_path(self, step: int) -> Path:
-        """Archivo PIVlab del instante ``step``."""
+        """PIVlab file of step ``step``."""
         return self._path(VELOCITY_PATTERN, step)
 
     def mesh_in_metres(self, step: int = 1) -> tuple[np.ndarray, np.ndarray, float, np.ndarray]:
-        """Nodos en metros, metros por píxel y qué nodos midió PIVlab, de un archivo."""
+        """Nodes in metres, metres per pixel and which nodes PIVlab measured, from a file."""
         path = self._path(VELOCITY_PATTERN, step)
         x, y, u, _ = read_velocity_file(path, self.n_nodes, self.pivlab_format)
         return x, y, xy_factor_in_header(path), np.isfinite(u)
 
     def read(self, step: int) -> Frame:
-        """Lee un instante. No aplica el modelo de humedad: eso va en orden, en ``frames``."""
+        """Read one step. It does not apply the moisture model: that goes in order, in
+        ``frames``."""
         path = self._path(VELOCITY_PATTERN, step)
         _, _, u, v = read_velocity_file(path, self.n_nodes, self.pivlab_format)
         if self.moisture:
@@ -189,7 +190,7 @@ class FrameSource:
         return replace(frame, moisture=state.moisture, saturation=state.saturation)
 
     def frames(self, steps: range) -> Iterator[Frame]:
-        """Devuelve los instantes en orden, leyendo los siguientes en segundo plano."""
+        """Yield the steps in order, reading the following ones in the background."""
         if self.prefetch == 0:
             yield from (self._with_moisture(self.read(step)) for step in steps)
             return

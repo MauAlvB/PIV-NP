@@ -1,14 +1,14 @@
-"""Orquestación de un análisis completo (antes el programa principal de PIV-NP).
+"""Orchestration of a full analysis (formerly the main program of PIV-NP).
 
-Flujo de cada paso (igual que el original):
+Flow of every step (the same as the original):
 
-1. Relocalizar partículas y acumular su masa nodal     (VELOCIDADES)
-2. Cargar las medidas del instante en los nodos         (VELOCIDADES)
-3. Corregir velocidades en el contorno                  (CONTOUR)
-4. Cantidad de movimiento nodal                         (VELOCIDADES)
-5. Interpolar velocidad/desplazamiento a partículas     (SOLMOV)
-6. Deformaciones, energías y nueva posición             (SOLMOV)
-7. Escribir resultados si toca                          (IMPRES_GiD)
+1. Relocate particles and accumulate their nodal mass   (VELOCIDADES)
+2. Load the measurements of the step into the nodes     (VELOCIDADES)
+3. Correct the velocities at the boundary               (CONTOUR)
+4. Nodal momentum                                       (VELOCIDADES)
+5. Interpolate velocity/displacement to the particles   (SOLMOV)
+6. Strains, energies and new position                   (SOLMOV)
+7. Write results when due                               (IMPRES_GiD)
 """
 
 from __future__ import annotations
@@ -46,18 +46,18 @@ log = logging.getLogger("pivnp")
 
 @dataclass(frozen=True)
 class RunOptions:
-    prefetch: int = 4  # archivos PIVlab leídos por adelantado
-    contour_min_neighbors: int = 3  # ICONTOUR=1: vecinos con dato necesarios
-    contour_layers: int = 1  # ICONTOUR=1 y 3: capas de puntos a reconstruir
-    contour_min_particles: int = 1  # ICONTOUR=2: partículas necesarias alrededor
-    eol: str = os.linesep  # fin de línea de los archivos GiD (CRLF en Windows, como Intel)
-    log_every: int = 10  # cada cuántos pasos se informa del archivo analizado
-    #: Reproduce exactamente el comportamiento del Fortran original, para repetir con
-    #: esta versión análisis hechos con él.
+    prefetch: int = 4  # PIVlab files read ahead
+    contour_min_neighbors: int = 3  # ICONTOUR=1: neighbours with data needed
+    contour_layers: int = 1  # ICONTOUR=1 and 3: layers of points to rebuild
+    contour_min_particles: int = 1  # ICONTOUR=2: particles needed around the point
+    eol: str = os.linesep  # line ending of the GiD files (CRLF on Windows, like Intel)
+    log_every: int = 10  # how often the file being analysed is reported
+    #: Reproduce exactly the behaviour of the original Fortran, to repeat with this version
+    #: analyses that were made with it.
     legacy_compat: bool = False
-    #: Con IVERSION=2, reproduce el reparto de la versión de 2023: cada nodo de la malla
-    #: desplazada tomaba la media de los puntos que le aportan, en vez de la suma de
-    #: cuartos. Hace falta para repetir los análisis hechos con aquella versión.
+    #: With IVERSION=2, reproduce the distribution of the 2023 version: every staggered-grid
+    #: node took the mean of the points contributing to it, instead of the sum of quarters.
+    #: Needed to repeat the analyses made with that version.
     legacy_2023_average: bool = False
 
 
@@ -74,7 +74,7 @@ class RunSummary:
 
 
 class Simulation:
-    """Un análisis PIV-NP sobre los archivos de un directorio de caso."""
+    """One PIV-NP analysis over the files of a case directory."""
 
     def __init__(self, case_dir: Path, case_name: str, config: CaseConfig,
                  frames: FrameSource, contour: ContourCorrection,
@@ -90,8 +90,8 @@ class Simulation:
         self.particles: Particles = create_particles(config, self.grid, options.legacy_compat)
         self.nodes = Nodes.zeros(config.n_nodes, self.grid.n_nodes)
         self.point_to_node = pivlab_to_node(config.n_cols, config.n_rows)
-        # Centros de celda de la malla desplazada. El original solo los generaba cuando
-        # no era un reinicio, así que en modo compatibilidad se dejan a cero.
+        # Cell centres of the staggered grid. The original only generated them when it was
+        # not a restart, so in compatibility mode they are left at zero.
         legacy_restart = config.restart and options.legacy_compat
         if config.mesh_version == 2 and not legacy_restart:
             self.centers = cell_centers(self.grid)
@@ -118,36 +118,36 @@ class Simulation:
 
     @property
     def staggered_average(self) -> int:
-        """Qué hacer con los nodos de borde de la malla desplazada (solo IVERSION=2)."""
+        """What to do with the boundary nodes of the staggered grid (IVERSION=2 only)."""
         if self.options.legacy_2023_average:
             return AVERAGE_2023
         return AVERAGE if self.contour.normalizes_staggered else NO_AVERAGE
 
     def check_frame_interval(self) -> float | None:
-        """Avisa si el DT del ``.PAR`` no coincide con el intervalo que usó PIVlab.
+        """Warn when the DT of the ``.PAR`` does not match the interval PIVlab used.
 
-        Si no coinciden, los desplazamientos salen multiplicados por el cociente entre
-        ambos: es un error que no da ningún síntoma salvo resultados a otra escala.
+        If they do not match, the displacements come out multiplied by the ratio between the
+        two: a mistake with no symptom other than results at a different scale.
         """
         try:
-            intervalo = frame_interval_in_header(self.frames.velocity_path(1))
+            interval = frame_interval_in_header(self.frames.velocity_path(1))
         except (FileNotFoundError, OSError):
             return None
-        if intervalo is None or math.isclose(intervalo, self.config.dt, rel_tol=1e-3):
-            return intervalo
+        if interval is None or math.isclose(interval, self.config.dt, rel_tol=1e-3):
+            return interval
         log.warning(
-            "El .PAR usa DT=%g s, pero los archivos PIVlab se exportaron con un intervalo "
-            "entre imágenes de %g s: los desplazamientos saldrán multiplicados por %.4g. "
-            "Revisa el DT del .PAR o el intervalo con el que exportaste desde PIVlab "
-            "(si los archivos no vienen de PIVlab, ignora este aviso).",
-            self.config.dt, intervalo, self.config.dt / intervalo)
-        return intervalo
+            "The .PAR uses DT=%g s, but the PIVlab files were exported with an interval "
+            "between images of %g s: displacements will come out multiplied by %.4g. Check "
+            "the DT of the .PAR or the interval you exported from PIVlab with (if the files "
+            "do not come from PIVlab, ignore this warning).",
+            self.config.dt, interval, self.config.dt / interval)
+        return interval
 
     def run(self) -> RunSummary:
         cfg = self.config
         started = time.perf_counter()
         summary = RunSummary(self.case_name, cfg.n_particles, cfg.total_steps)
-        log.info("LEYENDO DATOS... caso %s: %d partículas, %d pasos", self.case_name,
+        log.info("READING DATA... case %s: %d particles, %d steps", self.case_name,
                  cfg.n_particles, cfg.total_steps)
         self.check_frame_interval()
 
@@ -155,14 +155,14 @@ class Simulation:
         if cfg.restart:
             step, t, resumed = self._load_restart()
             if resumed:
-                log.info("Continuando desde el paso %d (t = %g s)", step, t)
+                log.info("Continuing from step %d (t = %g s)", step, t)
 
         writer = GidWriter(self.case_dir, self.case_name, self.options.eol,
                            self.options.legacy_compat)
         with writer:
             if cfg.restart and not resumed:
-                # Con un .REC del Fortran original no se sabe por dónde iba el análisis:
-                # se empieza una serie de resultados nueva, como hacía el original.
+                # With a .REC from the original Fortran there is no way to know how far the
+                # analysis had got: a new series of results is started, as the original did.
                 self._write_output(writer, step, t, summary)
 
             steps = range(1, cfg.total_steps + 1)
@@ -181,10 +181,10 @@ class Simulation:
         if self.frames.images is not None:
             log.info("Moisture: %s", self.frames.images.quality_summary())
         summary.elapsed_s = time.perf_counter() - started
-        log.info("ANALYSIS FINISHED en %.1f s", summary.elapsed_s)
+        log.info("ANALYSIS FINISHED in %.1f s", summary.elapsed_s)
         return summary
 
-    # --- pasos ---------------------------------------------------------------------------
+    # --- steps ---------------------------------------------------------------------------
     def _update_nodes(self, frame, step: int) -> None:
         cfg = self.config
         accumulate_particle_mass(self.particles, self.grid, self.nodes, step,
@@ -203,39 +203,39 @@ class Simulation:
                       append: bool = False) -> None:
         located = output_mask(self.particles, self.grid, step)
         count_nan_nodes(self.particles, self.nodes, self.grid, self.config.mesh_version, step)
-        if not summary.output_times:  # primer instante impreso: malla y cabecera
-            # La malla GiD lleva las posiciones iniciales, porque los desplazamientos se
-            # acumulan desde ellas y GiD dibuja malla + desplazamiento. El original
-            # escribía las posiciones ya movidas por el primer paso.
+        if not summary.output_times:  # first printed step: mesh and header
+            # The GiD mesh carries the initial positions, because the displacements are
+            # accumulated from them and GiD draws mesh + displacement. The original wrote the
+            # positions already moved by the first step.
             positions = (self.particles.position if self.options.legacy_compat
                          else self.particles.initial_position)
             writer.write_mesh(positions, self.particles.nan_initial)
-            # Al continuar un análisis, los resultados se añaden a los anteriores en vez
-            # de sobrescribirlos.
+            # When continuing an analysis, results are appended to the previous ones instead
+            # of overwriting them.
             writer.start_results(append=append)
         writer.write_step(t, self.particles, self.nodes, located, self.config.moisture)
         summary.output_times.append(t)
 
-    # --- reinicio ------------------------------------------------------------------------
+    # --- restart -------------------------------------------------------------------------
     def _load_restart(self) -> tuple[int, float, bool]:
-        """Carga el ``.REC``; devuelve (paso, instante, ``True`` si se continúa la serie).
+        """Load the ``.REC``; returns (step, time, ``True`` when the series continues).
 
-        Un ``.REC`` con estado nodal (escrito por esta versión) permite continuar el
-        análisis exactamente donde se quedó. Con uno del Fortran original, o en modo
-        compatibilidad, se empieza en el paso 0 y el instante 0, como hacía el original.
+        A ``.REC`` carrying nodal state (written by this version) makes it possible to
+        continue the analysis exactly where it stopped. With one from the original Fortran,
+        or in compatibility mode, it starts at step 0 and time 0, as the original did.
         """
         cfg = self.config
         data = read_restart(find_file(self.case_dir, self.restart_path.name))
         if data.n_particles != cfg.n_particles:
-            raise ConfigError(f"{self.restart_path.name}: tiene {data.n_particles} partículas "
-                              f"y el .PAR define {cfg.n_particles}")
+            raise ConfigError(f"{self.restart_path.name}: it holds {data.n_particles} "
+                              f"particles and the .PAR defines {cfg.n_particles}")
         if data.mesh_version != cfg.mesh_version:
             raise ConfigError(f"{self.restart_path.name}: IVERSION={data.mesh_version} "
-                              f"distinto del .PAR ({cfg.mesh_version})")
+                              f"differs from the .PAR ({cfg.mesh_version})")
         n = data.n_particles
         p = self.particles
         p.position[:n] = data.position
-        # Con un .REC del original no se guardó la posición inicial: se reconstruye.
+        # A .REC from the original did not store the initial position: it is rebuilt.
         p.initial_position[:n] = (data.position - data.displacement
                                   if data.initial_position is None else data.initial_position)
         p.displacement[:n] = data.displacement
@@ -243,7 +243,7 @@ class Simulation:
         p.eq_strain[:n] = data.eq_strain
         p.nan_initial[:n] = data.nan_initial
         if self.options.legacy_compat:
-            # El original arrastraba el desplazamiento acumulado al "instantáneo".
+            # The original carried the accumulated displacement into the "instantaneous" one.
             p.step_displacement[:n] = data.displacement
             return 0, 0.0, False
         if data.nodes is None:
@@ -264,10 +264,10 @@ class Simulation:
 
 
 def moisture_source(case_dir: Path, case_name: str, frames: FrameSource):
-    """Fuente de humedad calculada desde las imágenes del ensayo (MOISTER=2).
+    """Moisture source computed from the test images (MOISTER=2).
 
-    La malla de PIV-NP se sitúa en la imagen con las coordenadas y el factor de conversión
-    del primer archivo PIVlab, y con la máscara de nodos que PIVlab midió.
+    The PIV-NP grid is placed on the image with the coordinates and the conversion factor of
+    the first PIVlab file, and with the mask of nodes PIVlab measured.
     """
     from .moisture.source import Mesh, source_for_case
 
@@ -277,10 +277,10 @@ def moisture_source(case_dir: Path, case_name: str, frames: FrameSource):
 
 def write_moisture_files(case_dir: Path, case_name: str | None = None,
                          options: RunOptions = DEFAULT_OPTIONS) -> int:
-    """Calcula la humedad desde las imágenes y la escribe en ``Moist_<n>.TXT``.
+    """Compute the moisture from the images and write it to ``Moist_<n>.TXT``.
 
-    No ejecuta el análisis: sirve para revisar los campos de humedad por separado, o para
-    compararlos con los de análisis anteriores. Devuelve cuántos archivos se han escrito.
+    It does not run the analysis: it is meant for looking at the moisture fields on their own,
+    or for comparing them with those of earlier analyses. Returns how many files were written.
     """
     from .moisture.source import Mesh, write_moist
 
