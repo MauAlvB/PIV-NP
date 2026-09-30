@@ -242,6 +242,77 @@ Es, por tanto, el método del artículo publicado, y es el que hay que reproduci
 Los `sc_gv_sat_swir_n.png` son figuras de MATLAB con barra de color, no datos: sirven para
 mirar, no para medir. Los `Moist_n.txt` son la referencia numérica.
 
+## Resultados de la fase 3: cuánto mueve cada decisión
+
+Medido sobre el caso del artículo, que es el único con una referencia calculada sin trinquete
+y sin umbral. La variante de referencia es la que reproduce sus archivos: banda global 92-132
+(40 niveles), σ = 40, filtro redondeado y sin política incremental. Cada variante cambia una
+sola cosa, y se compara en los 40 instantes y en todos los nodos con dato.
+
+| Variante | dif. media de saturación | p95 | máx | dif. media de humedad | nodos que se mueven > 0,05 | saturación media final | nodos con sat > 0,99 |
+|---|---|---|---|---|---|---|---|
+| *(referencia)* | — | — | — | — | — | 0,937 | 80,4 % |
+| Trinquete, umbral 0,8 | 0,022 | 0,131 | 0,53 | **0,000** | 11,3 % | 0,972 | 92,7 % |
+| Trinquete, umbral 0,95 | 0,015 | 0,056 | 0,43 | **0,000** | 6,0 % | 0,968 | 88,8 % |
+| Trinquete, sin umbral | 0,008 | 0,056 | 0,43 | **0,000** | 5,2 % | 0,961 | 85,3 % |
+| Banda de 11 niveles | **0,105** | 0,613 | 0,68 | 2,52 | 24,0 % | 0,856 | 80,4 % |
+| Banda de 20 niveles | 0,062 | 0,383 | 0,44 | 1,47 | 21,6 % | 0,888 | 80,4 % |
+| Banda de 60 niveles | 0,028 | 0,234 | 0,26 | 0,59 | 15,5 % | 0,961 | 80,4 % |
+| Banda de 80 niveles | 0,041 | 0,328 | 0,41 | 0,82 | 17,2 % | 0,972 | 80,4 % |
+| Banda desplazada −2 niveles | 0,021 | 0,095 | 0,12 | 0,52 | 21,6 % | 0,920 | 74,8 % |
+| Banda desplazada +2 niveles | 0,017 | 0,095 | 0,12 | 0,40 | 17,2 % | 0,950 | 84,9 % |
+| Banda desplazada ±4 niveles | 0,031-0,047 | 0,19-0,20 | 0,22 | 0,73-1,20 | 17-27 % | 0,900-0,961 | 62-88 % |
+| Sin redondear el filtro | **0,002** | 0,016 | 0,03 | 0,06 | **0,0 %** | 0,937 | 79,9 % |
+| σ = 15 en vez de 40 | 0,035 | 0,219 | 0,71 | 0,83 | 17,7 % | 0,915 | 77,4 % |
+| σ = 80 en vez de 40 | 0,047 | 0,351 | 0,62 | 1,05 | 16,5 % | 0,974 | 83,9 % |
+| Referencia por nodo (+5/−6) | 0,152 | 0,722 | 0,99 | 3,41 | 38,0 % | 0,885 | 71,2 % |
+| Referencia por nodo, banda de 40 | 0,663 | 0,980 | 0,99 | 15,61 | 95,4 % | 0,296 | 6,0 % |
+
+### Qué se saca de ahí
+
+**1. La anchura de la banda manda sobre todo lo demás.** Pasar de 40 a los 11 niveles del
+flujo RGB mueve la saturación 0,105 de media y 0,61 en el percentil 95: un orden de magnitud
+más que cualquier otra decisión. Y equivocarse solo por un factor de dos (20 en vez de 40)
+todavía la mueve 0,062. Es, con diferencia, el número que hay que medir bien.
+
+**2. La posición de la banda pesa tanto como el trinquete.** Desplazarla **dos niveles de
+gris** —lo que separa dos clics vecinos al marcar la referencia a mano— cambia la saturación
+media 0,02 y mueve diez puntos el porcentaje de nodos que acaban saturados, del 75 % al 85 %.
+Esos dos extremos salen hoy de pinchar dos puntos en una imagen y sumarles cuatro constantes
+escritas en el código (+25, −5, +5, −8). Conviene que salgan de una medida, no de un clic.
+
+**3. El trinquete mueve la saturación y deja la humedad exactamente igual: 0,000.** Es la
+incoherencia entre los dos campos, ya cuantificada: hasta 0,53 de diferencia en saturación sin
+que la humedad cambie ni una milésima. El umbral en 0,8 duplica el efecto del trinquete solo
+(0,022 frente a 0,008) y lleva del 80 % al 93 % los nodos que acaban dados por saturados.
+
+**4. El redondeo del filtro aquí no se nota**: 0,002 de media y ni un nodo por encima de 0,05.
+Y sin embargo en el caso RGB ese mismo redondeo era **todo** el residuo. La diferencia está en
+la anchura de la banda: con 40 niveles un nivel de gris es el 2,5 % de la escala; con 11 es el
+9 %. El redondeo no era el problema, era un síntoma de una banda demasiado estrecha.
+
+**5. σ no es un parámetro cosmético.** Cambiarlo a 15 o a 80 mueve entre 0,035 y 0,047, tanto
+como equivocarse en un 30-50 % en la anchura de la banda. Merece justificarse con el tamaño
+del grano y la escala de la imagen, no elegirse a ojo.
+
+**6. La referencia por nodo depende por completo de que la imagen de referencia esté en un
+estado conocido.** Con la única candidata de este caso (`ref3.jpg`, que es donde se marcaron
+los puntos, no una imagen de suelo seco) el resultado se va al traste: 0,66 de diferencia
+media y el 95 % de los nodos afectados. No dice que el método por nodo sea peor —cancela el
+patrón fijo de textura, que es su ventaja—, dice que **exige una condición experimental que
+hoy no está escrita en ninguna parte**.
+
+### Orden de prioridades que sale de las medidas
+
+1. La anchura de la banda, de ensayo de columna, por suelo.
+2. La posición de la banda, medida y no pinchada.
+3. σ, justificado.
+4. Hacer coherentes humedad y saturación, y sacar el trinquete de la medida.
+5. El redondeo, que se resuelve solo en cuanto la banda es ancha.
+
+Todo esto está medido sobre el caso SWIR, con banda de 40 niveles. En el flujo RGB, con 11,
+todas las sensibilidades son mayores.
+
 ## Fase 3 — Mejoras del cálculo de humedad
 
 Se prueban sobre el caso del artículo, midiendo cada una:
@@ -262,4 +333,4 @@ Se prueban sobre el caso del artículo, midiendo cada una:
 | 0 | hecha: un solo formato de `.PAR`, los 46 archivos convertidos, y el lector de PIVlab deduce el formato del propio archivo |
 | 1 | hecha en lo esencial: cuatro casos reproducidos exactamente y los demás explicados |
 | 2 | hecha: la humedad del caso del artículo se reproduce en el 99,8 % de los nodos |
-| 3 | en marcha: ya están la banda global y el registro por homografía |
+| 3 | medido el efecto de cada decisión; quedan por aplicar las conclusiones |
