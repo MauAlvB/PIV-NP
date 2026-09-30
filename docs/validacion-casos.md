@@ -44,17 +44,45 @@ Hasta ahora se adivinaba por el número de valores, y eso no basta:
 Los dos últimos tienen los mismos ocho valores y el mismo bloque 4, y significan cosas
 distintas: por posición son indistinguibles.
 
-**Solución.** Leer la línea de comentario que precede a los valores, que es justamente donde
-cada archivo documenta su propio orden (`del_t total_steps salto_impresión v.pivnp v.pivlab
-moister REC PTR`). Se reconocen los nombres, con o sin acentos y en español o inglés, y se
-asigna cada valor a su campo. Si la cabecera no se reconoce, se cae en la heurística actual
-por número de valores. Así el lector deja de adivinar y pasa a leer lo que el archivo dice.
+**Solución: un solo formato de entrada.** En vez de arrastrar la ambigüedad en el lector, los
+archivos se convierten una vez y a partir de ahí hay un único formato:
 
-**Detalle a decidir:** en el `.PAR` de la centrífuga de 2022 aparece `MOISTER = 2`, y su
-`.POST.RES` sí trae humedad y saturación, así que en aquella versión 2 seguía significando
-"leer los archivos de humedad". En la versión nueva 2 significa "calcularla desde las
-imágenes". Se resuelve por dialecto: en los `.PAR` antiguos, cualquier valor distinto de 0 se
-entiende como "leer los archivos"; el 2 nuevo solo tiene su significado en el dialecto actual.
+```
+Título del caso
+BLOQUE 2: N_cel N_nod N_part_celda N_fil Ancho    Alto
+          2006  2100  3            34    0.212115 0.212115
+BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
+          0.8   149         1         0       1       1      0       0   0
+BLOQUE 4: s_density porosity
+          2650.0    0.4
+```
+
+Los nombres van encima de sus valores, así que el archivo se explica solo, y el Fortran de
+2024 lo sigue leyendo, que es lo que permite seguir contrastando contra él. La conversión se
+hace con `pivnp <directorio> --convert-par`, que guarda cada original como `<caso>.PAR.orig`.
+
+Para leer los archivos antiguos, el conversor sí mira la línea de comentario, que es donde
+cada uno documenta su propio orden (`del_t total_steps salto_impresión v.pivnp v.pivlab
+moister REC PTR`): es la única forma de distinguir los dos dialectos de ocho valores. Esa
+lógica vive ahora solo en el conversor; el lector acepta el formato único y, si ve otra cosa,
+lo dice y remite al conversor en vez de adivinar.
+
+**La conversión no cambia ningún resultado**, y se comprueba con una garantía sencilla: leer
+el archivo viejo y leer el convertido tienen que dar la misma configuración, campo a campo.
+Se verificó en los 46 `.PAR` (20 del repositorio y 26 de las carpetas de casos). Dos
+correcciones deliberadas se salen de ahí y se avisan siempre:
+
+* **`MOISTER=2` de la centrífuga de 2022.** Allí significaba "leer los archivos de humedad"
+  —su `.POST.RES` los trae— y en el formato actual significa "calcularla desde las imágenes".
+  Se escribe 1.
+* **`IPIVLAB` de las etapas del caso del artículo.** Sus `.PAR` no traen el campo, así que se
+  asumía 1 (archivos de 4 columnas) y los suyos tienen 5. Se escribe el valor que se mide
+  contando las columnas del propio `datos (1).txt`. Son los dos únicos archivos de los 46
+  cuya configuración cambia, y el cambio es justo el que hacía falta: con él, ese caso da
+  exactamente lo mismo que el Fortran de 2024.
+
+El `DT` que no cuadra con la cabecera de PIVlab (`caso paper centrifuga`, `caso talud`) se
+avisa pero **no se toca**: cambiarlo cambiaría los resultados, y eso es una decisión aparte.
 
 ## Resultados de la fase 1
 
@@ -231,7 +259,7 @@ Se prueban sobre el caso del artículo, midiendo cada una:
 
 | Fase | Estado |
 |---|---|
-| 0 | hecha: el lector de `.PAR` entiende los seis dialectos y el de PIVlab deduce el formato |
+| 0 | hecha: un solo formato de `.PAR`, los 46 archivos convertidos, y el lector de PIVlab deduce el formato del propio archivo |
 | 1 | hecha en lo esencial: cuatro casos reproducidos exactamente y los demás explicados |
 | 2 | hecha: la humedad del caso del artículo se reproduce en el 99,8 % de los nodos |
 | 3 | en marcha: ya están la banda global y el registro por homografía |
