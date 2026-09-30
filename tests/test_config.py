@@ -43,29 +43,36 @@ def test_values_may_span_lines_commas_and_fortran_exponents():
     assert cfg.total_steps == 149  # REAL truncado, como el DO del original
 
 
-def test_old_par_format_is_accepted():
-    """Los .PAR de versiones anteriores traen 3 o 4 valores en el bloque 3 y ningún bloque 4."""
+@pytest.mark.parametrize(("texto", "mensaje"), [
+    # tres valores en el bloque 3 y sin bloque 4, el formato más antiguo
+    ("1.\t11\t1", "bloque 3 tiene 3 valores"),
+    # ocho valores, con la densidad y la porosidad metidas en el bloque 3
+    ("1\t149\t1\t1\t1212\t0.444\t1\t0", "bloque 3 tiene 8 valores"),
+])
+def test_old_par_formats_are_rejected_with_instructions(texto, mensaje):
+    """Hay un solo formato de entrada; los anteriores se convierten una vez y ya está."""
+    antiguo = "\n".join(PAR.splitlines()[:4] + [texto]) + "\n"
+    with pytest.raises(ConfigError, match=mensaje):
+        parse_par(antiguo)
+    with pytest.raises(ConfigError, match="convert-par"):
+        parse_par(antiguo)
+
+
+def test_a_header_naming_the_fields_in_another_order_is_rejected():
+    """Nueve valores pero con la cabecera de otro dialecto: no se adivina, se avisa."""
     lineas = PAR.splitlines()
-    antiguo = "\n".join(lineas[:4] + ["1.\t11\t1"]) + "\n"
-    cfg = parse_par(antiguo)
-    assert (cfg.dt, cfg.total_steps, cfg.print_every) == (1.0, 11, 1)
-    assert cfg.mesh_version == 1 and cfg.pivlab_format == 1
-    assert not cfg.moisture and not cfg.restart and cfg.contour == 0
-    assert (cfg.soil_density, cfg.porosity) == (0.0, 0.0)
-
-    con_humedad = "\n".join(lineas[:4] + ["1. 11 1 1"]) + "\n"
-    assert parse_par(con_humedad).moisture
+    texto = "\n".join(lineas[:3] + [
+        "BLOQUE 3: del_t Total_steps Salto_de_impresión Humedad S_density porosity "
+        "Version PTV IREC",
+        "0.04 20 1 1 1385.46 0.506 1 0 1"] + lineas[5:]) + "\n"
+    with pytest.raises(ConfigError, match="otro orden"):
+        parse_par(texto)
 
 
-def test_par_with_density_inside_block_three():
-    """Variante con 8 valores: DT TOTAL_STEPS IMPPAS MOISTER S_DENSITY POROSITY IVERSION PTV."""
-    lineas = PAR.splitlines()
-    texto = "\n".join(lineas[:4] + ["1\t149\t1\t1\t1212\t0.444\t1\t0"]) + "\n"
-    cfg = parse_par(texto)
-    assert (cfg.dt, cfg.total_steps, cfg.print_every) == (1.0, 149, 1)
-    assert cfg.moisture and cfg.mesh_version == 1
-    assert (cfg.soil_density, cfg.porosity) == (1212.0, 0.444)
-    assert cfg.pivlab_format == 1 and cfg.contour == 0 and not cfg.restart
+def test_the_fourth_block_is_required():
+    texto = "\n".join(PAR.splitlines()[:5]) + "\n"
+    with pytest.raises(ConfigError, match="bloque 4"):
+        parse_par(texto)
 
 
 def test_moister_selects_where_the_moisture_comes_from():
@@ -78,74 +85,6 @@ def test_moister_selects_where_the_moisture_comes_from():
     assert con_moister(2).moisture and con_moister(2).moisture_from_images
     with pytest.raises(ConfigError, match="MOISTER"):
         con_moister(3)
-
-
-#: Dialectos reales del bloque 3. El orden cambió entre versiones del programa y hay dos con
-#: los mismos ocho valores en distinto orden, así que se distinguen por su cabecera.
-DIALECTOS = {
-    "centrifuga 2022": (
-        "BLOQUE 3: del_t\t total_steps  salto_impresión  v.pivnp  v.pivlab  moister  REC  "
-        "PTR\t(ANALYSIS TYPE DATA)\n2\t149\t1\t2\t2\t1\t0\t0\n"
-        "BLOQUE 4: s_density(kg/m3)  initial_porosity\n3600\t0.5\n",
-        {"dt": 2.0, "mesh_version": 2, "pivlab_format": 2, "moisture": True,
-         "restart": False, "soil_density": 3600.0, "porosity": 0.5},
-    ),
-    "artículo, pruebas": (
-        "BLOQUE 3: del_t Total_steps Salto_de_impresión Humedad Version  IPIVLAB  IREC  PTV\n"
-        "1\t20\t1\t1\t2\t2\t1\t0\n"
-        "BLOQUE 4: S_density (kg/m3) porosity \n1385.46\t0.506\n",
-        {"dt": 1.0, "mesh_version": 2, "pivlab_format": 2, "moisture": True,
-         "restart": True, "soil_density": 1385.46, "porosity": 0.506},
-    ),
-    "artículo, etapas": (
-        "BLOQUE 3: del_t Total_steps Salto_de_impresión Humedad S_density (kg/m3) porosity "
-        "Version PTV  IREC\n0.04\t20\t1\t1\t1385.46\t0.506\t1\t0\t1\n",
-        {"dt": 0.04, "mesh_version": 1, "pivlab_format": 1, "moisture": True,
-         "restart": True, "soil_density": 1385.46, "porosity": 0.506},
-    ),
-    "2024, el actual": (
-        "BLOQUE 3: del_t Total_steps Impresion Moister Version PIVlab Contour Rec Track\n"
-        "0.8\t149\t1\t1\t2\t2\t3\t1\t0\n"
-        "BLOQUE 4: Densidad Porosidad\n2650.0  0.4\n",
-        {"dt": 0.8, "mesh_version": 2, "pivlab_format": 2, "moisture": True,
-         "restart": True, "contour": 3, "soil_density": 2650.0, "porosity": 0.4},
-    ),
-}
-
-
-@pytest.mark.parametrize("nombre", list(DIALECTOS))
-def test_block_three_is_read_from_its_own_header(nombre):
-    """Cada .PAR documenta en su comentario qué es cada valor; hay que hacerle caso."""
-    bloque, esperado = DIALECTOS[nombre]
-    cfg = parse_par("\n".join(PAR.splitlines()[:3]) + "\n" + bloque)
-    for campo, valor in esperado.items():
-        assert getattr(cfg, campo) == valor, campo
-    assert cfg.total_steps in (20, 149) and cfg.print_every == 1
-
-
-def test_old_moister_two_means_read_the_files():
-    """En las versiones anteriores cualquier valor distinto de 0 leía los archivos; el 2 de
-    'calcular desde las imágenes' solo existe en el dialecto actual."""
-    bloque, _ = DIALECTOS["centrifuga 2022"]
-    bloque = bloque.replace("\t1\t0\t0", "\t2\t0\t0")
-    cfg = parse_par("\n".join(PAR.splitlines()[:3]) + "\n" + bloque)
-    assert cfg.moisture and not cfg.moisture_from_images
-
-
-def test_unreadable_header_falls_back_to_positions():
-    """Con una cabecera que no nombra los campos se recurre al número de valores."""
-    lineas = PAR.splitlines()
-    texto = "\n".join(lineas[:4] + ["1. 11 1 1"]) + "\n"
-    assert parse_par(texto).moisture
-    # una cabecera con un campo repetido tampoco es fiable
-    texto = texto.replace(lineas[3], "BLOQUE 3: del_t Total_steps Salto de impresión (Datos)")
-    assert parse_par(texto).moisture
-
-
-def test_incomplete_analysis_block_is_rejected():
-    lineas = PAR.splitlines()
-    with pytest.raises(ConfigError, match="bloque 3"):
-        parse_par("\n".join(lineas[:4] + ["1. 11 1 0 1 1"]) + "\n")
 
 
 def test_particle_count():

@@ -30,7 +30,14 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import ConfigError, RawPar, config_from_blocks, find_file, read_par_blocks
+from .config import (
+    ConfigError,
+    RawPar,
+    _ListDirectedReader,
+    config_from_blocks,
+    find_file,
+    names_in_header,
+)
 from .pivlab_io import VELOCITY_PATTERN, frame_interval_in_header
 
 log = logging.getLogger("pivnp")
@@ -64,6 +71,58 @@ class Conversion:
             return f"{self.path.name}: NO se ha podido convertir - {self.error}"
         estado = "convertido" if self.changed else "ya estaba en el formato único"
         return f"{self.path.name}: {estado}" + "".join(f"\n    - {n}" for n in self.notes)
+
+
+def _analysis_block_of_any_version(reader: _ListDirectedReader,
+                                   header: str) -> tuple[dict[str, str], bool]:
+    """Bloque 3 de cualquier versión: devuelve los valores por nombre y si ya era el actual.
+
+    Primero se mira la línea de comentario, que es donde cada archivo nombra sus campos y la
+    única forma fiable de saber el orden: hay dos dialectos con los mismos ocho valores
+    colocados de otra manera. Si no se entiende, se recurre al número de valores.
+    """
+    values = reader.line_values()
+    campos = names_in_header(header)
+    if campos is not None and len(campos) == len(values):
+        log.info("%s: bloque 3 leído por su cabecera (%s)", reader.source, " ".join(campos))
+        return dict(zip(campos, values, strict=True)), "ICONTOUR" in campos
+
+    orden: list[str]
+    if len(values) >= 9:
+        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "IVERSION", "IPIVLAB", "ICONTOUR",
+                 "IREC", "ITR"]
+        return dict(zip(orden, values[:9], strict=True)), True
+    if len(values) == 8:
+        log.info("%s: .PAR con densidad y porosidad en el bloque 3", reader.source)
+        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "S_DENSITY", "POROSITY",
+                 "IVERSION", "ITR"]
+        return dict(zip(orden, values, strict=True)), False
+    if len(values) in (3, 4):
+        log.info("%s: .PAR en formato antiguo (%d valores en el bloque 3); se asumen "
+                 "IVERSION=1, IPIVLAB=1, ICONTOUR=0, IREC=0 e ITR=0", reader.source, len(values))
+        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER"]
+        return dict(zip(orden, values, strict=False)), False
+    raise ConfigError(
+        f"{reader.source}: el bloque 3 tiene {len(values)} valores y su línea de comentario "
+        "no dice qué es cada uno; no se reconoce como ninguna versión conocida del .PAR")
+
+
+def read_any_par_blocks(text: str, source: str = "<PAR>") -> RawPar:
+    """Lee un ``.PAR`` de cualquier versión. Solo lo usa la conversión."""
+    reader = _ListDirectedReader(text.splitlines(), source)
+    title = reader.text()
+    reader.comment()
+    geometry = reader.values(6)
+    analysis, current = _analysis_block_of_any_version(reader, reader.comment())
+
+    density, porosity = analysis.get("S_DENSITY"), analysis.get("POROSITY")
+    if density is None:
+        if reader.at_end():  # los .PAR antiguos no traen el bloque 4
+            density = porosity = "0"
+        else:
+            reader.comment()
+            density, porosity = reader.values(2)
+    return RawPar(title, geometry, analysis, density, porosity, current)
 
 
 def bloque(titulo: str, nombres: tuple[str, ...], valores: list[str]) -> list[str]:
@@ -105,7 +164,7 @@ def convert_file(path: Path) -> Conversion:
     resultado = Conversion(path)
     texto = path.read_text(encoding="latin-1")
     try:
-        crudo = read_par_blocks(texto, str(path))
+        crudo = read_any_par_blocks(texto, str(path))
         config = config_from_blocks(crudo, str(path))
     except (ConfigError, ValueError) as error:
         resultado.error = str(error)

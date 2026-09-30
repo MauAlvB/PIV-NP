@@ -114,16 +114,17 @@ Una línea con el nombre del caso (sin extensión), por ejemplo `zapatak`.
 ### `<caso>.PAR`
 
 Formato de lectura libre de Fortran: los valores se separan por espacios, tabuladores o
-comas. Las líneas de comentario son obligatorias.
+comas. Las líneas de comentario son obligatorias y llevan los nombres de los campos encima
+de sus valores, de modo que el archivo se explica solo.
 
 ```
 Título del análisis
-BLOQUE 2: NC NN NPC NFIL AXC AYC
-2006  2100  3  34  0.212115  0.212115
-BLOQUE 3: DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR
-0.8  149  1  0  1  1  0  0  0
-BLOQUE 4: S_DENSITY POROSITY
-2650.0  0.4
+BLOQUE 2: N_cel N_nod N_part_celda N_fil Ancho    Alto
+          2006  2100  3            34    0.212115 0.212115
+BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
+          0.8   149         1         0       1       1      0       0   0
+BLOQUE 4: s_density porosity
+          2650.0    0.4
 ```
 
 | Parámetro | Significado |
@@ -135,7 +136,7 @@ BLOQUE 4: S_DENSITY POROSITY
 | `DT` | tiempo entre imágenes [s] |
 | `TOTAL_STEPS` | número de archivos PIVlab a procesar |
 | `IMPPAS` | se escriben resultados en el paso 1 y cada `IMPPAS` pasos |
-| `MOISTER` | 1 = leer también `Moist_<n>.TXT` (humedad y saturación) |
+| `MOISTER` | 0 = sin humedad; 1 = leerla de `Moist_<n>.TXT`; 2 = calcularla desde las imágenes del ensayo (`<caso>.HUM`) |
 | `IVERSION` | 1 = las velocidades PIVlab están en los nodos de la malla; 2 = están en el centro de cada elemento (malla desplazada media celda) |
 | `IPIVLAB` | 1 = archivos de 4 columnas (PIVlab antiguo); otro = 5 columnas |
 | `ICONTOUR` | corrección de contorno: 0 = ninguna, 1 = media de vecinos, 2 = media de partículas, 3 = extrapolación |
@@ -146,10 +147,21 @@ BLOQUE 4: S_DENSITY POROSITY
 Los datos se validan al leerlos: si algo no encaja (por ejemplo, NC no múltiplo de NFIL) se
 explica con un mensaje en lugar de producir resultados sin sentido.
 
-También se leen los `.PAR` de versiones anteriores, con 3 o 4 valores en el bloque 3
-(`DT TOTAL_STEPS IMPPAS [MOISTER]`) y sin bloque 4: el resto de parámetros toma su valor por
-defecto (malla PIV-NP, archivos de 4 columnas, sin corrección de contorno, análisis nuevo).
-Así se pueden reanalizar casos antiguos sin tocar sus archivos.
+#### Casos de versiones anteriores
+
+El bloque 3 cambió de orden varias veces a lo largo de los años, y llegó a haber archivos con
+los mismos valores colocados de otra manera. Hay un solo formato de entrada, así que un caso
+antiguo se pasa a él una vez:
+
+```bash
+pivnp <directorio> --convert-par
+```
+
+Reescribe todos los `.PAR` que encuentre por debajo del directorio y guarda cada original al
+lado, como `<caso>.PAR.orig`. La conversión reordena los valores tal cual, sin volver a
+formatearlos, así que no cambia ni un decimal; los dos casos en los que sí corrige algo
+—`IPIVLAB` según las columnas que de verdad tienen los archivos del caso, y el `MOISTER` de
+las versiones en las que 2 significaba otra cosa— se avisan por pantalla.
 
 ### Datos PIVlab
 

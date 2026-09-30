@@ -114,16 +114,17 @@ A single line with the case name (no extension), for example `zapatak`.
 ### `<case>.PAR`
 
 Fortran list-directed format: values are separated by spaces, tabs or commas. The comment
-lines are required.
+lines are required and carry the field names above their values, so the file explains
+itself.
 
 ```
 Analysis title
-BLOCK 2: NC NN NPC NFIL AXC AYC
-2006  2100  3  34  0.212115  0.212115
-BLOCK 3: DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR
-0.8  149  1  0  1  1  0  0  0
-BLOCK 4: S_DENSITY POROSITY
-2650.0  0.4
+BLOQUE 2: N_cel N_nod N_part_celda N_fil Ancho    Alto
+          2006  2100  3            34    0.212115 0.212115
+BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
+          0.8   149         1         0       1       1      0       0   0
+BLOQUE 4: s_density porosity
+          2650.0    0.4
 ```
 
 | Parameter | Meaning |
@@ -135,7 +136,7 @@ BLOCK 4: S_DENSITY POROSITY
 | `DT` | time between images [s] |
 | `TOTAL_STEPS` | number of PIVlab files to process |
 | `IMPPAS` | results are written at step 1 and every `IMPPAS` steps |
-| `MOISTER` | 1 = also read `Moist_<n>.TXT` (water content and saturation) |
+| `MOISTER` | 0 = no moisture; 1 = read it from `Moist_<n>.TXT`; 2 = compute it from the test images (`<case>.HUM`) |
 | `IVERSION` | 1 = PIVlab velocities sit at the grid nodes; 2 = they sit at the centre of each element (grid shifted half a cell) |
 | `IPIVLAB` | 1 = 4-column files (older PIVlab); any other value = 5 columns |
 | `ICONTOUR` | boundary correction: 0 = none, 1 = neighbour average, 2 = particle average, 3 = extrapolation |
@@ -146,10 +147,21 @@ BLOCK 4: S_DENSITY POROSITY
 Input is validated on reading: if something does not add up (for instance, NC not a
 multiple of NFIL) you get an explicit message instead of meaningless results.
 
-`.PAR` files from earlier versions are also accepted, with 3 or 4 values in block 3
-(`DT TOTAL_STEPS IMPPAS [MOISTER]`) and no block 4: the remaining parameters take their
-default values (PIV-NP grid, 4-column files, no boundary correction, new analysis). Old
-cases can therefore be re-analysed without editing their files.
+#### Cases from earlier versions
+
+Block 3 changed order several times over the years, and there were even files with the same
+values arranged differently. There is a single input format, so an old case is moved to it
+once:
+
+```bash
+pivnp <directory> --convert-par
+```
+
+This rewrites every `.PAR` below the directory and keeps each original next to it as
+`<case>.PAR.orig`. The conversion reorders the values as they are, without reformatting
+them, so not one decimal changes; the two places where it does correct something —`IPIVLAB`,
+from the number of columns the case files actually have, and the `MOISTER` of the versions
+where 2 meant something else— are reported on screen.
 
 ### PIVlab data
 

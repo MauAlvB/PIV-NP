@@ -1,24 +1,30 @@
 """Lectura y validación de los datos del caso (``PIV-NP.TXT`` y ``<caso>.PAR``).
 
-Formato del archivo ``.PAR`` (lectura *list-directed* de Fortran: los valores se separan
-por espacios, tabuladores o comas y pueden repartirse en varias líneas)::
+Hay un solo formato de ``.PAR``. La lectura es *list-directed* de Fortran: los valores se
+separan por espacios, tabuladores o comas, y el programa original lo lee igual::
 
-    Bloque 1  título (una línea)
-    Bloque 2  línea de comentario
-              NC  NN  NPC  NFIL  AXC  AYC
-    Bloque 3  línea de comentario
-              DT  TOTAL_STEPS  IMPPAS  MOISTER  IVERSION  IPIVLAB  ICONTOUR  IREC  ITR
+    <título del caso>
+    BLOQUE 2: N_cel N_nod N_part_celda N_fil Ancho    Alto
+              2006  2100  3            34    0.212115 0.212115
+    BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
+              0.8   149         1         0       1       1      0       0   0
+    BLOQUE 4: s_density porosity
+              2650.0    0.4
 
-MOISTER vale 0 (sin humedad), 1 (leerla de los ``Moist_<n>.TXT``) o 2 (calcularla desde las
-imágenes del ensayo, con la configuración de ``<caso>.HUM``).
+Los nombres van encima de sus valores, así que el archivo se explica solo. El bloque 3 es,
+por orden: el tiempo entre imágenes, el número de archivos PIVlab, cada cuántos pasos se
+imprimen resultados, de dónde sale la humedad, la versión de la malla, el formato de los
+archivos PIVlab, la corrección de contorno, si se continúa un análisis y las partículas de
+seguimiento.
 
-El bloque 3 ha cambiado de orden entre versiones del programa, y hay dialectos con el mismo
-número de valores en distinto orden. Por eso se lee primero su línea de comentario, donde
-cada archivo nombra sus propios campos, y solo si no se entiende se recurre a la posición.
-    Bloque 4  línea de comentario
-              S_DENSITY  POROSITY
+* MOISTER: 0 sin humedad, 1 leerla de los ``Moist_<n>.TXT``, 2 calcularla desde las imágenes
+  del ensayo con la configuración de ``<caso>.HUM``.
+* ITR (partículas de seguimiento PTV) debe ser 0: esa opción ya no está soportada.
 
-ITR (partículas de seguimiento PTV) debe ser 0: esa opción ya no está soportada.
+El bloque 3 cambió de orden varias veces entre versiones del programa, y llegó a haber
+dialectos con los mismos valores colocados de otra manera. Aquí no se leen: un ``.PAR`` de
+una versión anterior se pasa una sola vez al formato de arriba con ``pivnp <directorio>
+--convert-par`` (ver :mod:`pivnp.par_migrate`), que guarda el original al lado.
 """
 
 from __future__ import annotations
@@ -191,7 +197,7 @@ def _strip_accents(text: str) -> str:
                    if unicodedata.category(c) != "Mn")
 
 
-def _names_in_header(header: str) -> list[str] | None:
+def names_in_header(header: str) -> list[str] | None:
     """Campos que nombra la línea de comentario del bloque 3, o ``None`` si no se entiende.
 
     Cada ``.PAR`` documenta su propio orden en esa línea (``del_t total_steps
@@ -217,48 +223,27 @@ def _names_in_header(header: str) -> list[str] | None:
     return campos
 
 
-def _analysis_block(reader: _ListDirectedReader,
-                    header: str) -> tuple[dict[str, str], bool]:
-    """Bloque 3, admitiendo los ``.PAR`` de todas las versiones.
+#: Orden de los valores del bloque 3 en el formato único.
+ANALYSIS_ORDER = ("DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "IVERSION", "IPIVLAB", "ICONTOUR",
+                  "IREC", "ITR")
 
-    Devuelve los valores por nombre y si el archivo está en el dialecto actual. Primero se
-    intenta leer la línea de comentario, que dice el orden; si no se entiende, se recurre a
-    la posición, que solo distingue los formatos que además difieren en número de valores:
+_COMO_CONVERTIR = ("Si viene de una versión anterior del programa, pásalo al formato único "
+                   "con:  pivnp <directorio> --convert-par")
 
-    * 9 valores: ``DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR``.
-    * 8 valores: ``DT TOTAL_STEPS IMPPAS MOISTER S_DENSITY POROSITY IVERSION PTV``.
-    * 3 o 4 valores: ``DT TOTAL_STEPS IMPPAS [MOISTER]``.
 
-    Lo que no aparece toma su valor por defecto: malla PIV-NP (IVERSION=1), archivos PIVlab
-    de 4 columnas, sin corrección de contorno y análisis nuevo.
-    """
+def _analysis_block(reader: _ListDirectedReader, header: str) -> dict[str, str]:
+    """Bloque 3 del formato único: nueve valores en el orden de :data:`ANALYSIS_ORDER`."""
     values = reader.line_values()
-    campos = _names_in_header(header)
-    if campos is not None and len(campos) == len(values):
-        log.info("%s: bloque 3 leído por su cabecera (%s)", reader.source, " ".join(campos))
-        return dict(zip(campos, values, strict=True)), "ICONTOUR" in campos
-
-    orden: list[str]
-    if len(values) >= 9:
-        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "IVERSION", "IPIVLAB", "ICONTOUR",
-                 "IREC", "ITR"]
-        return dict(zip(orden, values[:9], strict=True)), True
-    if len(values) == 8:
-        log.info("%s: .PAR con densidad y porosidad en el bloque 3", reader.source)
-        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "S_DENSITY", "POROSITY",
-                 "IVERSION", "ITR"]
-        return dict(zip(orden, values, strict=True)), False
-    if len(values) in (3, 4):
-        log.info("%s: .PAR en formato antiguo (%d valores en el bloque 3); se asumen "
-                 "IVERSION=1, IPIVLAB=1, ICONTOUR=0, IREC=0 e ITR=0", reader.source, len(values))
-        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER"]
-        return dict(zip(orden, values, strict=False)), False
-    raise ConfigError(
-        f"{reader.source}: el bloque 3 tiene {len(values)} valores y su línea de comentario "
-        "no dice qué es cada uno. Se esperaban 9 valores (DT TOTAL_STEPS IMPPAS MOISTER "
-        "IVERSION IPIVLAB ICONTOUR IREC ITR), 8 con la densidad y la porosidad, o los 3 del "
-        "formato antiguo (DT TOTAL_STEPS IMPPAS)"
-    )
+    if len(values) != len(ANALYSIS_ORDER):
+        raise ConfigError(
+            f"{reader.source}: el bloque 3 tiene {len(values)} valores y el formato único "
+            f"tiene {len(ANALYSIS_ORDER)} ({' '.join(ANALYSIS_ORDER)}). {_COMO_CONVERTIR}")
+    campos = names_in_header(header)
+    if campos is not None and tuple(campos) != ANALYSIS_ORDER:
+        raise ConfigError(
+            f"{reader.source}: la línea de comentario del bloque 3 nombra los campos en otro "
+            f"orden ({' '.join(campos)}). {_COMO_CONVERTIR}")
+    return dict(zip(ANALYSIS_ORDER, values, strict=True))
 
 
 @dataclass(frozen=True)
@@ -274,8 +259,8 @@ class RawPar:
     analysis: dict[str, str]  # lo que traiga el bloque 3, por nombre
     density: str
     porosity: str
-    #: El ``.PAR`` está en el formato único actual (con ICONTOUR en el bloque 3).
-    current_dialect: bool
+    #: El ``.PAR`` está en el formato único actual. Solo el conversor lee los anteriores.
+    current_dialect: bool = True
 
     def value(self, name: str) -> str:
         """Valor del bloque 3, o el que se asume cuando el archivo no lo trae."""
@@ -285,21 +270,22 @@ class RawPar:
 
 
 def read_par_blocks(text: str, source: str = "<PAR>") -> RawPar:
-    """Lee un ``.PAR`` de cualquier versión y devuelve sus valores por nombre."""
+    """Lee un ``.PAR`` en el formato único y devuelve sus valores por nombre.
+
+    Los ``.PAR`` de versiones anteriores no se leen aquí: se convierten una vez con
+    ``pivnp <directorio> --convert-par`` y a partir de ahí hay un solo formato de entrada.
+    """
     reader = _ListDirectedReader(text.splitlines(), source)
     title = reader.text()
     reader.comment()
     geometry = reader.values(6)
-    analysis, current = _analysis_block(reader, reader.comment())
-
-    density, porosity = analysis.get("S_DENSITY"), analysis.get("POROSITY")
-    if density is None:
-        if reader.at_end():  # los .PAR antiguos no traen el bloque 4
-            density = porosity = "0"
-        else:
-            reader.comment()
-            density, porosity = reader.values(2)
-    return RawPar(title, geometry, analysis, density, porosity, current)
+    analysis = _analysis_block(reader, reader.comment())
+    if reader.at_end():
+        raise ConfigError(f"{source}: falta el bloque 4, con la densidad del suelo y la "
+                          f"porosidad. {_COMO_CONVERTIR}")
+    reader.comment()
+    density, porosity = reader.values(2)
+    return RawPar(title, geometry, analysis, density, porosity)
 
 
 def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
