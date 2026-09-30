@@ -42,6 +42,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--write-moisture", action="store_true",
                         help="calcular la humedad desde las imágenes del ensayo, escribirla "
                              "en los Moist_<n>.TXT y salir sin hacer el análisis")
+    parser.add_argument("--convert-par", action="store_true",
+                        help="pasar al formato único los .PAR que haya en el directorio y "
+                             "por debajo, guardando cada original como <caso>.PAR.orig")
     parser.add_argument("-q", "--quiet", action="store_true", help="solo errores")
     return parser
 
@@ -68,6 +71,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     log = logging.getLogger("pivnp")
     try:
+        if args.convert_par:
+            from .par_migrate import convert_tree
+
+            resultados = convert_tree(args.case_dir)
+            for resultado in resultados:
+                (log.error if resultado.error else log.info)("%s", resultado)
+            convertidos = sum(r.changed for r in resultados)
+            fallidos = sum(r.error is not None for r in resultados)
+            log.info("%d archivos .PAR: %d convertidos, %d ya estaban, %d con problemas",
+                     len(resultados), convertidos,
+                     len(resultados) - convertidos - fallidos, fallidos)
+            return 1 if fallidos else 0
         if args.write_moisture:
             write_moisture_files(args.case_dir, args.case, options)
             return 0

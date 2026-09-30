@@ -261,27 +261,61 @@ def _analysis_block(reader: _ListDirectedReader,
     )
 
 
-def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
-    """Interpreta el contenido de un archivo ``.PAR`` (formato actual o anterior)."""
-    reader = _ListDirectedReader(text.splitlines(), source)
+@dataclass(frozen=True)
+class RawPar:
+    """Los valores de un ``.PAR``, tal cual vienen, ya identificados por su nombre.
 
+    Guarda las cadenas y no los números, de modo que convertir un archivo al formato único
+    sea reordenar lo que hay, sin volver a formatear ni redondear nada.
+    """
+
+    title: str
+    geometry: list[str]  # NC NN NPC NFIL AXC AYC
+    analysis: dict[str, str]  # lo que traiga el bloque 3, por nombre
+    density: str
+    porosity: str
+    #: El ``.PAR`` está en el formato único actual (con ICONTOUR en el bloque 3).
+    current_dialect: bool
+
+    def value(self, name: str) -> str:
+        """Valor del bloque 3, o el que se asume cuando el archivo no lo trae."""
+        if name in self.analysis:
+            return self.analysis[name]
+        return _BLOCK3_DEFAULTS[name]
+
+
+def read_par_blocks(text: str, source: str = "<PAR>") -> RawPar:
+    """Lee un ``.PAR`` de cualquier versión y devuelve sus valores por nombre."""
+    reader = _ListDirectedReader(text.splitlines(), source)
     title = reader.text()
     reader.comment()
-    nc, nn, npc, nfil, axc, ayc = reader.values(6)
-    bloque3, dialecto_actual = _analysis_block(reader, reader.comment())
-    valor = {**_BLOCK3_DEFAULTS, **bloque3}.get
-    dt, steps, imppas = bloque3["DT"], bloque3["TOTAL_STEPS"], bloque3["IMPPAS"]
-    moister, iversion = valor("MOISTER"), valor("IVERSION")
-    ipivlab, icontour = valor("IPIVLAB"), valor("ICONTOUR")
-    irec, itr = valor("IREC"), valor("ITR")
+    geometry = reader.values(6)
+    analysis, current = _analysis_block(reader, reader.comment())
 
-    density, porosity = bloque3.get("S_DENSITY"), bloque3.get("POROSITY")
+    density, porosity = analysis.get("S_DENSITY"), analysis.get("POROSITY")
     if density is None:
         if reader.at_end():  # los .PAR antiguos no traen el bloque 4
             density = porosity = "0"
         else:
             reader.comment()
             density, porosity = reader.values(2)
+    return RawPar(title, geometry, analysis, density, porosity, current)
+
+
+def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
+    """Interpreta el contenido de un archivo ``.PAR`` (formato actual o anterior)."""
+    return config_from_blocks(read_par_blocks(text, source), source)
+
+
+def config_from_blocks(crudo: RawPar, source: str = "<PAR>") -> CaseConfig:
+    """Valida los valores leídos y los convierte en la configuración del caso."""
+    nc, nn, npc, nfil, axc, ayc = crudo.geometry
+    dt, steps, imppas = (crudo.value("DT"), crudo.value("TOTAL_STEPS"), crudo.value("IMPPAS"))
+    moister, iversion = crudo.value("MOISTER"), crudo.value("IVERSION")
+    ipivlab, icontour = crudo.value("IPIVLAB"), crudo.value("ICONTOUR")
+    irec, itr = crudo.value("IREC"), crudo.value("ITR")
+    title, density, porosity = crudo.title, crudo.density, crudo.porosity
+    dialecto_actual = crudo.current_dialect
 
     if _to_int(itr, "ITR") != 0:
         raise ConfigError(
