@@ -12,6 +12,7 @@ from pivnp.humedad.configuracion import ConfiguracionError, analizar, leer
 from pivnp.humedad.modelo import (
     ModeloHumedad,
     normalizar,
+    referencias_globales,
     referencias_por_desplazamiento,
 )
 from pivnp.humedad.muestreo import Registro, coordenadas_en_pixeles, muestrear
@@ -92,6 +93,56 @@ def test_el_registro_escala_y_desplaza():
     columna, fila = coordenadas_en_pixeles(x, y, 0.0001, Registro(2.0, 5.0, 0.5, -1.0))
     assert columna.tolist() == [24]  # (10 * 2 + 5) - 1
     assert fila.tolist() == [3]      # (10 * 0.5 - 1) - 1
+
+
+def test_la_banda_global_sustituye_a_la_referencia_por_nodo():
+    """Dos intensidades para toda la imagen, como en el flujo SWIR."""
+    cfg = analizar(MINIMO + "BANDA_SATURADA = 92\nBANDA_SECA = 132\n")
+    assert cfg.banda_global and (cfg.banda_saturada, cfg.banda_seca) == (92.0, 132.0)
+    assert not analizar(MINIMO).banda_global
+
+    gris = np.array([92.0, 102.0, 132.0, 80.0])
+    referencias = referencias_globales(gris.shape, cfg.banda_seca, cfg.banda_saturada)
+    assert referencias.seco.tolist() == [132.0] * 4
+    assert referencias.saturado.tolist() == [92.0] * 4
+    # una banda de 40 niveles: cada nivel de gris son 2.5 puntos de la escala
+    np.testing.assert_allclose(normalizar(gris, referencias), [0.0, 25.0, 100.0, 0.0])
+
+
+@pytest.mark.parametrize(("texto", "mensaje"), [
+    (MINIMO + "BANDA_SECA = 132\n", "van juntas"),
+    (MINIMO + "BANDA_SATURADA = 92\n", "van juntas"),
+    (MINIMO + "BANDA_SECA = 90\nBANDA_SATURADA = 92\n", "BANDA_SECA"),
+])
+def test_bandas_globales_invalidas(texto, mensaje):
+    with pytest.raises(ConfiguracionError, match=mensaje):
+        analizar(texto)
+
+
+def test_el_registro_admite_una_homografia():
+    """Con dos cámaras que miran desde ángulos distintos hace falta la perspectiva."""
+    registro = Registro(escala_x=1.1, origen_x=-90.0, escala_y=1.1, origen_y=-30.0,
+                        inclinacion_xy=0.09, inclinacion_yx=0.02,
+                        perspectiva_x=1e-5, perspectiva_y=8e-5)
+    assert not registro.es_identidad
+    x, y = np.array([0.5]), np.array([0.25])  # con 0.001 m/px: 500 y 250 píxeles
+    columna, fila = coordenadas_en_pixeles(x, y, 0.001, registro)
+
+    peso = 1e-5 * 500 + 8e-5 * 250 + 1.0
+    esperada_col = round((1.1 * 500 + 0.09 * 250 - 90.0) / peso) - 1
+    esperada_fil = round((0.02 * 500 + 1.1 * 250 - 30.0) / peso) - 1
+    assert columna.tolist() == [esperada_col]
+    assert fila.tolist() == [esperada_fil]
+
+
+def test_la_homografia_se_lee_del_archivo():
+    cfg = analizar(MINIMO + "ESCALA_X = 1.104\nORIGEN_X = -92.3\nINCLINACION_XY = 0.0906\n"
+                            "PERSPECTIVA_Y = 8.56e-5\n")
+    assert not cfg.registro_es_identidad
+    registro = cfg.registro
+    assert registro.escala_x == 1.104 and registro.origen_x == -92.3
+    assert registro.inclinacion_xy == 0.0906 and registro.perspectiva_y == 8.56e-5
+    assert registro.escala_y == 1.0 and registro.perspectiva_x == 0.0
 
 
 def test_muestrea_y_descarta_lo_que_no_toca():

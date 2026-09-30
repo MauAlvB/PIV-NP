@@ -131,6 +131,68 @@ tolera una unidad en la sexta cifra del formato `E14.6`. Se empieza por el más 
 
 Cada diferencia que aparezca se analiza antes de tocar nada, se anota aquí y se corrige.
 
+## Resultados de la fase 2: la humedad del caso del artículo
+
+**Reproducido: el 99,8 % de los nodos sale con la humedad exacta**, y la saturación con una
+diferencia media de 0,0024. Se llegó así:
+
+1. **Qué tabla de calibración es.** Los pares (humedad, saturación) de los archivos del caso
+   no caían sobre la tabla que usamos para `Slope_RGB`. Como los dos campos salen del mismo
+   gris a través de la misma tabla, basta con mirar los pares: son los de
+   `calibration_curve.m` de la carpeta `SWIR_SR`, no los de `calibration_curve_JC.m`, que
+   tiene la saturación retocada a mano. La humedad coincide hasta el último decimal.
+
+2. **Cuánto mide la banda.** En los 40 instantes solo aparecen **19 pares distintos**, y al
+   despejar el gris normalizado de cada uno salen 0, 2,5, 5, 7,5 … 45: una escalera perfecta
+   de 2,5. Como el gris de la imagen es entero, eso fija la anchura de la banda en
+   **exactamente 40 niveles** (100/2,5). De paso confirma que aquel código sí redondeaba el
+   filtro, que es lo que hace que los valores estén cuantizados.
+
+3. **El registro entre las dos cámaras.** El MATLAB lo resolvía con una homografía de cuatro
+   puntos marcados a mano, que no se guardó. Se recuperó de los propios datos: el gris
+   medido en la imagen SWIR tiene que ser `saturado + gv_n/2,5`, así que se busca la
+   homografía que menos dispersión deja en esa resta. Sale **0,294 niveles de gris**, por
+   debajo de la cuantización, y desde tres puntos de partida distintos se llega a la misma.
+
+4. **La banda, ya en números.** Saturado **92**, seco **132**.
+
+El campo de humedad de este caso está bien calculado en todos los nodos (el fallo del bucle
+que vacía los de `Slope_RGB` no está aquí) y **no lleva política incremental**: ningún nodo
+tiene saturación exactamente 1 y la mínima baja y vuelve a subir a lo largo del ensayo. Es
+decir, es el método del artículo publicado, y es el que conviene tomar como referencia.
+
+### Lo que se añadió al código para poder reproducirlo
+
+* **Registro por homografía.** `Registro` admite ahora los ocho valores de una homografía, no
+  solo escala y origen, que es lo que hace falta cuando las dos cámaras miran desde ángulos
+  distintos. En el `.HUM`: `INCLINACION_XY`, `INCLINACION_YX`, `PERSPECTIVA_X`,
+  `PERSPECTIVA_Y`, además de las que ya había.
+* **Banda global.** `BANDA_SECA` y `BANDA_SATURADA` fijan las dos intensidades para toda la
+  imagen, en vez de sacarlas de una imagen de referencia nodo a nodo. Es lo que hace el flujo
+  SWIR, y no cambia nada de lo anterior: si no se dan, se sigue usando la referencia por nodo.
+* **Tabla de calibración** del suelo del artículo, en `tests/data/humedad/calibracion_swir.csv`.
+
+El `.HUM` de ese caso queda así:
+
+```
+IMAGENES        = swir_{n}.jpg
+CANAL           = gris
+SIGMA           = 40
+REDONDEO_LEGADO = 1          ! aquel análisis redondeaba el filtro
+INCREMENTAL     = 0          ! el método del artículo no lleva trinquete
+CALIBRACION     = calibracion_swir.csv
+BANDA_SATURADA  = 92
+BANDA_SECA      = 132
+ESCALA_X        = 1.10390448    INCLINACION_XY = 0.09063166   ORIGEN_X = -92.27781
+INCLINACION_YX  = 0.02232128    ESCALA_Y       = 1.09522258   ORIGEN_Y = -29.29620
+PERSPECTIVA_X   = 1.3776e-05    PERSPECTIVA_Y  = 8.5586e-05
+```
+
+La diferencia que queda en la saturación (0,0024 de media) está en la tabla, no en la cadena:
+su extremo húmedo tiene dos puntos de gris casi pegados (0 y 0,0001) con alturas muy
+distintas, y ahí la interpolación es delicada. La humedad, que no pasa por ese punto, sale
+exacta.
+
 ## Fase 2 — La humedad, contra el caso del artículo
 
 Este caso es mejor banco de pruebas que `Slope_RGB`, y conviene decirlo claro:
@@ -171,5 +233,5 @@ Se prueban sobre el caso del artículo, midiendo cada una:
 |---|---|
 | 0 | hecha: el lector de `.PAR` entiende los seis dialectos y el de PIVlab deduce el formato |
 | 1 | hecha en lo esencial: cuatro casos reproducidos exactamente y los demás explicados |
-| 2 | por hacer |
-| 3 | por hacer |
+| 2 | hecha: la humedad del caso del artículo se reproduce en el 99,8 % de los nodos |
+| 3 | en marcha: ya están la banda global y el registro por homografía |

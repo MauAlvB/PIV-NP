@@ -16,14 +16,32 @@ import numpy as np
 class Registro:
     """Transformación de la malla PIV a la imagen de humedad.
 
-    Con una sola cámara es la identidad. Con dos (por ejemplo visible e infrarroja) son la
-    escala y el desplazamiento que hacen coincidir ambas imágenes.
+    Con una sola cámara es la identidad. Con dos (por ejemplo visible e infrarroja) es la
+    homografía que hace coincidir ambas imágenes, la misma que el código MATLAB construía
+    marcando puntos a mano sobre las dos::
+
+        | columna |   | escala_x       inclinacion_xy  origen_x |   | x |
+        | fila    | ~ | inclinacion_yx escala_y        origen_y | · | y |
+        | 1       |   | perspectiva_x  perspectiva_y   1        |   | 1 |
+
+    Con las dos cámaras en el mismo sitio basta la escala y el origen; los otros cuatro
+    valores hacen falta cuando miran desde ángulos distintos.
     """
 
     escala_x: float = 1.0
     origen_x: float = 0.0
     escala_y: float = 1.0
     origen_y: float = 0.0
+    inclinacion_xy: float = 0.0
+    inclinacion_yx: float = 0.0
+    perspectiva_x: float = 0.0
+    perspectiva_y: float = 0.0
+
+    @property
+    def es_identidad(self) -> bool:
+        return (self.escala_x, self.escala_y) == (1.0, 1.0) and not any(
+            (self.origen_x, self.origen_y, self.inclinacion_xy, self.inclinacion_yx,
+             self.perspectiva_x, self.perspectiva_y))
 
 
 SIN_REGISTRO = Registro()
@@ -33,15 +51,20 @@ def coordenadas_en_pixeles(x_m: np.ndarray, y_m: np.ndarray, metros_por_pixel: f
                            registro: Registro = SIN_REGISTRO) -> tuple[np.ndarray, np.ndarray]:
     """Columna y fila (base 0) de cada nodo dentro de la imagen.
 
-    Se redondea al píxel más cercano, como hacía el MATLAB, y se resta 1 porque allí los
-    índices empiezan en 1.
+    Se pasa de metros a píxeles, se aplica el registro y se redondea al píxel más cercano,
+    como hacía el MATLAB; se resta 1 porque allí los índices empiezan en 1.
     """
     if metros_por_pixel <= 0:
         raise ValueError(f"el factor de conversión debe ser positivo y vale {metros_por_pixel}")
-    columna = np.floor(np.asarray(x_m, dtype=np.float64) / metros_por_pixel + 0.5)
-    fila = np.floor(np.asarray(y_m, dtype=np.float64) / metros_por_pixel + 0.5)
-    columna = np.floor(columna * registro.escala_x + registro.origen_x + 0.5)
-    fila = np.floor(fila * registro.escala_y + registro.origen_y + 0.5)
+    x = np.asarray(x_m, dtype=np.float64) / metros_por_pixel
+    y = np.asarray(y_m, dtype=np.float64) / metros_por_pixel
+    if not registro.es_identidad:
+        peso = registro.perspectiva_x * x + registro.perspectiva_y * y + 1.0
+        peso = np.where(np.abs(peso) < 1e-12, np.nan, peso)
+        x, y = ((registro.escala_x * x + registro.inclinacion_xy * y + registro.origen_x) / peso,
+                (registro.inclinacion_yx * x + registro.escala_y * y + registro.origen_y) / peso)
+    columna = np.floor(np.nan_to_num(x, nan=-1e9) + 0.5)
+    fila = np.floor(np.nan_to_num(y, nan=-1e9) + 0.5)
     return columna.astype(np.int64) - 1, fila.astype(np.int64) - 1
 
 

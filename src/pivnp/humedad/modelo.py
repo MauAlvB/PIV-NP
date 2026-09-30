@@ -54,6 +54,19 @@ def referencias_por_desplazamiento(gris_referencia: np.ndarray, desplazamiento_s
     return Referencias(gris + desplazamiento_seco, gris + desplazamiento_saturado)
 
 
+def referencias_globales(forma, gris_seco: float, gris_saturado: float) -> Referencias:
+    """Referencias iguales en todos los nodos, medidas sobre el suelo del ensayo.
+
+    Es lo que hace el flujo SWIR: en vez de sacar la referencia de la imagen nodo a nodo, se
+    fijan dos intensidades para todo el material, la del suelo seco y la del saturado. La
+    banda deja así de depender de la textura de cada punto.
+    """
+    if gris_seco <= gris_saturado:
+        raise ValueError(f"el gris del suelo seco ({gris_seco}) debe ser mayor que el del "
+                         f"saturado ({gris_saturado})")
+    return Referencias(np.full(forma, float(gris_seco)), np.full(forma, float(gris_saturado)))
+
+
 def normalizar(gris: np.ndarray, referencias: Referencias) -> np.ndarray:
     """Lleva el gris a la escala 0 (saturado) - 100 (seco), recortando los negativos."""
     recorrido = referencias.seco - referencias.saturado

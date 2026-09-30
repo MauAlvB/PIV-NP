@@ -16,8 +16,15 @@ import numpy as np
 from .calibracion import Calibracion
 from .configuracion import ConfiguracionHumedad, leer
 from .imagenes import desenfoque_gaussiano, leer_imagen
-from .modelo import Estado, ModeloHumedad, Referencias, normalizar, referencias_por_desplazamiento
-from .muestreo import Registro, coordenadas_en_pixeles, fuera_de_la_imagen, muestrear
+from .modelo import (
+    Estado,
+    ModeloHumedad,
+    Referencias,
+    normalizar,
+    referencias_globales,
+    referencias_por_desplazamiento,
+)
+from .muestreo import coordenadas_en_pixeles, fuera_de_la_imagen, muestrear
 
 CABECERA_MOIST = "x_m,y_m,moisture,saturation_degree"
 
@@ -49,23 +56,31 @@ class FuenteHumedad:
         self.malla = malla
         self.modelo = ModeloHumedad(calibracion, configuracion.umbral_saturacion,
                                     configuracion.incremental)
-        registro = Registro(configuracion.escala_x, configuracion.origen_x,
-                            configuracion.escala_y, configuracion.origen_y)
         self.columna, self.fila = coordenadas_en_pixeles(malla.x_m, malla.y_m,
-                                                         malla.metros_por_pixel, registro)
+                                                         malla.metros_por_pixel,
+                                                         configuracion.registro)
         self.referencias: Referencias | None = None
         self.nodos_fuera = 0
 
     # --- preparación ---------------------------------------------------------------------
     def preparar(self, con_dato: np.ndarray) -> Referencias:
-        """Calcula las referencias seca y saturada a partir de la imagen de referencia."""
-        ruta = self.directorio / self.configuracion.referencia_seca
-        filtrada = self._imagen_filtrada(ruta)
+        """Fija las referencias seca y saturada, que no cambian durante el ensayo.
+
+        Con ``BANDA_SECA`` y ``BANDA_SATURADA`` en el ``.HUM`` son dos intensidades para toda
+        la imagen y no hace falta imagen de referencia. Si no, se sacan de la imagen de
+        referencia nodo a nodo, que es lo que hace el flujo RGB.
+        """
+        configuracion = self.configuracion
+        if configuracion.banda_global:
+            self.referencias = referencias_globales(self.columna.shape,
+                                                    configuracion.banda_seca,
+                                                    configuracion.banda_saturada)
+            return self.referencias
+        filtrada = self._imagen_filtrada(self.directorio / configuracion.referencia_seca)
         self.nodos_fuera = fuera_de_la_imagen(filtrada, self.columna, self.fila)
         gris = muestrear(filtrada, self.columna, self.fila, con_dato)
         self.referencias = referencias_por_desplazamiento(
-            gris, self.configuracion.desplazamiento_seco,
-            self.configuracion.desplazamiento_saturado)
+            gris, configuracion.desplazamiento_seco, configuracion.desplazamiento_saturado)
         return self.referencias
 
     # --- cálculo -------------------------------------------------------------------------
