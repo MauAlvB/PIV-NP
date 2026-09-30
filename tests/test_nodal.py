@@ -2,6 +2,9 @@ import numpy as np
 
 from pivnp.mesh import Grid
 from pivnp.nodal import (
+    AVERAGE,
+    AVERAGE_2023,
+    NO_AVERAGE,
     compute_nodal_momentum_v1,
     compute_nodal_momentum_v2,
     load_measurements,
@@ -96,3 +99,24 @@ def test_momentum_v2_averages_four_surrounding_points():
     nodes.is_nan[4] = 1
     compute_nodal_momentum_v2(nodes, grid, cell_centers(grid), particles, step=2)
     assert nodes.momentum[5, 0] == 0.25 * (0 + 1 + 3)
+
+
+def test_momentum_v2_border_nodes_can_be_averaged():
+    """Un nodo de borde recibe menos de cuatro aportaciones; los tres modos lo tratan
+    distinto, y el de 2023 dejaba el incremento sin promediar."""
+    grid = Grid(3, 3, 1.0, 1.0, -0.5, -0.5)
+    esperado = {NO_AVERAGE: (0.25 * 8.0, 0.25 * 4.0),  # suma de cuartos
+                AVERAGE: (8.0, 4.0),                   # media de un solo punto
+                AVERAGE_2023: (8.0, 0.25 * 4.0)}       # media, pero no en el incremento
+    for modo, (momento, incremento) in esperado.items():
+        nodes = Nodes.zeros(9, grid.n_nodes)
+        nodes.velocity[:, 0] = np.arange(9.0)
+        nodes.previous_velocity[:, 0] = np.arange(9.0) / 2.0
+        particles = Particles.zeros(1, n_lost=9)
+        compute_nodal_momentum_v2(nodes, grid, cell_centers(grid), particles, step=2,
+                                  normalize=modo)
+        assert nodes.active_count[15] == 1, "el nodo 15 es una esquina"
+        assert nodes.momentum[15, 0] == momento
+        assert nodes.momentum_increment[15, 0] == incremento
+        # en el interior, con cuatro aportaciones, los tres modos coinciden
+        assert nodes.momentum[5, 0] == 0.25 * (0 + 1 + 3 + 4)

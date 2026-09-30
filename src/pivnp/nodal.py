@@ -125,6 +125,12 @@ def compute_nodal_momentum_v1(nodes: Nodes) -> None:
     nodes.saturation[:n][ok] = (nodes.saturation_measured * nodes.mass[:n])[ok]
 
 
+#: Qué hacer con los nodos de la malla desplazada que reciben menos de cuatro aportaciones.
+NO_AVERAGE = 0  #: dejar la suma de cuartos, como el Fortran de 2024
+AVERAGE = 1  #: media de los puntos que aportan, lo que hace la corrección de contorno
+AVERAGE_2023 = 2  #: la media de la versión de 2023, que no la aplicaba al incremento
+
+
 @njit(cache=True, nogil=True)
 def _distribute_to_staggered(velocity, previous_velocity, has_velocity, lost, cells, n_cols,
                              moisture_measured, saturation_measured,
@@ -151,7 +157,7 @@ def _distribute_to_staggered(velocity, previous_velocity, has_velocity, lost, ce
             moisture[node] = moisture[node] + moisture_measured[i] * weight
             saturation[node] = saturation[node] + saturation_measured[i] * weight
 
-    if normalize:
+    if normalize != NO_AVERAGE:
         # Un nodo del borde recibe menos de 4 aportaciones y se quedaría con una
         # fracción de la velocidad. Dividir por el peso acumulado (1 en el interior, donde
         # por tanto no cambia nada) lo convierte en la media de los puntos que sí aportan.
@@ -160,15 +166,18 @@ def _distribute_to_staggered(velocity, previous_velocity, has_velocity, lost, ce
             if total > 0.0 and total != 1.0:
                 momentum[node, 0] /= total
                 momentum[node, 1] /= total
-                momentum_increment[node, 0] /= total
-                momentum_increment[node, 1] /= total
                 moisture[node] /= total
                 saturation[node] /= total
+                if normalize != AVERAGE_2023:
+                    # La versión de 2023 dividía la cantidad de movimiento pero no su
+                    # incremento, así que su aceleración no era coherente con la velocidad.
+                    momentum_increment[node, 0] /= total
+                    momentum_increment[node, 1] /= total
 
 
 def compute_nodal_momentum_v2(nodes: Nodes, grid: Grid, centers: np.ndarray,
                               particles: Particles, step: int,
-                              normalize: bool = False) -> None:
+                              normalize: int = NO_AVERAGE) -> None:
     """IVERSION = 2: cada punto PIVlab reparte 1/4 de su velocidad a los nodos de la celda
     desplazada que lo contiene.
 

@@ -27,6 +27,9 @@ from .contour import ContourContext, ContourCorrection, make_contour_correction
 from .gid_writer import GidWriter
 from .mesh import Grid, particle_grid
 from .nodal import (
+    AVERAGE,
+    AVERAGE_2023,
+    NO_AVERAGE,
     accumulate_particle_mass,
     compute_nodal_momentum_v1,
     compute_nodal_momentum_v2,
@@ -52,6 +55,10 @@ class RunOptions:
     #: Reproduce exactamente el comportamiento del Fortran original, para repetir con
     #: esta versión análisis hechos con él.
     legacy_compat: bool = False
+    #: Con IVERSION=2, reproduce el reparto de la versión de 2023: cada nodo de la malla
+    #: desplazada tomaba la media de los puntos que le aportan, en vez de la suma de
+    #: cuartos. Hace falta para repetir los análisis hechos con aquella versión.
+    legacy_2023_average: bool = False
 
 
 DEFAULT_OPTIONS = RunOptions()
@@ -108,6 +115,13 @@ class Simulation:
     @property
     def restart_path(self) -> Path:
         return self.case_dir / f"{self.case_name}.REC"
+
+    @property
+    def staggered_average(self) -> int:
+        """Qué hacer con los nodos de borde de la malla desplazada (solo IVERSION=2)."""
+        if self.options.legacy_2023_average:
+            return AVERAGE_2023
+        return AVERAGE if self.contour.normalizes_staggered else NO_AVERAGE
 
     def check_frame_interval(self) -> float | None:
         """Avisa si el DT del ``.PAR`` no coincide con el intervalo que usó PIVlab.
@@ -179,7 +193,7 @@ class Simulation:
             compute_nodal_momentum_v1(self.nodes)
         else:
             compute_nodal_momentum_v2(self.nodes, self.grid, self.centers, self.particles, step,
-                                      normalize=self.contour.normalizes_staggered)
+                                      normalize=self.staggered_average)
         if step == 1 or step % self.options.log_every == 0:
             log.info("ANALYZING %s", frame.source.name)
 

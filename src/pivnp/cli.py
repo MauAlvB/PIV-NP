@@ -34,6 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--legacy-compat", action="store_true",
                         help="reproducir exactamente el comportamiento del Fortran "
                              "original, para repetir análisis hechos con él")
+    parser.add_argument("--legacy-2023-average", action="store_true",
+                        help="con IVERSION=2, promediar los nodos de la malla desplazada "
+                             "como la versión de 2023 (para repetir aquellos análisis)")
     parser.add_argument("--vtk", action="store_true",
                         help="al terminar, exportar también a VTK para ParaView (<caso>_vtk/)")
     parser.add_argument("--write-moisture", action="store_true",
@@ -61,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         contour_layers=args.contour_layers,
         contour_min_particles=args.contour_min_particles,
         legacy_compat=args.legacy_compat,
+        legacy_2023_average=args.legacy_2023_average,
     )
     log = logging.getLogger("pivnp")
     try:
