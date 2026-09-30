@@ -56,6 +56,67 @@ por número de valores. Así el lector deja de adivinar y pasa a leer lo que el 
 imágenes". Se resuelve por dialecto: en los `.PAR` antiguos, cualquier valor distinto de 0 se
 entiende como "leer los archivos"; el 2 nuevo solo tiene su significado en el dialecto actual.
 
+## Resultados de la fase 1
+
+**Lo primero, y lo que da sentido a todo lo demás: la versión nueva es idéntica byte a byte
+al Fortran de 2024 compilado.** Comprobado ejecutando los dos programas sobre tres casos
+distintos —malla PIV-NP y malla desplazada, 20 y 149 pasos, de 5432 a 13806 nodos— y
+comparando los quince resultados y la malla: ni una sola diferencia.
+
+Con eso, cuando un resultado guardado no cuadra, la pregunta deja de ser "¿está bien nuestro
+código?" y pasa a ser "¿con qué versión se hizo aquel análisis?".
+
+| Caso | Resultado |
+|---|---|
+| Artículo, etapa 1 - prueba | **Exacto** |
+| Artículo, etapa 1 - prueba 2 (malla desplazada) | **Exacto** con `--legacy-2023-average` |
+| Artículo, etapa 2 - prueba (reinicio) | **Exacto** |
+| Artículo, etapa 2 - prueba 2 (reinicio, malla desplazada) | Exacto en todos los valores; 4 partículas de diferencia en cuáles se imprimen |
+| Artículo, etapa 1 (1fps) | Versión anterior: ver abajo |
+| Centrífuga, caso rojo | Primer paso exacto con `--legacy-2023-average`; después divergen del 10 al 15 % de las trayectorias |
+
+### Hallazgo: el reparto de la malla desplazada cambió entre versiones
+
+Los resultados guardados con `IVERSION=2` no cuadraban. La relación entre sus valores y los
+nuestros salía 4/3 y 3/2, que es lo que se obtiene al dividir por el número de puntos que
+aportan a cada nodo. Se probó y **con esa media los quince resultados coinciden exactamente**,
+con un detalle: aquella versión no aplicaba la media al incremento de cantidad de movimiento,
+de modo que su aceleración no era coherente con su velocidad. Reproduciendo también eso, la
+coincidencia es total.
+
+En el Fortran de 2024 se ve el cambio, con la línea original comentada al lado:
+
+```fortran
+F1=0.25d0*1.0D0 !AMASSINI(I) ... !AM(JJ)      !Cuidado con la masa
+AMASSNODE(JJ)=1.0D0 !AMASSNODE(JJ)+0.25d0*AMASSINI(I)
+```
+
+Es decir, la acumulación del peso nodal se sustituyó por la constante 1, y con ella
+desapareció la media. **Ese es el origen del hallazgo H-23**, los nodos del borde con
+velocidad infravalorada: no es un descuido de siempre, es una regresión introducida entre
+versiones. Y confirma que promediar era lo que se hacía antes.
+
+Se añade `--legacy-2023-average` para repetir aquellos análisis.
+
+### Hallazgo: el formato de los archivos PIVlab no se puede fiar al `.PAR`
+
+Los `.PAR` anteriores a 2024 no traen `IPIVLAB`, así que tomaba el valor 1, que significa
+leer 4·NN valores seguidos sin mirar los saltos de línea. Los archivos del caso del artículo
+tienen cinco columnas, con lo que a partir del primer valor todo se descoloca y el análisis
+sale sin sentido. Ahora el formato se deduce del propio archivo. Con archivos de cuatro
+columnas los dos caminos dan lo mismo, así que ningún análisis que ya funcionaba cambia.
+
+### Sobre `etapa 1 (1fps)` y `etapa 2 (25fps)`
+
+Son los análisis originales, hechos con una versión bastante anterior a la de las carpetas
+`- prueba`. Comparando las partículas que ambos imprimen, **coinciden exactamente** los
+desplazamientos, las velocidades, las energías, la humedad y la saturación. Difieren:
+
+* aquella versión **imprimía las 13552 partículas**, también las que están fuera del material;
+  la nuestra imprime solo las 5916 localizadas;
+* las **deformaciones coinciden en el paso 1 y van divergiendo** después, lo que apunta a que
+  el criterio para marcar una partícula como NaN era distinto, no a otra fórmula.
+
 ## Fase 1 — Reproducir los resultados mecánicos
 
 Para cada caso con `.POST.RES` de referencia: ejecutar y comparar con `pivnp.compare`, que
@@ -108,7 +169,7 @@ Se prueban sobre el caso del artículo, midiendo cada una:
 
 | Fase | Estado |
 |---|---|
-| 0 | por hacer |
-| 1 | por hacer |
+| 0 | hecha: el lector de `.PAR` entiende los seis dialectos y el de PIVlab deduce el formato |
+| 1 | hecha en lo esencial: cuatro casos reproducidos exactamente y los demás explicados |
 | 2 | por hacer |
 | 3 | por hacer |
