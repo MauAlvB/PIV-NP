@@ -95,8 +95,54 @@ El `.PAR` no se toca.
 Como en la migración del Fortran, primero se reproduce el comportamiento actual y solo
 después se activan los cambios, para poder separar lo que es traducción de lo que es mejora.
 
+## Resultados de la primera validación contra el caso
+
+Con la cadena completa implementada (imagen → canal → filtro → muestreo → normalización →
+calibración → política incremental) y comparando con los `Moist_n.txt` del caso:
+
+| Instante | Nodos comparables | Saturación idéntica | Difieren |
+|---|---|---|---|
+| 1 | 1045 | 1045 (error 3·10⁻¹⁶) | 0 |
+| 2 | 1045 | 930 | 11 % |
+| 5 | 1045 | 797 | 24 % |
+| 10 | 1023 | 704 | 31 % |
+| 149 | 784 | 610 | 22 % |
+
+Entre el 69 % y el 100 % de los nodos coinciden **exactamente**. Los que difieren lo hacen
+en saltos de un nivel de gris.
+
+### Dos hallazgos importantes
+
+**1. En los datos del caso la humedad solo se calculó en una columna de nodos.** En
+`gv2sat_JC2.m` el cálculo de la humedad (líneas 39-40) está **fuera del bucle interior**:
+se ejecuta una vez por fila, con el último valor de la columna. Verificado en los archivos
+del caso: solo 34 de 2100 nodos (1,6 %) tienen humedad distinta de cero, y son siempre los
+últimos del archivo, es decir la última columna de la malla. El resto se queda con el cero
+con el que se inicializa la matriz.
+
+Consecuencia: **el campo de humedad de esos análisis está esencialmente vacío**. La
+saturación sí se calcula bien en todos los nodos, porque ese cálculo está dentro de los dos
+bucles. Nuestra implementación calcula la humedad en todos los nodos, que es lo que el
+código pretendía hacer.
+
+**2. El método es muy sensible al redondeo del filtro.** La banda entre el gris seco y el
+saturado son solo **11 niveles de gris** (+5 y −6), así que **un nivel de diferencia equivale
+al 9 % de toda la escala** y puede cambiar la saturación de un nodo hasta en 0,85. Las
+diferencias que quedan tienen exactamente ese tamaño: un nivel de gris.
+
+La causa más probable es que `imgaussfilt` de MATLAB, con un núcleo de 161 puntos, filtre en
+el dominio de la frecuencia (lo hace automáticamente con núcleos grandes), y su redondeo a
+entero no coincida con el de la convolución directa en algunos píxeles.
+
+Queda por decidir cómo tratarlo, y es una decisión de fondo: o se replica el camino exacto
+de MATLAB, o se acepta la diferencia y se documenta, o se evita el problema trabajando en
+coma flotante sin redondear a entero tras el filtro (lo que además elimina esta fragilidad
+de raíz, pero deja de reproducir los valores antiguos).
+
 ## Estado
 
-* Rama `humedad` creada sobre `main` (189 pruebas en verde, linter limpio).
-* Nada subido a GitHub todavía; `main` tiene un commit local por delante del remoto.
-* Fase 0 sin empezar, a la espera de confirmar el formato de configuración y dos convenios.
+* Rama `humedad` con la cadena completa implementada y 251 pruebas en verde.
+* Fase 1 (calibración) y fase 2 (imágenes, muestreo, modelo) terminadas y probadas.
+* Falta: decidir lo del redondeo del filtro, integrar la fuente en el análisis y el comando
+  propio, y aplicar los cambios acordados (umbral 0,95 y primer instante).
+* Nada subido a GitHub; `main` tiene un commit local por delante del remoto.
