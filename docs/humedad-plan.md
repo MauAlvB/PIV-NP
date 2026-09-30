@@ -210,13 +210,20 @@ MATLAB, y la saturación, en la medida ya conocida del nivel de gris.
 * Rama `humedad` con la cadena completa implementada y 267 pruebas en verde.
 * Fases 1 (calibración), 2 (imágenes, muestreo, modelo) y 3 (integración y comando)
   terminadas, probadas y validadas contra el caso; el residuo está explicado y acotado.
-* Criterio en vigor: **todo lo más cerca posible del código original** mientras la comparación
-  de resultados siga abierta. Las dos únicas diferencias de comportamiento por defecto son el
-  redondeo del filtro y el primer instante, las dos acordadas, y las dos recuperables desde el
-  `.HUM` (`REDONDEO_LEGADO = 1`, `PRIMER_INSTANTE = legado`).
-* Pendiente de decidir, en este orden: la incoherencia entre humedad y saturación, el umbral a
-  0,95, y cómo se fija la banda seca-saturada (ahora sigue siendo la del MATLAB, referencia
-  por nodo con +5 y −6).
+* **Comparación cerrada** y conclusiones aplicadas (ver `validacion-casos.md`):
+  * La política incremental actúa sobre el **gris normalizado**, no sobre la saturación, así
+    que los dos campos salen del mismo valor y no pueden contradecirse. Comprobado sobre
+    `Slope_RGB`: la saturación sale **exactamente igual** que con la política anterior
+    (diferencia máxima 0), y los 579 nodos dados por saturados pasan de tener humedad mediana
+    1,14 % a tener la del suelo saturado, 24,03 %.
+  * El trinquete viene **apagado** (`INCREMENTAL = 0`) y su umbral en 0,95: es una hipótesis
+    sobre el ensayo, no una medida, y con él puesto no se puede medir el secado.
+  * Se **avisa cuando la banda es estrecha** (menos de 20 niveles de gris, donde un nivel pasa
+    a pesar más del 5 % de la escala). En `Slope_RGB`, con 11 niveles, salta.
+  * Cada nodo lleva una **marca de calidad**: medido, sin dato, o en un tope de la banda, donde
+    el valor es una cota y no una medida. Al terminar el análisis se dice cuánto es cada cosa.
+* Sigue pendiente: cómo se mide la banda seca-saturada de cada suelo, que es el número más
+  sensible de todo el método.
 * Más adelante: medir también en secado (sin política incremental), el flujo SWIR con dos
   cámaras, y la masa de las partículas desde `S_DENSITY` y `POROSITY`.
 * Nada subido a GitHub; `main` tiene un commit local por delante del remoto.

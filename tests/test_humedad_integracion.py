@@ -80,6 +80,7 @@ def test_fuente_de_caso_lee_la_configuracion_y_la_calibracion(workdir: Path):
 
 def test_la_saturacion_no_baja_y_crece_al_oscurecerse(workdir: Path):
     caso = montar_caso(workdir / "caso", grises=(199, 197, 199))
+    (caso / "prueba.HUM").write_text(HUM + "INCREMENTAL = 1\n")
     malla = Malla(np.array([x for x, _ in NODOS]), np.array([y for _, y in NODOS]), 0.001)
     fuente = fuente_de_caso(caso, "prueba", malla, np.ones(4, dtype=bool))
     con_dato = np.ones(4, dtype=bool)
@@ -147,6 +148,20 @@ def test_escribir_los_archivos_de_humedad(workdir: Path):
     simulacion = Simulation.from_directory(caso)
     simulacion.run()
     assert (simulacion.particles.moisture > 0).all()
+
+
+def test_el_analisis_dice_cuanto_de_lo_publicado_es_medida(workdir: Path):
+    """Con el gris por debajo de la banda, la saturación es una cota y hay que saberlo."""
+    caso = montar_caso(workdir / "caso", grises=(199, 190, 185))  # los dos últimos, pasados
+    malla = Malla(np.array([x for x, _ in NODOS]), np.array([y for _, y in NODOS]), 0.001)
+    fuente = fuente_de_caso(caso, "prueba", malla, np.ones(4, dtype=bool))
+    for paso in (1, 2, 3):
+        fuente.instante(paso, np.ones(4, dtype=bool))
+
+    resumen = fuente.resumen_de_calidad()
+    assert "12 valores con dato" in resumen
+    assert "4 (33 %) medidos" in resumen
+    assert "8 (67 %) en el tope húmedo" in resumen
 
 
 def test_moister_desconocido(workdir: Path):

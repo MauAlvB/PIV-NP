@@ -178,6 +178,8 @@ class Simulation:
                     self._write_output(writer, step, t, summary, append=resumed)
 
         self._save_restart(step, t)
+        if self.frames.images is not None:
+            log.info("Humedad: %s", self.frames.images.resumen_de_calidad())
         summary.elapsed_s = time.perf_counter() - started
         log.info("ANALYSIS FINISHED en %.1f s", summary.elapsed_s)
         return summary
@@ -298,6 +300,7 @@ def write_moisture_files(case_dir: Path, case_name: str | None = None,
         if frame.step == 1 or frame.step % options.log_every == 0:
             log.info("ESCRITO %s", destino.name)
     log.info("%d archivos de humedad escritos en %s", escritos, case_dir)
+    log.info("Humedad: %s", frames.images.resumen_de_calidad())
     return escritos
 
 

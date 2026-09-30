@@ -26,7 +26,8 @@ from .muestreo import Registro
 
 #: Valor por defecto de cada clave. Son los del código MATLAB original salvo donde se acordó
 #: cambiar de criterio: CANAL (el análisis de referencia se hizo en escala de grises, no con
-#: el canal rojo), PRIMER_INSTANTE y REDONDEO_LEGADO.
+#: el canal rojo), PRIMER_INSTANTE, REDONDEO_LEGADO, e INCREMENTAL con su UMBRAL_SATURACION,
+#: que pasan a estar apagados porque son una hipótesis sobre el ensayo y no una medida.
 PREDETERMINADOS: dict[str, str] = {
     "IMAGENES": "vis_{n}.jpg",
     "CANAL": "gris",
@@ -37,8 +38,8 @@ PREDETERMINADOS: dict[str, str] = {
     "BANDA_SECA": "",
     "BANDA_SATURADA": "",
     "CALIBRACION": "",
-    "UMBRAL_SATURACION": "0.8",
-    "INCREMENTAL": "1",
+    "UMBRAL_SATURACION": "0.95",
+    "INCREMENTAL": "0",
     "PRIMER_INSTANTE": "igual",
     "REDONDEO_LEGADO": "0",
     "ESCALA_X": "1.0",

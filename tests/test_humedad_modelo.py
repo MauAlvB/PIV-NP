@@ -10,7 +10,12 @@ import pytest
 from pivnp.humedad.calibracion import Calibracion
 from pivnp.humedad.configuracion import ConfiguracionError, analizar, leer
 from pivnp.humedad.modelo import (
+    MEDIDO,
+    SIN_DATO,
+    TOPE_HUMEDO,
+    TOPE_SECO,
     ModeloHumedad,
+    avisar_si_la_banda_es_estrecha,
     normalizar,
     referencias_globales,
     referencias_por_desplazamiento,
@@ -26,7 +31,8 @@ def test_valores_por_defecto_como_el_matlab():
     # El canal por defecto es el gris, que es con el que se hizo el análisis de referencia.
     assert cfg.canal == 0 and cfg.sigma == 40
     assert (cfg.desplazamiento_seco, cfg.desplazamiento_saturado) == (5, -6)
-    assert cfg.umbral_saturacion == 0.8 and cfg.incremental
+    # el trinquete y su umbral vienen apagados: son una hipótesis, no una medida
+    assert cfg.umbral_saturacion == 0.95 and not cfg.incremental
     assert cfg.referencia_seca == "ref2.jpg"
     assert cfg.registro_es_identidad
     assert cfg.primer_instante == "igual"
@@ -103,6 +109,7 @@ def test_la_banda_global_sustituye_a_la_referencia_por_nodo():
 
     gris = np.array([92.0, 102.0, 132.0, 80.0])
     referencias = referencias_globales(gris.shape, cfg.banda_seca, cfg.banda_saturada)
+    assert avisar_si_la_banda_es_estrecha(referencias) == 40.0
     assert referencias.seco.tolist() == [132.0] * 4
     assert referencias.saturado.tolist() == [92.0] * 4
     # una banda de 40 niveles: cada nivel de gris son 2.5 puntos de la escala
@@ -181,19 +188,45 @@ def calibracion() -> Calibracion:
                        np.array([25.0, 20.0, 10.0, 4.0, 0.0]))
 
 
+def test_la_medida_viene_sin_politica_incremental(calibracion: Calibracion):
+    """El trinquete es una hipótesis sobre el ensayo, no una medida: viene apagado."""
+    modelo = ModeloHumedad(calibracion)
+    assert not modelo.incremental and modelo.umbral == 0.95
+    modelo.evaluar(np.array([25.0]))
+    assert modelo.evaluar(np.array([100.0])).saturacion[0] == pytest.approx(0.0)
+
+
 def test_la_saturacion_no_baja(calibracion: Calibracion):
-    modelo = ModeloHumedad(calibracion, umbral_saturacion=0.8)
+    modelo = ModeloHumedad(calibracion, umbral_saturacion=0.8, incremental=True)
     humedo = modelo.evaluar(np.array([50.0]))      # saturación 0.5
     seco = modelo.evaluar(np.array([75.0]))        # daría 0.2, pero no puede bajar
     assert humedo.saturacion[0] == pytest.approx(0.5)
     assert seco.saturacion[0] == pytest.approx(0.5)
 
 
+def test_el_trinquete_arrastra_tambien_la_humedad(calibracion: Calibracion):
+    """Los dos campos salen del mismo gris, así que no pueden contradecirse.
+
+    El código original aplicaba el trinquete solo a la saturación y recalculaba la humedad
+    entera, con lo que un nodo podía quedar dado por saturado con la humedad casi a cero.
+    """
+    modelo = ModeloHumedad(calibracion, umbral_saturacion=0.8, incremental=True)
+    humedo = modelo.evaluar(np.array([50.0]))
+    seco = modelo.evaluar(np.array([75.0]))
+    assert humedo.humedad[0] == pytest.approx(10.0)
+    assert seco.humedad[0] == pytest.approx(10.0)   # se conserva, como la saturación
+    # y lo que se publica sigue estando sobre la curva del suelo
+    assert seco.humedad[0] == pytest.approx(
+        np.interp(seco.saturacion[0], calibracion.saturacion[::-1],
+                  calibracion.humedad[::-1]), abs=1e-9)
+
+
 def test_al_superar_el_umbral_se_queda_saturado(calibracion: Calibracion):
-    modelo = ModeloHumedad(calibracion, umbral_saturacion=0.8)
+    modelo = ModeloHumedad(calibracion, umbral_saturacion=0.8, incremental=True)
     modelo.evaluar(np.array([25.0]))               # saturación 0.9 >= 0.8
     despues = modelo.evaluar(np.array([100.0]))    # aunque ahora mida 0
     assert despues.saturacion[0] == 1.0
+    assert despues.humedad[0] == pytest.approx(25.0)  # la humedad del suelo saturado
 
 
 def test_sin_politica_incremental_puede_secarse(calibracion: Calibracion):
@@ -203,18 +236,26 @@ def test_sin_politica_incremental_puede_secarse(calibracion: Calibracion):
 
 
 def test_el_umbral_es_ajustable(calibracion: Calibracion):
-    estricto = ModeloHumedad(calibracion, umbral_saturacion=0.95)
+    estricto = ModeloHumedad(calibracion, umbral_saturacion=0.95, incremental=True)
     estricto.evaluar(np.array([25.0]))             # 0.9 < 0.95: no se fija en 1
     assert estricto.evaluar(np.array([100.0])).saturacion[0] == pytest.approx(0.9)
 
 
 def test_los_nodos_sin_dato_se_mantienen(calibracion: Calibracion):
-    modelo = ModeloHumedad(calibracion)
+    modelo = ModeloHumedad(calibracion, incremental=True)
     estado = modelo.evaluar(np.array([np.nan, 50.0]))
     assert np.isnan(estado.saturacion[0])
     siguiente = modelo.evaluar(np.array([np.nan, 75.0]))
     assert np.isnan(siguiente.saturacion[0])
     assert siguiente.saturacion[1] == pytest.approx(0.5)  # conserva lo alcanzado
+
+
+def test_la_marca_de_calidad_distingue_medida_de_cota(calibracion: Calibracion):
+    """Un nodo en un tope de la banda no es una medida, es un 'al menos' o un 'como mucho'."""
+    modelo = ModeloHumedad(calibracion)
+    estado = modelo.evaluar(np.array([np.nan, 0.0, 50.0, 100.0]))
+    assert estado.calidad.tolist() == [SIN_DATO, TOPE_HUMEDO, MEDIDO, TOPE_SECO]
+    assert estado.recortados == 2 and estado.medidos == 1
 
 
 def test_umbral_invalido(calibracion: Calibracion):

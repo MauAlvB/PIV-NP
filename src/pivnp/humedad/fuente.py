@@ -17,9 +17,14 @@ from .calibracion import Calibracion
 from .configuracion import ConfiguracionHumedad, leer
 from .imagenes import desenfoque_gaussiano, leer_imagen
 from .modelo import (
+    MEDIDO,
+    SIN_DATO,
+    TOPE_HUMEDO,
+    TOPE_SECO,
     Estado,
     ModeloHumedad,
     Referencias,
+    avisar_si_la_banda_es_estrecha,
     normalizar,
     referencias_globales,
     referencias_por_desplazamiento,
@@ -61,6 +66,9 @@ class FuenteHumedad:
                                                          configuracion.registro)
         self.referencias: Referencias | None = None
         self.nodos_fuera = 0
+        #: Cuántos valores de cada marca de calidad se han publicado en todo el análisis.
+        self.calidad: dict[int, int] = dict.fromkeys((MEDIDO, SIN_DATO, TOPE_HUMEDO,
+                                                      TOPE_SECO), 0)
 
     # --- preparación ---------------------------------------------------------------------
     def preparar(self, con_dato: np.ndarray) -> Referencias:
@@ -75,12 +83,14 @@ class FuenteHumedad:
             self.referencias = referencias_globales(self.columna.shape,
                                                     configuracion.banda_seca,
                                                     configuracion.banda_saturada)
-            return self.referencias
-        filtrada = self._imagen_filtrada(self.directorio / configuracion.referencia_seca)
-        self.nodos_fuera = fuera_de_la_imagen(filtrada, self.columna, self.fila)
-        gris = muestrear(filtrada, self.columna, self.fila, con_dato)
-        self.referencias = referencias_por_desplazamiento(
-            gris, configuracion.desplazamiento_seco, configuracion.desplazamiento_saturado)
+        else:
+            filtrada = self._imagen_filtrada(self.directorio / configuracion.referencia_seca)
+            self.nodos_fuera = fuera_de_la_imagen(filtrada, self.columna, self.fila)
+            gris = muestrear(filtrada, self.columna, self.fila, con_dato)
+            self.referencias = referencias_por_desplazamiento(
+                gris, configuracion.desplazamiento_seco,
+                configuracion.desplazamiento_saturado)
+        avisar_si_la_banda_es_estrecha(self.referencias, configuracion.origen)
         return self.referencias
 
     # --- cálculo -------------------------------------------------------------------------
@@ -97,6 +107,22 @@ class FuenteHumedad:
         return desenfoque_gaussiano(imagen, self.configuracion.sigma,
                                     self.configuracion.redondeo_legado)
 
+    def resumen_de_calidad(self) -> str:
+        """Cuánto de lo publicado es medida y cuánto es una cota, en todo el análisis."""
+        total = sum(self.calidad.values())
+        if not total:
+            return "no se ha calculado ningún instante"
+        con_dato = total - self.calidad[SIN_DATO]
+        if not con_dato:
+            return "ningún nodo con dato"
+        partes = [f"{self.calidad[marca]} ({100 * self.calidad[marca] / con_dato:.0f} %) "
+                  f"{nombre}"
+                  for marca, nombre in ((MEDIDO, "medidos"),
+                                        (TOPE_HUMEDO, "en el tope húmedo (son un 'al menos')"),
+                                        (TOPE_SECO, "en el tope seco (son un 'como mucho')"))
+                  if self.calidad[marca]]
+        return f"de {con_dato} valores con dato: " + ", ".join(partes)
+
     def desde_gris(self, paso: int, normalizado: np.ndarray) -> Estado:
         """Humedad y saturación a partir del gris ya normalizado.
 
@@ -105,10 +131,11 @@ class FuenteHumedad:
         lleva y puede calcularse por adelantado en otro hilo.
         """
         estado = self.modelo.evaluar(normalizado)
+        for marca in self.calidad:
+            self.calidad[marca] += int((estado.calidad == marca).sum())
         if paso == 1 and self.configuracion.primer_instante == "legado":
             # El MATLAB dejaba la humedad a cero en el primer instante.
-            estado = Estado(estado.saturacion, np.zeros_like(estado.humedad),
-                            estado.recortados)
+            estado = Estado(estado.saturacion, np.zeros_like(estado.humedad), estado.calidad)
         return estado
 
     def instante(self, paso: int, con_dato: np.ndarray) -> Estado:

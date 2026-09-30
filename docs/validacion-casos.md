@@ -302,6 +302,22 @@ media y el 95 % de los nodos afectados. No dice que el método por nodo sea peor
 patrón fijo de textura, que es su ventaja—, dice que **exige una condición experimental que
 hoy no está escrita en ninguna parte**.
 
+### Lo que se ha cambiado con esas medidas delante
+
+* **La política incremental actúa ahora sobre el gris normalizado**, no sobre la saturación.
+  Los dos campos salen del mismo valor, así que no pueden contradecirse. Comprobado sobre
+  `Slope_RGB`: la saturación sale **exactamente igual** que antes —diferencia máxima 0 en
+  todos los pasos, así que no hace falta ningún interruptor de compatibilidad— y los 579 nodos
+  dados por saturados pasan de tener humedad mediana 1,14 % a tener 24,03 %, la del suelo
+  saturado.
+* **El trinquete viene apagado** y su umbral en 0,95. Se enciende con `INCREMENTAL = 1`.
+* **Aviso cuando la banda es estrecha**, por debajo de 20 niveles de gris. En `Slope_RGB`, con
+  11, salta y dice que un nivel pesa el 9 % de la escala.
+* **Marca de calidad por nodo**: medido, sin dato, o en un tope de la banda. Al terminar se
+  resume cuánto de lo publicado es medida. En el caso del artículo el resultado es
+  incómodo y conviene tenerlo a la vista: **el 82 % de los valores con dato están en el tope
+  húmedo**, es decir, son un "al menos" y no una medida. Solo el 18 % lo es.
+
 ### Orden de prioridades que sale de las medidas
 
 1. La anchura de la banda, de ensayo de columna, por suelo.

@@ -9,24 +9,28 @@ Tres pasos, los mismos del código MATLAB original:
 3. **Calibración**: ese valor normalizado se convierte en saturación y humedad con la curva
    del suelo.
 
-Sobre esos tres pasos actúa la **política incremental**: la saturación de un nodo no puede
-bajar respecto al instante anterior, y al superar el umbral se fija en 1. Refleja un frente
-de humedecimiento que avanza; para medir también el secado habrá que desactivarla.
+Sobre esos tres pasos puede actuar la **política incremental**: el gris de un nodo no vuelve
+a subir, y al pasar el umbral el nodo se da por saturado. Refleja un frente de humedecimiento
+que avanza, y por eso **viene apagada**: es una hipótesis sobre el ensayo, no una medida, y
+con ella puesta no se puede medir el secado.
 
-La política se aplica solo a la saturación, como en el código original: la humedad se vuelve
-a calcular entera en cada instante. Los dos campos pueden por tanto contradecirse, y en el
-caso de referencia lo hacen: al final del ensayo hay nodos marcados como saturados cuya
-humedad ha vuelto a bajar casi hasta cero. Se mantiene así a propósito, para poder comparar
-con los análisis anteriores; es una de las cosas a revisar cuando esa comparación se cierre.
+Cuando se activa, actúa sobre el gris normalizado y no sobre la saturación, de modo que los
+dos campos salen siempre del mismo valor. El código original la aplicaba solo a la saturación
+y recalculaba la humedad entera en cada instante, con lo que los dos campos podían
+contradecirse: en el caso de referencia acababa habiendo 634 nodos dados por saturados con la
+humedad casi a cero.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import numpy as np
 
 from .calibracion import Calibracion
+
+log = logging.getLogger("pivnp")
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,32 @@ def referencias_por_desplazamiento(gris_referencia: np.ndarray, desplazamiento_s
     return Referencias(gris + desplazamiento_seco, gris + desplazamiento_saturado)
 
 
+#: Por debajo de esta anchura, un nivel de gris pesa más del 5 % de la escala de saturación.
+#: Con los 11 niveles del flujo RGB pesa el 9 %, y ahí el método se vuelve muy frágil.
+ANCHO_MINIMO_DE_BANDA = 20.0
+
+
+def avisar_si_la_banda_es_estrecha(referencias: Referencias, origen: str = "") -> float:
+    """Comprueba la anchura de la banda, que es el número más sensible de todo el método.
+
+    Devuelve la anchura mediana. Cuanto más estrecha, más pesa cada nivel de gris: medido
+    sobre el caso del artículo, pasar de 40 niveles a 11 mueve la saturación 0,105 de media,
+    un orden de magnitud más que cualquier otra decisión del cálculo.
+    """
+    ancho = referencias.seco - referencias.saturado
+    finitos = ancho[np.isfinite(ancho)]
+    if finitos.size == 0:
+        return float("nan")
+    mediana = float(np.median(finitos))
+    if mediana < ANCHO_MINIMO_DE_BANDA:
+        log.warning("%sla banda entre el suelo seco y el saturado son %.0f niveles de gris, "
+                    "así que un nivel es el %.0f %% de la escala de saturación. Con una banda "
+                    "tan estrecha el resultado depende mucho del ruido de la imagen; conviene "
+                    "revisarla con el ensayo de calibración del suelo.",
+                    f"{origen}: " if origen else "", mediana, 100.0 / mediana)
+    return mediana
+
+
 def referencias_globales(forma, gris_seco: float, gris_saturado: float) -> Referencias:
     """Referencias iguales en todos los nodos, medidas sobre el suelo del ensayo.
 
@@ -76,51 +106,85 @@ def normalizar(gris: np.ndarray, referencias: Referencias) -> np.ndarray:
     return np.where(normalizado < 0.0, 0.0, normalizado)
 
 
+#: Marcas de calidad de cada nodo, para poder leer los resultados sabiendo qué es medida.
+MEDIDO = 0  #: el gris cae dentro de la banda: el valor es una medida
+SIN_DATO = 1  #: el nodo no tiene dato (fuera de la imagen, o PIVlab no lo midió)
+TOPE_HUMEDO = 2  #: el gris cae por debajo del extremo saturado: el valor es un "al menos"
+TOPE_SECO = 3  #: el gris cae por encima del extremo seco: el valor es un "como mucho"
+
+
 @dataclass
 class Estado:
     """Resultado de un instante."""
 
     saturacion: np.ndarray
     humedad: np.ndarray
-    recortados: int  # nodos fuera del rango de la calibración
+    #: Marca por nodo (:data:`MEDIDO`, :data:`SIN_DATO`, :data:`TOPE_HUMEDO`,
+    #: :data:`TOPE_SECO`). Un nodo en un tope no es una medida, es una cota: conviene
+    #: saberlo al leer un campo, porque suelen ser muchos.
+    calidad: np.ndarray
+
+    @property
+    def recortados(self) -> int:
+        """Nodos que caen fuera de la banda, y cuyo valor es por tanto una cota."""
+        return int(np.isin(self.calidad, (TOPE_HUMEDO, TOPE_SECO)).sum())
+
+    @property
+    def medidos(self) -> int:
+        return int((self.calidad == MEDIDO).sum())
 
 
 class ModeloHumedad:
     """Convierte el gris de cada instante en saturación y humedad.
 
-    Guarda la saturación alcanzada por cada nodo, que es lo que permite la política
-    incremental.
+    La política incremental se aplica **sobre el gris normalizado**, no sobre la saturación:
+    así los dos campos salen del mismo valor y no pueden contradecirse. El código original la
+    aplicaba solo a la saturación y dejaba la humedad libre, de modo que un nodo podía quedar
+    marcado como saturado con la humedad casi a cero.
     """
 
-    def __init__(self, calibracion: Calibracion, umbral_saturacion: float = 0.8,
-                 incremental: bool = True) -> None:
+    def __init__(self, calibracion: Calibracion, umbral_saturacion: float = 0.95,
+                 incremental: bool = False) -> None:
         if not 0 < umbral_saturacion <= 1:
             raise ValueError(f"el umbral debe estar en (0, 1] y vale {umbral_saturacion}")
         self.calibracion = calibracion
         self.umbral = float(umbral_saturacion)
         self.incremental = bool(incremental)
-        self.alcanzada: np.ndarray | None = None
+        #: Gris más bajo alcanzado por cada nodo: el suelo no se seca, así que no vuelve a subir.
+        self.alcanzado: np.ndarray | None = None
 
     def reiniciar(self) -> None:
-        self.alcanzada = None
+        self.alcanzado = None
 
     def evaluar(self, gris_normalizado: np.ndarray) -> Estado:
         """Saturación y humedad del instante, aplicando la política incremental."""
-        resultado = self.calibracion.evaluar(gris_normalizado)
-        saturacion = resultado.saturacion.copy()
+        gris = np.asarray(gris_normalizado, dtype=np.float64)
+        medido = np.isfinite(gris)
+        if self.incremental:
+            gris = self._aplicar_trinquete(gris, medido)
+        resultado = self.calibracion.evaluar(gris)
+        return Estado(resultado.saturacion, resultado.humedad, self._calidad(gris, medido))
 
-        if not self.incremental:
-            return Estado(saturacion, resultado.humedad, resultado.recortados)
-
-        if self.alcanzada is None:
-            self.alcanzada = np.full(saturacion.shape, np.nan)
-        elif self.alcanzada.shape != saturacion.shape:
+    # --- política incremental -------------------------------------------------------------
+    def _aplicar_trinquete(self, gris: np.ndarray, medido: np.ndarray) -> np.ndarray:
+        if self.alcanzado is None:
+            self.alcanzado = np.full(gris.shape, np.inf)
+        elif self.alcanzado.shape != gris.shape:
             raise ValueError("el número de nodos ha cambiado entre instantes")
 
-        medido = np.isfinite(saturacion)
-        previa = np.where(np.isfinite(self.alcanzada), self.alcanzada, -np.inf)
-        # al superar el umbral el nodo se da por saturado y ya no vuelve atrás
-        nueva = np.where(saturacion >= self.umbral, 1.0, np.maximum(saturacion, previa))
-        self.alcanzada = np.where(medido, nueva, self.alcanzada)
-        return Estado(np.where(medido, nueva, np.nan), resultado.humedad,
-                      resultado.recortados)
+        gris = np.where(medido, np.minimum(gris, self.alcanzado), gris)
+        if self.umbral < 1.0:
+            # Al pasar el umbral el nodo se da por saturado y ya no vuelve atrás.
+            saturado = self.calibracion.evaluar(gris).saturacion >= self.umbral
+            gris = np.where(medido & saturado, float(self.calibracion.rango[0]), gris)
+        self.alcanzado = np.where(medido, gris, self.alcanzado)
+        return gris
+
+    def _calidad(self, gris: np.ndarray, medido: np.ndarray) -> np.ndarray:
+        minimo, maximo = self.calibracion.rango
+        calidad = np.full(gris.shape, SIN_DATO, dtype=np.int8)
+        calidad[medido] = MEDIDO
+        # el gris ya viene recortado por debajo en normalizar(), de ahí el <=
+        calidad[medido & (gris <= minimo)] = TOPE_HUMEDO
+        calidad[medido & (gris >= maximo)] = TOPE_SECO
+        return calidad
