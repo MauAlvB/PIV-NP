@@ -55,7 +55,7 @@ repetición del borde; las coordenadas de los nodos se redondean al píxel.
 
 | # | Cambio | Estado |
 |---|---|---|
-| 1 | Umbral de saturación de 0.8 a **0.95**, manteniendo el comportamiento incremental | acordado |
+| 1 | Umbral de saturación de 0.8 a **0.95**, manteniendo el comportamiento incremental | aplazado: por defecto sigue 0.8 hasta cerrar la comparación; se pide con `UMBRAL_SATURACION` |
 | 2 | El **primer instante se calcula como los demás** (hoy devuelve humedad 0 y saturación constante) | acordado |
 | 3 | Referencias seca y saturada como **parámetros**, con estudio de sensibilidad (−6 frente a −8 mueve la saturación inicial un 45 %) | acordado, valor por decidir con pruebas |
 | 4 | **Recortar** en vez de extrapolar fuera del rango de calibración (origen de los −1710 % de `Moist_40.txt`) | hecho |
@@ -118,7 +118,7 @@ Reproduciendo el camino de MATLAB (canal gris, `REDONDEO_LEGADO = 1`):
 Entre el 69 % y el 100 % de los nodos coinciden **exactamente**. Los que difieren lo hacen
 en saltos de un nivel de gris.
 
-### Dos hallazgos importantes
+### Hallazgos importantes
 
 **1. En los datos del caso la humedad solo se calculó en una columna de nodos.** En
 `gv2sat_JC2.m` el cálculo de la humedad (líneas 39-40) está **fuera del bucle interior**:
@@ -158,6 +158,25 @@ distingue, porque la imagen es la propia referencia. Comparando los instantes si
 los cuatro canales, el gris es el que reproduce los datos (diferencia media 0,025 en el
 instante 2, frente a 0,034 del verde, 0,089 del azul y 0,113 del rojo).
 
+**4. La humedad y la saturación pueden contradecirse.** La política incremental se aplica
+solo a la saturación; la humedad se recalcula entera en cada instante. Como las imágenes de
+este ensayo se aclaran con el tiempo (la mediana del gris de un nodo sube 3,8 niveles del
+instante 1 al 149), los dos campos acaban diciendo cosas opuestas:
+
+| Paso | Nodos con saturación = 1 | Humedad de esos nodos (mín / mediana / máx) | De ellos, bajan de humedad |
+|---|---|---|---|
+| 10 | 107 | 10,81 / 18,47 / 24,03 | 54 |
+| 40 | 569 | 0,20 / 3,13 / 24,03 | 404 |
+| 149 | 634 | 0,20 / **1,09** / 24,03 | 190 |
+
+En la tabla de calibración la saturación 1 corresponde al 24,03 % de humedad. En el MATLAB no
+se veía porque la humedad estaba casi toda a cero por el fallo del bucle. **Se deja como está
+a propósito**, para que la comparación con los análisis anteriores sea limpia; es lo primero a
+revisar cuando esa comparación se cierre.
+
+Efecto del umbral, medido en el caso: con 0,95 en vez de 0,8 quedan al final 491 nodos fijados
+en saturación 1 en vez de 634, con una diferencia media de 0,022 y máxima de 0,20.
+
 ## Integración en el análisis (fase 3)
 
 `MOISTER`, en el bloque 3 del `.PAR`, pasa a admitir tres valores: 0 sin humedad, 1 leerla de
@@ -191,6 +210,13 @@ MATLAB, y la saturación, en la medida ya conocida del nivel de gris.
 * Rama `humedad` con la cadena completa implementada y 267 pruebas en verde.
 * Fases 1 (calibración), 2 (imágenes, muestreo, modelo) y 3 (integración y comando)
   terminadas, probadas y validadas contra el caso; el residuo está explicado y acotado.
-* Falta: el umbral a 0,95 cuando terminen las comparaciones a 0,8, y decidir cómo se fija la
-  banda seca-saturada (ahora sigue siendo la del MATLAB, referencia por nodo con +5 y −6).
+* Criterio en vigor: **todo lo más cerca posible del código original** mientras la comparación
+  de resultados siga abierta. Las dos únicas diferencias de comportamiento por defecto son el
+  redondeo del filtro y el primer instante, las dos acordadas, y las dos recuperables desde el
+  `.HUM` (`REDONDEO_LEGADO = 1`, `PRIMER_INSTANTE = legado`).
+* Pendiente de decidir, en este orden: la incoherencia entre humedad y saturación, el umbral a
+  0,95, y cómo se fija la banda seca-saturada (ahora sigue siendo la del MATLAB, referencia
+  por nodo con +5 y −6).
+* Más adelante: medir también en secado (sin política incremental), el flujo SWIR con dos
+  cámaras, y la masa de las partículas desde `S_DENSITY` y `POROSITY`.
 * Nada subido a GitHub; `main` tiene un commit local por delante del remoto.

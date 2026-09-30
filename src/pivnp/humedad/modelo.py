@@ -12,6 +12,12 @@ Tres pasos, los mismos del código MATLAB original:
 Sobre esos tres pasos actúa la **política incremental**: la saturación de un nodo no puede
 bajar respecto al instante anterior, y al superar el umbral se fija en 1. Refleja un frente
 de humedecimiento que avanza; para medir también el secado habrá que desactivarla.
+
+La política se aplica solo a la saturación, como en el código original: la humedad se vuelve
+a calcular entera en cada instante. Los dos campos pueden por tanto contradecirse, y en el
+caso de referencia lo hacen: al final del ensayo hay nodos marcados como saturados cuya
+humedad ha vuelto a bajar casi hasta cero. Se mantiene así a propósito, para poder comparar
+con los análisis anteriores; es una de las cosas a revisar cuando esa comparación se cierre.
 """
 
 from __future__ import annotations
