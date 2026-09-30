@@ -14,6 +14,7 @@ Flujo de cada paso (igual que el original):
 from __future__ import annotations
 
 import logging
+import math
 import os
 import time
 from dataclasses import dataclass, field
@@ -32,7 +33,7 @@ from .nodal import (
     load_measurements,
 )
 from .particles import cell_centers, create_particles
-from .pivlab_io import FrameSource, pivlab_to_node
+from .pivlab_io import FrameSource, frame_interval_in_header, pivlab_to_node
 from .restart import NodalState, RestartData, read_restart, write_restart
 from .solver import advance_particles, count_nan_nodes, output_mask, update_strains
 from .state import Nodes, Particles
@@ -105,12 +106,33 @@ class Simulation:
     def restart_path(self) -> Path:
         return self.case_dir / f"{self.case_name}.REC"
 
+    def check_frame_interval(self) -> float | None:
+        """Avisa si el DT del ``.PAR`` no coincide con el intervalo que usó PIVlab.
+
+        Si no coinciden, los desplazamientos salen multiplicados por el cociente entre
+        ambos: es un error que no da ningún síntoma salvo resultados a otra escala.
+        """
+        try:
+            intervalo = frame_interval_in_header(self.frames.velocity_path(1))
+        except (FileNotFoundError, OSError):
+            return None
+        if intervalo is None or math.isclose(intervalo, self.config.dt, rel_tol=1e-3):
+            return intervalo
+        log.warning(
+            "El .PAR usa DT=%g s, pero los archivos PIVlab se exportaron con un intervalo "
+            "entre imágenes de %g s: los desplazamientos saldrán multiplicados por %.4g. "
+            "Revisa el DT del .PAR o el intervalo con el que exportaste desde PIVlab "
+            "(si los archivos no vienen de PIVlab, ignora este aviso).",
+            self.config.dt, intervalo, self.config.dt / intervalo)
+        return intervalo
+
     def run(self) -> RunSummary:
         cfg = self.config
         started = time.perf_counter()
         summary = RunSummary(self.case_name, cfg.n_particles, cfg.total_steps)
         log.info("LEYENDO DATOS... caso %s: %d partículas, %d pasos", self.case_name,
                  cfg.n_particles, cfg.total_steps)
+        self.check_frame_interval()
 
         step, t, resumed = 0, 0.0, False
         if cfg.restart:

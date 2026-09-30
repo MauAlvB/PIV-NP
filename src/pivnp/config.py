@@ -147,25 +147,35 @@ def _to_float(token: str, name: str) -> float:
         raise ConfigError(f"{name}: se esperaba un número y se leyó {token!r}") from None
 
 
-def _analysis_block(reader: _ListDirectedReader) -> list[str]:
+def _analysis_block(reader: _ListDirectedReader) -> tuple[list[str], str | None, str | None]:
     """Bloque 3, admitiendo también los ``.PAR`` de versiones anteriores.
 
-    El formato actual tiene 9 valores. Las versiones antiguas escribían solo
-    ``DT TOTAL_STEPS IMPPAS`` (3 valores) o esos más ``MOISTER`` (4); el resto toma su
-    valor por defecto: malla PIV-NP (IVERSION=1), archivos PIVlab de 4 columnas, sin
-    corrección de contorno, análisis nuevo y sin partículas PTV.
+    Devuelve los 9 valores del formato actual y, si el ``.PAR`` los trae dentro del bloque 3,
+    la densidad y la porosidad. Formatos reconocidos:
+
+    * 9 valores: ``DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR``
+      (el actual), con la densidad y la porosidad en el bloque 4.
+    * 8 valores: ``DT TOTAL_STEPS IMPPAS MOISTER S_DENSITY POROSITY IVERSION PTV``.
+    * 3 o 4 valores: ``DT TOTAL_STEPS IMPPAS [MOISTER]``.
+
+    Lo que no aparece toma su valor por defecto: malla PIV-NP (IVERSION=1), archivos PIVlab
+    de 4 columnas, sin corrección de contorno y análisis nuevo.
     """
     values = reader.line_values()
     if len(values) >= 9:
-        return values[:9]
+        return values[:9], None, None
+    if len(values) == 8:
+        log.info("%s: .PAR con densidad y porosidad en el bloque 3", reader.source)
+        dt, steps, imppas, moister, density, porosity, iversion, itr = values
+        return [dt, steps, imppas, moister, iversion, "1", "0", "0", itr], density, porosity
     if len(values) in (3, 4):
         log.info("%s: .PAR en formato antiguo (%d valores en el bloque 3); se asumen "
                  "IVERSION=1, IPIVLAB=1, ICONTOUR=0, IREC=0 e ITR=0", reader.source, len(values))
-        return [*values, *["0"] * (4 - len(values)), "1", "1", "0", "0", "0"]
+        return [*values, *["0"] * (4 - len(values)), "1", "1", "0", "0", "0"], None, None
     raise ConfigError(
         f"{reader.source}: el bloque 3 tiene {len(values)} valores; se esperaban 9 "
-        "(DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR) o los 3 "
-        "del formato antiguo (DT TOTAL_STEPS IMPPAS)"
+        "(DT TOTAL_STEPS IMPPAS MOISTER IVERSION IPIVLAB ICONTOUR IREC ITR), 8 con la "
+        "densidad y la porosidad, o los 3 del formato antiguo (DT TOTAL_STEPS IMPPAS)"
     )
 
 
@@ -177,12 +187,14 @@ def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
     reader.text()
     nc, nn, npc, nfil, axc, ayc = reader.values(6)
     reader.text()
-    dt, steps, imppas, moister, iversion, ipivlab, icontour, irec, itr = _analysis_block(reader)
-    if reader.at_end():  # los .PAR antiguos no traen el bloque 4
-        density = porosity = "0"
-    else:
-        reader.text()
-        density, porosity = reader.values(2)
+    bloque3, density, porosity = _analysis_block(reader)
+    dt, steps, imppas, moister, iversion, ipivlab, icontour, irec, itr = bloque3
+    if density is None:
+        if reader.at_end():  # los .PAR antiguos no traen el bloque 4
+            density = porosity = "0"
+        else:
+            reader.text()
+            density, porosity = reader.values(2)
 
     if _to_int(itr, "ITR") != 0:
         raise ConfigError(

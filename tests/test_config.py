@@ -57,6 +57,17 @@ def test_old_par_format_is_accepted():
     assert parse_par(con_humedad).moisture
 
 
+def test_par_with_density_inside_block_three():
+    """Variante con 8 valores: DT TOTAL_STEPS IMPPAS MOISTER S_DENSITY POROSITY IVERSION PTV."""
+    lineas = PAR.splitlines()
+    texto = "\n".join(lineas[:4] + ["1\t149\t1\t1\t1212\t0.444\t1\t0"]) + "\n"
+    cfg = parse_par(texto)
+    assert (cfg.dt, cfg.total_steps, cfg.print_every) == (1.0, 149, 1)
+    assert cfg.moisture and cfg.mesh_version == 1
+    assert (cfg.soil_density, cfg.porosity) == (1212.0, 0.444)
+    assert cfg.pivlab_format == 1 and cfg.contour == 0 and not cfg.restart
+
+
 def test_incomplete_analysis_block_is_rejected():
     lineas = PAR.splitlines()
     with pytest.raises(ConfigError, match="bloque 3"):

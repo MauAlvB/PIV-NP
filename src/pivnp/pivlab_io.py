@@ -7,6 +7,7 @@ arriba, por eso se reordenan los nodos y se cambia el signo de la velocidad vert
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -16,6 +17,10 @@ import numpy as np
 
 VELOCITY_PATTERN = "datos ({step}).TXT"
 MOISTURE_PATTERN = "Moist_{step}.TXT"
+
+#: Factores de conversión que PIVlab escribe en la segunda línea de cada archivo.
+_XY_FACTOR = re.compile(r"px\s*->\s*m\)\s*:\s*([0-9.eE+-]+)")
+_UV_FACTOR = re.compile(r"px/frame\s*->\s*m/s\)\s*:\s*([0-9.eE+-]+)")
 
 
 @dataclass(frozen=True)
@@ -38,6 +43,26 @@ def pivlab_to_node(n_cols: int, n_rows: int) -> np.ndarray:
     """
     col, row_from_top = np.divmod(np.arange((n_cols + 1) * (n_rows + 1)), n_rows + 1)
     return (n_rows - row_from_top) * (n_cols + 1) + col
+
+
+def frame_interval_in_header(path: Path) -> float | None:
+    """Intervalo entre imágenes con el que se exportó el archivo, o ``None`` si no consta.
+
+    PIVlab escribe dos factores de conversión: uno de píxeles a metros y otro de píxeles por
+    imagen a metros por segundo. Su cociente es el tiempo entre imágenes que se le indicó,
+    que debería coincidir con el DT del ``.PAR``: si no, los desplazamientos salen escalados.
+    """
+    lineas = Path(path).read_text(encoding="latin-1").splitlines()
+    if len(lineas) < 2:
+        return None
+    xy, uv = _XY_FACTOR.search(lineas[1]), _UV_FACTOR.search(lineas[1])
+    if not xy or not uv:
+        return None
+    try:
+        divisor = float(uv.group(1))
+        return float(xy.group(1)) / divisor if divisor else None
+    except (ValueError, ZeroDivisionError):
+        return None
 
 
 def _parse_values(lines: list[str], count: int, path: Path) -> np.ndarray:
@@ -96,6 +121,10 @@ class FrameSource:
             return self._index[name.lower()]
         except KeyError:
             raise FileNotFoundError(self.directory / name) from None
+
+    def velocity_path(self, step: int) -> Path:
+        """Archivo PIVlab del instante ``step``."""
+        return self._path(VELOCITY_PATTERN, step)
 
     def read(self, step: int) -> Frame:
         path = self._path(VELOCITY_PATTERN, step)
