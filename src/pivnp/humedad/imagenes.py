@@ -96,11 +96,15 @@ def _convolucion_vertical(entrada, nucleo, salida):
             salida[f, c] = total
 
 
-def desenfoque_gaussiano(imagen: np.ndarray, sigma: float) -> np.ndarray:
+def desenfoque_gaussiano(imagen: np.ndarray, sigma: float,
+                         redondear: bool = False) -> np.ndarray:
     """Filtro gaussiano equivalente a ``imgaussfilt(imagen, sigma)`` de MATLAB.
 
-    Si la imagen es de enteros, el resultado se redondea y se devuelve con el mismo tipo,
-    como hace MATLAB.
+    El resultado se devuelve en coma flotante. MATLAB lo redondeaba al tipo de la imagen,
+    es decir a niveles enteros de gris, y eso es delicado aquí: la banda entre el suelo seco
+    y el saturado es estrecha, así que un nivel de diferencia se convierte en un salto
+    grande de saturación. Con ``redondear=True`` se reproduce aquel comportamiento, para
+    comparar con análisis antiguos.
     """
     nucleo = nucleo_gaussiano(sigma)
     entrada = np.ascontiguousarray(imagen, dtype=np.float64)
@@ -109,8 +113,7 @@ def desenfoque_gaussiano(imagen: np.ndarray, sigma: float) -> np.ndarray:
     _convolucion_horizontal(entrada, nucleo, intermedio)
     _convolucion_vertical(intermedio, nucleo, salida)
 
-    if np.issubdtype(imagen.dtype, np.integer):
+    if redondear and np.issubdtype(imagen.dtype, np.integer):
         informacion = np.iinfo(imagen.dtype)
-        return np.clip(np.floor(salida + 0.5), informacion.min,
-                       informacion.max).astype(imagen.dtype)
+        return np.clip(np.floor(salida + 0.5), informacion.min, informacion.max)
     return salida

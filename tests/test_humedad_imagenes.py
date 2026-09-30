@@ -76,7 +76,7 @@ def test_sigma_invalido():
 def test_una_imagen_constante_no_cambia():
     """Comprueba a la vez la normalización del núcleo y el relleno por repetición."""
     imagen = np.full((30, 40), 173, dtype=np.uint8)
-    np.testing.assert_array_equal(desenfoque_gaussiano(imagen, 5.0), imagen)
+    np.testing.assert_allclose(desenfoque_gaussiano(imagen, 5.0), 173.0, atol=1e-9)
 
 
 def test_coincide_con_la_convolucion_directa():
@@ -112,10 +112,18 @@ def test_respuesta_a_un_impulso():
     np.testing.assert_allclose(filtrada, filtrada[::-1, :], atol=1e-12)
 
 
-def test_conserva_el_tipo_y_redondea():
+def test_devuelve_coma_flotante_sin_redondear():
+    """El redondeo a niveles enteros amplificaba el ruido, así que ya no se hace."""
     rng = np.random.default_rng(1)
     imagen = rng.integers(0, 256, size=(20, 20), dtype=np.uint8)
     filtrada = desenfoque_gaussiano(imagen, 2.0)
-    assert filtrada.dtype == np.uint8
-    exacta = desenfoque_gaussiano(imagen.astype(np.float64), 2.0)
-    np.testing.assert_array_equal(filtrada, np.clip(np.floor(exacta + 0.5), 0, 255))
+    assert filtrada.dtype == np.float64
+    assert np.any(filtrada != np.round(filtrada))
+
+
+def test_el_modo_antiguo_redondea():
+    rng = np.random.default_rng(1)
+    imagen = rng.integers(0, 256, size=(20, 20), dtype=np.uint8)
+    exacta = desenfoque_gaussiano(imagen, 2.0)
+    antigua = desenfoque_gaussiano(imagen, 2.0, redondear=True)
+    np.testing.assert_array_equal(antigua, np.clip(np.floor(exacta + 0.5), 0, 255))
