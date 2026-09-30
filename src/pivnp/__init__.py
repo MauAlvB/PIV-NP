@@ -1,4 +1,4 @@
-"""PIV-NP: partículas numéricas sobre campos de velocidad de PIVlab.
+"""PIV-NP: numerical particles driven by PIVlab velocity fields.
 
 Pinyol, N.M. & Alvarado, M. (2017). Novel PIV-based analysis for large displacement.
 Canadian Geotechnical Journal 54(7): 933-944.

@@ -1,7 +1,7 @@
-"""Estado de la simulación: arrays de partículas y de nodos.
+"""State of the simulation: particle and node arrays.
 
-Sustituye a los bloques ``COMMON /PARTICULAS/`` y ``COMMON /NODOS/`` del original.
-Se usan ``NamedTuple`` para que Numba pueda recibirlos directamente en los kernels.
+It replaces the ``COMMON /PARTICULAS/`` and ``COMMON /NODOS/`` blocks of the original.
+``NamedTuple`` is used so that Numba can take them straight into the kernels.
 """
 
 from __future__ import annotations
@@ -12,31 +12,31 @@ import numpy as np
 
 
 class Particles(NamedTuple):
-    """Variables por partícula numérica. ``n`` = número de partículas (NP)."""
+    """Per-particle variables. ``n`` = number of particles (NP)."""
 
     position: np.ndarray  # XP (n, 2)
-    initial_position: np.ndarray  # posición al empezar el análisis (malla GiD)
-    displacement: np.ndarray  # UP (n, 2): desplazamiento acumulado
-    step_displacement: np.ndarray  # UPO (n, 2): desplazamiento del paso
+    initial_position: np.ndarray  # position when the analysis started (the GiD mesh)
+    displacement: np.ndarray  # UP (n, 2): accumulated displacement
+    step_displacement: np.ndarray  # UPO (n, 2): displacement of this step
     position_increment: np.ndarray  # XPP (n, 2)
     velocity: np.ndarray  # VP (n, 2)
     acceleration: np.ndarray  # ACEP (n, 2)
-    strain: np.ndarray  # EPS (n, 4): xx, yy, xy (ingenieril), zz (siempre 0)
+    strain: np.ndarray  # EPS (n, 4): xx, yy, xy (engineering), zz (always 0)
     strain_increment: np.ndarray  # DEPS (n, 3)
-    eq_strain: np.ndarray  # EPSEQ: deformación de corte equivalente acumulada
+    eq_strain: np.ndarray  # EPSEQ: accumulated equivalent shear strain
     eq_strain_increment: np.ndarray  # EPSEQ2
     vol_strain: np.ndarray  # EVOLUMETRIC
     vol_strain_increment: np.ndarray  # EVOL_IN
-    mass: np.ndarray  # AMP (siempre 1)
+    mass: np.ndarray  # AMP (always 1)
     potential_energy: np.ndarray  # E_Potential
     kinetic_energy: np.ndarray  # E_Cinetic_x, E_Cinetic_y (n, 2)
     total_energy: np.ndarray  # E_Total
     moisture: np.ndarray  # SMOIST_NP
     saturation: np.ndarray  # SATURA_NP
-    nan_initial: np.ndarray  # NaN_P: 0 activa, 1 sin datos en el paso 1
-    nan_step: np.ndarray  # NaN_P2: sin datos en el paso actual (solo informativo)
-    missing_data: np.ndarray  # resultado "NaNs": datos que faltan alrededor
-    lost: np.ndarray  # IDONDE == -1 (tamaño max(n, nodos PIVlab))
+    nan_initial: np.ndarray  # NaN_P: 0 active, 1 without data on step 1
+    nan_step: np.ndarray  # NaN_P2: without data on the current step (informative only)
+    missing_data: np.ndarray  # the "NaNs" result: missing data around the particle
+    lost: np.ndarray  # IDONDE == -1 (size max(n, PIVlab nodes))
 
     @classmethod
     def zeros(cls, n: int, n_lost: int) -> Particles:
@@ -58,18 +58,18 @@ class Particles(NamedTuple):
 
 
 class Nodes(NamedTuple):
-    """Variables nodales.
+    """Nodal variables.
 
-    Los campos medidos (``velocity``, ``is_nan``...) se indexan con la numeración de los
-    nodos PIV-NP (= puntos PIVlab). Los campos de cálculo (``momentum``, ``mass``...) se
-    indexan con los nodos de la malla de partículas, que coincide con la anterior si
-    IVERSION = 1 y es la malla desplazada si IVERSION = 2.
+    The measured fields (``velocity``, ``is_nan``…) are indexed with the PIV-NP node
+    numbering (= the PIVlab points). The computation fields (``momentum``, ``mass``…) are
+    indexed with the nodes of the particle grid, which is the same one when IVERSION = 1 and
+    the staggered grid when IVERSION = 2.
     """
 
     velocity: np.ndarray  # VEL_X_NODO, VEL_Y_NODO (nn, 2)
     previous_velocity: np.ndarray  # VEL_X_NODO_V, VEL_Y_NODO_V (nn, 2)
-    is_nan: np.ndarray  # Node_NaN: PIVlab no midió velocidad en el nodo
-    filled: np.ndarray  # velocidad reconstruida por la corrección de contorno
+    is_nan: np.ndarray  # Node_NaN: PIVlab measured no velocity at the node
+    filled: np.ndarray  # velocity rebuilt by the boundary correction
     moisture_measured: np.ndarray  # SMOISTURE_N2
     saturation_measured: np.ndarray  # SATURATION_N2
     momentum: np.ndarray  # PV (nm, 2)

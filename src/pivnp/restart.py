@@ -1,14 +1,14 @@
-"""Archivo de reinicio ``<caso>.REC`` (antes subrutina ``RECOM`` y lectura en PIVLAB_DATA).
+"""Restart file ``<case>.REC`` (formerly the ``RECOM`` subroutine and the read in PIVLAB_DATA).
 
-Usa el formato Fortran *unformatted sequential* (cada registro va precedido y seguido de
-su longitud en bytes, entero de 4 bytes), así que es compatible con los ``.REC`` generados
-por el ejecutable original y viceversa.
+It uses the Fortran *unformatted sequential* format (every record is preceded and followed by
+its length in bytes, as a 4-byte integer), so it is compatible with the ``.REC`` files written
+by the original executable and the other way round.
 
-Registros del original: NP, IVERSION, XP(NP,2), UP(NP,2), EPS(NP,4), EPSEQ(NP), NaN_P(NP).
+Records of the original: NP, IVERSION, XP(NP,2), UP(NP,2), EPS(NP,4), EPSEQ(NP), NaN_P(NP).
 
-A continuación se añaden registros con el instante, el número de paso y el estado nodal,
-necesarios para que continuar un análisis dé exactamente el mismo resultado que no haberlo
-interrumpido. El Fortran original los ignora, porque solo lee los siete primeros.
+After those, records with the time, the step number and the nodal state are appended, which
+are what makes continuing an analysis give exactly the same result as never having stopped it.
+The original Fortran ignores them, because it only reads the first seven.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ EXTENSION_VERSION = 2
 
 @dataclass(frozen=True)
 class NodalState:
-    """Campos nodales que se arrastran de un paso al siguiente."""
+    """Nodal fields that carry over from one step to the next."""
 
     velocity: np.ndarray  # (n_measured, 2)
     is_nan: np.ndarray  # (n_measured,)
@@ -58,10 +58,10 @@ class RestartData:
     strain: np.ndarray  # (n, 4)
     eq_strain: np.ndarray  # (n,)
     nan_initial: np.ndarray  # (n,)
-    time: float = 0.0  # instante alcanzado
-    step: int = 0  # pasos ya calculados
+    time: float = 0.0  # time reached
+    step: int = 0  # steps already computed
     nodes: NodalState | None = None
-    initial_position: np.ndarray | None = None  # posición al empezar el análisis original
+    initial_position: np.ndarray | None = None  # position when the original analysis started
 
     @property
     def n_particles(self) -> int:
@@ -79,17 +79,17 @@ def _read_record(f: BinaryIO, dtype: str, optional: bool = False) -> np.ndarray 
     if len(head) < 4:
         if optional:
             return None
-        raise EOFError(f"{f.name}: faltan registros en el archivo de reinicio")
+        raise EOFError(f"{f.name}: records are missing from the restart file")
     size = int(np.frombuffer(head, _MARKER)[0])
     data = f.read(size)
     tail = int(np.frombuffer(f.read(4), _MARKER)[0])
     if tail != size or len(data) != size:
-        raise ValueError(f"{f.name}: registro Fortran corrupto")
+        raise ValueError(f"{f.name}: corrupt Fortran record")
     return np.frombuffer(data, dtype=dtype)
 
 
 def write_restart(path: Path, data: RestartData, extended: bool = True) -> None:
-    """Escribe el ``.REC``; con ``extended=False`` solo los registros del original."""
+    """Write the ``.REC``; with ``extended=False``, only the records of the original."""
     with open(path, "wb") as f:
         _write_record(f, np.array([data.n_particles], dtype="<i4"))
         _write_record(f, np.array([data.mesh_version], dtype="<i4"))
@@ -129,7 +129,7 @@ def read_restart(path: Path) -> RestartData:
         time, step, nodes, initial = 0.0, 0, None, None
         if header is not None:
             if header[0] != EXTENSION_VERSION:
-                raise ValueError(f"{path}: versión de reinicio {header[0]} desconocida")
+                raise ValueError(f"{path}: unknown restart version {header[0]}")
             n_measured, n_mesh, step = int(header[1]), int(header[2]), int(header[3])
             time = float(_read_record(f, "<f8")[0])
             nodes = NodalState(

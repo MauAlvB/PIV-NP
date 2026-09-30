@@ -1,9 +1,9 @@
-"""Formateo de números idéntico a los descriptores Fortran ``I<w>`` y ``E14.6``.
+"""Number formatting identical to the Fortran ``I<w>`` and ``E14.6`` descriptors.
 
-Escribir los resultados en texto es la parte más costosa del programa (cientos de MB).
-Aquí se formatean filas de ancho fijo directamente en un buffer de bytes con Numba y en
-paralelo. Los pocos valores cuyo redondeo a 6 cifras es ambiguo en coma flotante (casi
-empates) se reescriben con :func:`format_e`, que usa el redondeo exacto de Python.
+Writing the results as text is the most expensive part of the program (hundreds of MB).
+Here fixed-width rows are formatted straight into a byte buffer with Numba, in parallel. The
+few values whose rounding to 6 digits is ambiguous in floating point (near ties) are rewritten
+with :func:`format_e`, which uses Python's exact rounding.
 """
 
 from __future__ import annotations
@@ -16,12 +16,12 @@ from numba import njit, prange
 E_WIDTH = 14
 E_DIGITS = 6
 _SPACE, _MINUS, _PLUS, _DOT, _E, _ZERO = (ord(c) for c in " -+.E0")
-_POW10 = np.array([10.0**k for k in range(23)])  # potencias exactas en binario
+_POW10 = np.array([10.0**k for k in range(23)])  # powers that are exact in binary
 _AMBIGUITY = 1e-7
 
 
 def format_e(value: float, width: int = E_WIDTH, digits: int = E_DIGITS) -> str:
-    """Referencia exacta en Python de ``Ew.d`` (formato de gfortran)."""
+    """Exact Python reference for ``Ew.d`` (gfortran's format)."""
     if math.isnan(value):
         return "NaN".rjust(width)
     if math.isinf(value):
@@ -30,7 +30,7 @@ def format_e(value: float, width: int = E_WIDTH, digits: int = E_DIGITS) -> str:
     if value == 0:
         mantissa, exponent = "0" * digits, 0
     else:
-        text = f"{abs(value):.{digits - 1}e}"  # d.ddddde±xx, redondeo correcto
+        text = f"{abs(value):.{digits - 1}e}"  # d.ddddde±xx, correctly rounded
         mantissa = text[0] + text[2 : digits + 1]
         exponent = int(text[digits + 2 :]) + 1
     exp_text = f"E{exponent:+03d}" if abs(exponent) <= 99 else f"{exponent:+04d}"
@@ -39,7 +39,7 @@ def format_e(value: float, width: int = E_WIDTH, digits: int = E_DIGITS) -> str:
 
 @njit(cache=True, nogil=True, inline="always")
 def _put_int(out, end, value):
-    """Escribe ``value`` alineado a la derecha terminando en ``end`` (exclusivo)."""
+    """Write ``value`` right-aligned, ending at ``end`` (exclusive)."""
     negative = value < 0
     v = -value if negative else value
     pos = end - 1
@@ -55,9 +55,9 @@ def _put_int(out, end, value):
 
 @njit(cache=True, nogil=True)
 def _put_e14_6(out, start, value):
-    """Escribe ``value`` con formato E14.6 en ``out[start:start+14]``.
+    """Write ``value`` in E14.6 format into ``out[start:start+14]``.
 
-    Devuelve True si el redondeo es ambiguo y hay que corregirlo con :func:`format_e`.
+    Returns True when the rounding is ambiguous and has to be fixed with :func:`format_e`.
     """
     for k in range(E_WIDTH):
         out[start + k] = _SPACE
@@ -74,16 +74,16 @@ def _put_e14_6(out, start, value):
             k = E_DIGITS - exponent
             if k > 22 or k < -22:
                 return True
-            s = a * _POW10[k] if k >= 0 else a / _POW10[-k]  # una sola operación redondeada
+            s = a * _POW10[k] if k >= 0 else a / _POW10[-k]  # a single rounded operation
             whole = math.floor(s)
             frac = s - whole
             if abs(frac - 0.5) < _AMBIGUITY:
                 return True
             digits = int(whole) + (1 if frac > 0.5 else 0)
-            if digits >= 1000000:  # el redondeo sube de década: 0.999999x -> 0.100000
+            if digits >= 1000000:  # rounding moves up a decade: 0.999999x -> 0.100000
                 digits = 100000
                 exponent += 1
-            elif digits < 100000:  # log10 se pasó por uno justo en una potencia de 10
+            elif digits < 100000:  # log10 was off by one right at a power of 10
                 exponent -= 1
                 continue
             found = True
@@ -97,7 +97,7 @@ def _put_e14_6(out, start, value):
     out[pos + 1] = _ZERO
     out[pos + 2] = _DOT
     _put_int(out, pos + 3 + E_DIGITS, digits)
-    for k in range(pos + 3, pos + 3 + E_DIGITS):  # ceros a la izquierda de la mantisa
+    for k in range(pos + 3, pos + 3 + E_DIGITS):  # leading zeros of the mantissa
         if out[k] == _SPACE:
             out[k] = _ZERO
     out[pos + 9] = _E
@@ -139,7 +139,7 @@ def _format_int_rows(values, width, eol, out):
 
 def format_float_rows(ids: np.ndarray, values: np.ndarray, eol: bytes = b"\n",
                       id_width: int = 14) -> bytes:
-    """Filas ``(I<id_width>, k*E14.6)``: un identificador y ``k`` reales por fila."""
+    """Rows ``(I<id_width>, k*E14.6)``: one identifier and ``k`` reals per row."""
     values = np.ascontiguousarray(values, dtype=np.float64)
     if values.ndim == 1:
         values = values[:, None]
@@ -156,7 +156,7 @@ def format_float_rows(ids: np.ndarray, values: np.ndarray, eol: bytes = b"\n",
 
 
 def format_int_rows(values: np.ndarray, width: int, eol: bytes = b"\n") -> bytes:
-    """Filas de enteros alineados a la derecha en campos de ``width`` caracteres."""
+    """Rows of integers, right-aligned in fields of ``width`` characters."""
     values = np.ascontiguousarray(values, dtype=np.int64)
     n, k = values.shape
     out = np.empty(n * (width * k + len(eol)), dtype=np.uint8)

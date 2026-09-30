@@ -1,10 +1,10 @@
-"""Comparación de archivos de resultados GiD (``.POST.RES`` / ``.POST.MSH``).
+"""Comparison of GiD result files (``.POST.RES`` / ``.POST.MSH``).
 
-Uso: ``python -m pivnp.compare referencia.POST.RES nuevo.POST.RES``
+Usage: ``python -m pivnp.compare reference.POST.RES new.POST.RES``
 
-Las líneas se comparan primero como texto. Si difieren, se comparan token a token y los
-números se aceptan si difieren como mucho en ``ulps`` unidades de la sexta cifra (el
-formato E14.6 tiene 6 cifras significativas).
+Lines are first compared as text. If they differ, they are compared token by token, and
+numbers are accepted when they differ by at most ``ulps`` units of the sixth digit (the
+E14.6 format carries 6 significant digits).
 """
 
 from __future__ import annotations
@@ -30,13 +30,13 @@ class ComparisonReport:
         return self.mismatched_lines == 0
 
     def summary(self) -> str:
-        return (f"{self.lines} líneas: {self.identical_lines} idénticas, "
-                f"{self.tolerated_lines} con diferencias de redondeo, "
-                f"{self.mismatched_lines} distintas (máx. dif. abs. {self.max_abs_diff:.3e})")
+        return (f"{self.lines} lines: {self.identical_lines} identical, "
+                f"{self.tolerated_lines} with rounding differences, "
+                f"{self.mismatched_lines} different (max abs diff {self.max_abs_diff:.3e})")
 
 
 def _last_digit_unit(token: str) -> float:
-    """Valor de una unidad en la última cifra de un número en formato E (0.dddddd E±xx)."""
+    """Value of one unit in the last digit of a number in E format (0.dddddd E±xx)."""
     mantissa, _, exponent = token.upper().partition("E")
     decimals = len(mantissa.split(".")[1]) if "." in mantissa else 0
     return 10.0 ** (int(exponent or 0) - decimals)
@@ -83,12 +83,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("reference", type=Path)
     parser.add_argument("candidate", type=Path)
     parser.add_argument("--ulps", type=int, default=1,
-                        help="tolerancia en unidades de la última cifra (por defecto 1)")
+                        help="tolerance in units of the last digit (1 by default)")
     args = parser.parse_args(argv)
     report = compare_files(args.reference, args.candidate, args.ulps)
     print(report.summary())
     for number, a, b in report.examples:
-        print(f"  línea {number}:\n    ref: {a}\n    new: {b}")
+        print(f"  line {number}:\n    ref: {a}\n    new: {b}")
     return 0 if report.equivalent else 1
 
 
