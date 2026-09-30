@@ -43,48 +43,48 @@ def test_values_may_span_lines_commas_and_fortran_exponents():
     assert cfg.total_steps == 149  # REAL truncado, como el DO del original
 
 
-@pytest.mark.parametrize(("texto", "mensaje"), [
-    # tres valores en el bloque 3 y sin bloque 4, el formato más antiguo
-    ("1.\t11\t1", "bloque 3 tiene 3 valores"),
-    # ocho valores, con la densidad y la porosidad metidas en el bloque 3
-    ("1\t149\t1\t1\t1212\t0.444\t1\t0", "bloque 3 tiene 8 valores"),
+@pytest.mark.parametrize(("text", "message"), [
+    # three values in block 3 and no block 4, the oldest format
+    ("1.\t11\t1", "block 3 carries 3 values"),
+    # eight values, with the density and the porosity tucked into block 3
+    ("1\t149\t1\t1\t1212\t0.444\t1\t0", "block 3 carries 8 values"),
 ])
-def test_old_par_formats_are_rejected_with_instructions(texto, mensaje):
-    """Hay un solo formato de entrada; los anteriores se convierten una vez y ya está."""
-    antiguo = "\n".join(PAR.splitlines()[:4] + [texto]) + "\n"
-    with pytest.raises(ConfigError, match=mensaje):
-        parse_par(antiguo)
+def test_old_par_formats_are_rejected_with_instructions(text, message):
+    """There is a single input format; the earlier ones are converted once and that is it."""
+    old = "\n".join(PAR.splitlines()[:4] + [text]) + "\n"
+    with pytest.raises(ConfigError, match=message):
+        parse_par(old)
     with pytest.raises(ConfigError, match="convert-par"):
-        parse_par(antiguo)
+        parse_par(old)
 
 
 def test_a_header_naming_the_fields_in_another_order_is_rejected():
-    """Nueve valores pero con la cabecera de otro dialecto: no se adivina, se avisa."""
-    lineas = PAR.splitlines()
-    texto = "\n".join(lineas[:3] + [
+    """Nine values but with the header of another dialect: no guessing, it warns."""
+    lines = PAR.splitlines()
+    text = "\n".join(lines[:3] + [
         "BLOQUE 3: del_t Total_steps Salto_de_impresión Humedad S_density porosity "
         "Version PTV IREC",
-        "0.04 20 1 1 1385.46 0.506 1 0 1"] + lineas[5:]) + "\n"
-    with pytest.raises(ConfigError, match="otro orden"):
-        parse_par(texto)
+        "0.04 20 1 1 1385.46 0.506 1 0 1"] + lines[5:]) + "\n"
+    with pytest.raises(ConfigError, match="another order"):
+        parse_par(text)
 
 
 def test_the_fourth_block_is_required():
-    texto = "\n".join(PAR.splitlines()[:5]) + "\n"
-    with pytest.raises(ConfigError, match="bloque 4"):
-        parse_par(texto)
+    text = "\n".join(PAR.splitlines()[:5]) + "\n"
+    with pytest.raises(ConfigError, match="block 4"):
+        parse_par(text)
 
 
 def test_moister_selects_where_the_moisture_comes_from():
-    """0 sin humedad, 1 de los Moist_<n>.TXT, 2 calculada desde las imágenes."""
-    def con_moister(valor):
-        return parse_par(PAR.replace("0.8\t149\t1\t0\t1", f"0.8\t149\t1\t{valor}\t1"))
+    """0 no moisture, 1 from the Moist_<n>.TXT, 2 computed from the images."""
+    def with_moister(value):
+        return parse_par(PAR.replace("0.8\t149\t1\t0\t1", f"0.8\t149\t1\t{value}\t1"))
 
-    assert not con_moister(0).moisture and not con_moister(0).moisture_from_images
-    assert con_moister(1).moisture and not con_moister(1).moisture_from_images
-    assert con_moister(2).moisture and con_moister(2).moisture_from_images
+    assert not with_moister(0).moisture and not with_moister(0).moisture_from_images
+    assert with_moister(1).moisture and not with_moister(1).moisture_from_images
+    assert with_moister(2).moisture and with_moister(2).moisture_from_images
     with pytest.raises(ConfigError, match="MOISTER"):
-        con_moister(3)
+        with_moister(3)
 
 
 def test_particle_count():
@@ -93,8 +93,8 @@ def test_particle_count():
 
 
 @pytest.mark.parametrize(("old", "new", "message"), [
-    ("2006  2100", "2005  2100", "no es múltiplo"),
-    ("2006  2100", "2006  2000", "no coincide"),
+    ("2006  2100", "2005  2100", "not a multiple"),
+    ("2006  2100", "2006  2000", "does not match"),
     ("0.8\t149\t1\t0\t1", "0.8\t149\t1\t0\t3", "IVERSION"),
     ("0.8\t149\t1", "0.8\t149\t0", "IMPPAS"),
     ("0\t0\t0\n", "0\t2\t0\n", "IREC"),
@@ -106,7 +106,7 @@ def test_invalid_inputs_are_rejected(old, new, message):
 
 
 def test_truncated_file():
-    with pytest.raises(ConfigError, match="fin de archivo"):
+    with pytest.raises(ConfigError, match="end of file"):
         parse_par("\n".join(PAR.splitlines()[:3]))
 
 

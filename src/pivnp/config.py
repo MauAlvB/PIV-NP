@@ -1,30 +1,29 @@
-"""Lectura y validación de los datos del caso (``PIV-NP.TXT`` y ``<caso>.PAR``).
+"""Reading and validation of the case input (``PIV-NP.TXT`` and ``<case>.PAR``).
 
-Hay un solo formato de ``.PAR``. La lectura es *list-directed* de Fortran: los valores se
-separan por espacios, tabuladores o comas, y el programa original lo lee igual::
+There is a single ``.PAR`` format. Reading is Fortran *list-directed*: values are separated
+by spaces, tabs or commas, and the original program reads it the same way::
 
-    <título del caso>
-    BLOQUE 2: N_cel N_nod N_part_celda N_fil Ancho    Alto
-              2006  2100  3            34    0.212115 0.212115
-    BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
-              0.8   149         1         0       1       1      0       0   0
-    BLOQUE 4: s_density porosity
-              2650.0    0.4
+    <case title>
+    BLOCK 2: n_cells n_nodes n_part_cell n_rows width    height
+             2006    2100    3           34     0.212115 0.212115
+    BLOCK 3: dt  total_steps print_every moisture mesh_version pivlab contour restart track
+             0.8 149         1           0        1            1      0       0       0
+    BLOCK 4: s_density porosity
+             2650.0    0.4
 
-Los nombres van encima de sus valores, así que el archivo se explica solo. El bloque 3 es,
-por orden: el tiempo entre imágenes, el número de archivos PIVlab, cada cuántos pasos se
-imprimen resultados, de dónde sale la humedad, la versión de la malla, el formato de los
-archivos PIVlab, la corrección de contorno, si se continúa un análisis y las partículas de
-seguimiento.
+The names sit above their values, so the file explains itself. Block 3 is, in order: the time
+between images, the number of PIVlab files, how often results are printed, where the moisture
+comes from, the grid version, the format of the PIVlab files, the boundary correction, whether
+an analysis is continued, and the tracking particles.
 
-* MOISTER: 0 sin humedad, 1 leerla de los ``Moist_<n>.TXT``, 2 calcularla desde las imágenes
-  del ensayo con la configuración de ``<caso>.HUM``.
-* ITR (partículas de seguimiento PTV) debe ser 0: esa opción ya no está soportada.
+* MOISTURE: 0 no moisture, 1 read it from the ``Moist_<n>.TXT``, 2 compute it from the test
+  images with the settings of ``<case>.HUM``.
+* TRACK (PTV tracking particles) must be 0: that option is no longer supported.
 
-El bloque 3 cambió de orden varias veces entre versiones del programa, y llegó a haber
-dialectos con los mismos valores colocados de otra manera. Aquí no se leen: un ``.PAR`` de
-una versión anterior se pasa una sola vez al formato de arriba con ``pivnp <directorio>
---convert-par`` (ver :mod:`pivnp.par_migrate`), que guarda el original al lado.
+Block 3 changed order several times between versions of the program, and there were even
+dialects with the same values arranged differently. They are not read here: a ``.PAR`` from
+an earlier version is moved once to the format above with ``pivnp <directory> --convert-par``
+(see :mod:`pivnp.par_migrate`), which keeps the original next to it.
 """
 
 from __future__ import annotations
@@ -44,79 +43,79 @@ _TOKEN_SEPARATORS = re.compile(r"[,\s]+")
 
 
 class ConfigError(ValueError):
-    """Datos de entrada ausentes o incoherentes."""
+    """Input data that is missing or inconsistent."""
 
 
-#: Máximo de partículas por lado de celda: con más, el original las colocaba todas en el
-#: centro de la celda.
+#: Maximum particles per cell side: with more, the original placed them all at the centre of
+#: the cell.
 MAX_PARTICLES_PER_SIDE = 6
 
 
 @dataclass(frozen=True)
 class CaseConfig:
-    """Parámetros del análisis. Entre paréntesis, el nombre de la variable en el Fortran."""
+    """Parameters of the analysis. In brackets, the name of the variable in the Fortran."""
 
     title: str
-    n_cells: int  # NC: celdas de la malla PIVlab
-    n_nodes: int  # NN: nodos (puntos) PIVlab
-    particles_per_side: int  # NPC: partículas por lado de celda (NPC² por celda)
-    n_rows: int  # NFIL: filas de celdas
+    n_cells: int  # NC: cells of the PIVlab grid
+    n_nodes: int  # NN: PIVlab nodes (points)
+    particles_per_side: int  # NPC: particles per cell side (NPC² per cell)
+    n_rows: int  # NFIL: rows of cells
     cell_width: float  # AXC [m]
     cell_height: float  # AYC [m]
-    dt: float  # DT: tiempo entre imágenes
-    total_steps: int  # TOTAL_STEPS: número de archivos PIVlab
-    print_every: int  # IMPPAS: pasos entre resultados impresos
-    moisture: bool  # MOISTER >= 1: el análisis lleva humedad y saturación
-    #: MOISTER = 2: la humedad se calcula desde las imágenes del ensayo, con la
-    #: configuración de ``<caso>.HUM``, en vez de leerse de los ``Moist_<n>.TXT``.
+    dt: float  # DT: time between images
+    total_steps: int  # TOTAL_STEPS: number of PIVlab files
+    print_every: int  # IMPPAS: steps between printed results
+    moisture: bool  # MOISTER >= 1: the analysis carries moisture and saturation
+    #: MOISTER = 2: the moisture is computed from the test images, with the settings of
+    #: ``<case>.HUM``, instead of being read from the ``Moist_<n>.TXT``.
     moisture_from_images: bool
-    mesh_version: int  # IVERSION: 1 = malla PIV-NP = malla PIVlab; 2 = malla desplazada
-    pivlab_format: int  # IPIVLAB: 1 = 4 columnas (PIVlab antiguo); otro = 5 columnas
-    contour: int  # ICONTOUR: corrección de velocidades en el contorno (0 = no)
-    restart: bool  # IREC: continuar desde <caso>.REC
-    soil_density: float  # S_DENSITY [kg/m3] (no se usa en el cálculo)
-    porosity: float  # POROSITY (no se usa en el cálculo)
+    mesh_version: int  # IVERSION: 1 = PIV-NP grid = PIVlab grid; 2 = staggered grid
+    pivlab_format: int  # IPIVLAB: 1 = 4 columns (older PIVlab); anything else = 5 columns
+    contour: int  # ICONTOUR: velocity correction at the boundary (0 = none)
+    restart: bool  # IREC: continue from <case>.REC
+    soil_density: float  # S_DENSITY [kg/m3] (not used in the computation)
+    porosity: float  # POROSITY (not used in the computation)
 
     @property
     def n_cols(self) -> int:
-        """NCH: celdas por fila."""
+        """NCH: cells per row."""
         return self.n_cells // self.n_rows
 
     @property
     def n_particles(self) -> int:
-        """NP: partículas generadas en la malla."""
+        """NP: particles generated on the grid."""
         cells = self.n_cells if self.mesh_version == 1 else (self.n_cols + 1) * (self.n_rows + 1)
         return cells * self.particles_per_side**2
 
     def validate(self) -> None:
-        """Rechaza combinaciones con las que el original produce resultados sin sentido."""
+        """Reject combinations for which the original produces meaningless results."""
         errors = []
         if self.n_rows < 1 or self.n_cells < 1:
-            errors.append("NC y NFIL deben ser positivos")
+            errors.append("NC and NFIL must be positive")
         elif self.n_cells % self.n_rows:
-            errors.append(f"NC={self.n_cells} no es múltiplo de NFIL={self.n_rows}")
+            errors.append(f"NC={self.n_cells} is not a multiple of NFIL={self.n_rows}")
         elif self.n_nodes != (self.n_cols + 1) * (self.n_rows + 1):
             errors.append(
-                f"NN={self.n_nodes} no coincide con (NC/NFIL+1)*(NFIL+1)="
+                f"NN={self.n_nodes} does not match (NC/NFIL+1)*(NFIL+1)="
                 f"{(self.n_cols + 1) * (self.n_rows + 1)}"
             )
         if not 1 <= self.particles_per_side <= MAX_PARTICLES_PER_SIDE:
-            errors.append(f"NPC={self.particles_per_side} debe estar entre 1 y "
+            errors.append(f"NPC={self.particles_per_side} must be between 1 and "
                           f"{MAX_PARTICLES_PER_SIDE}")
         if self.cell_width <= 0 or self.cell_height <= 0:
-            errors.append("AXC y AYC deben ser positivos")
+            errors.append("AXC and AYC must be positive")
         if self.mesh_version not in (1, 2):
-            errors.append(f"IVERSION={self.mesh_version} debe ser 1 o 2")
+            errors.append(f"IVERSION={self.mesh_version} must be 1 or 2")
         if self.print_every < 1:
-            errors.append("IMPPAS debe ser >= 1")
+            errors.append("IMPPAS must be >= 1")
         if self.contour not in (0, 1, 2, 3):
-            errors.append(f"ICONTOUR={self.contour} debe estar entre 0 y 3")
+            errors.append(f"ICONTOUR={self.contour} must be between 0 and 3")
         if errors:
             raise ConfigError("; ".join(errors))
 
 
 class _ListDirectedReader:
-    """Imita las sentencias ``READ(u, 2000)`` (A80) y ``READ(u, *)`` de Fortran."""
+    """Mimics the Fortran ``READ(u, 2000)`` (A80) and ``READ(u, *)`` statements."""
 
     def __init__(self, lines: list[str], source: str) -> None:
         self._lines = lines
@@ -125,28 +124,28 @@ class _ListDirectedReader:
 
     def _next_line(self) -> str:
         if self._pos >= len(self._lines):
-            raise ConfigError(f"{self.source}: fin de archivo inesperado (línea {self._pos + 1})")
+            raise ConfigError(f"{self.source}: unexpected end of file (line {self._pos + 1})")
         line = self._lines[self._pos]
         self._pos += 1
         return line
 
     def text(self) -> str:
-        """Una línea de texto, truncada a 80 columnas como el formato A80 del original."""
+        """One line of text, truncated to 80 columns like the A80 format of the original."""
         return self._next_line()[:80].rstrip()
 
     def comment(self) -> str:
-        """Una línea de comentario, entera: aquí el original no lee nada, solo salta."""
+        """One whole comment line: the original reads nothing here, it just skips."""
         return self._next_line().rstrip()
 
     def values(self, count: int) -> list[str]:
-        """Lee ``count`` valores; el resto de la última línea leída se descarta."""
+        """Read ``count`` values; the rest of the last line read is discarded."""
         tokens: list[str] = []
         while len(tokens) < count:
             tokens.extend(t for t in _TOKEN_SEPARATORS.split(self._next_line().strip()) if t)
         return tokens[:count]
 
     def line_values(self) -> list[str]:
-        """Todos los valores de la línea siguiente."""
+        """All the values of the next line."""
         return [t for t in _TOKEN_SEPARATORS.split(self._next_line().strip()) if t]
 
     def at_end(self) -> bool:
@@ -159,18 +158,20 @@ def _to_int(token: str, name: str) -> int:
     try:
         return int(token)
     except ValueError:
-        raise ConfigError(f"{name}: se esperaba un entero y se leyó {token!r}") from None
+        raise ConfigError(f"{name}: expected an integer and read {token!r}") from None
 
 
 def _to_float(token: str, name: str) -> float:
     try:
         return float(token.replace("D", "E").replace("d", "e"))
     except ValueError:
-        raise ConfigError(f"{name}: se esperaba un número y se leyó {token!r}") from None
+        raise ConfigError(f"{name}: expected a number and read {token!r}") from None
 
 
-#: Nombre de campo que corresponde a cada palabra de la línea de comentario del bloque 3.
-#: Se busca como subcadena, sin acentos y en minúsculas, en el orden de esta lista.
+#: Field name matching every word of the comment line of block 3. It is looked up as a
+#: substring, without accents and in lower case, in the order of this list. Both the English
+#: names of the single format and the Spanish ones of the earlier versions are recognized,
+#: so that the converter can read any of them.
 _BLOCK3_NAMES: tuple[tuple[str, str], ...] = (
     ("del_t", "DT"), ("delt", "DT"), ("dt", "DT"),
     ("total", "TOTAL_STEPS"), ("steps", "TOTAL_STEPS"), ("pasos", "TOTAL_STEPS"),
@@ -181,11 +182,11 @@ _BLOCK3_NAMES: tuple[tuple[str, str], ...] = (
     ("pivlab", "IPIVLAB"),
     ("pivnp", "IVERSION"), ("version", "IVERSION"),
     ("contour", "ICONTOUR"), ("contorno", "ICONTOUR"),
-    ("rec", "IREC"),
+    ("restart", "IREC"), ("rec", "IREC"),
     ("ptv", "ITR"), ("ptr", "ITR"), ("track", "ITR"), ("segui", "ITR"),
 )
 
-#: Valor por defecto de lo que un ``.PAR`` puede no traer.
+#: Default value of what a ``.PAR`` may not carry.
 _BLOCK3_DEFAULTS = {"MOISTER": "0", "IVERSION": "1", "IPIVLAB": "1", "ICONTOUR": "0",
                     "IREC": "0", "ITR": "0"}
 
@@ -198,82 +199,82 @@ def _strip_accents(text: str) -> str:
 
 
 def names_in_header(header: str) -> list[str] | None:
-    """Campos que nombra la línea de comentario del bloque 3, o ``None`` si no se entiende.
+    """Fields named by the comment line of block 3, or ``None`` when it is not understood.
 
-    Cada ``.PAR`` documenta su propio orden en esa línea (``del_t total_steps
-    salto_impresion v.pivnp v.pivlab moister REC PTR``), que es la única forma fiable de
-    saberlo: hay dialectos con los mismos ocho valores en distinto orden.
+    Every ``.PAR`` documents its own order on that line (``del_t total_steps salto_impresion
+    v.pivnp v.pivlab moister REC PTR``), which is the only reliable way to know it: there are
+    dialects carrying the same eight values in a different order.
     """
-    texto = _PARENTHESES.sub(" ", header)
-    _, _, despues = texto.partition(":")  # quita el "BLOQUE 3:" de delante
-    palabras = _strip_accents(despues or texto).lower().split()
-    if not palabras:
+    text = _PARENTHESES.sub(" ", header)
+    _, _, after = text.partition(":")  # drops the leading "BLOCK 3:"
+    words = _strip_accents(after or text).lower().split()
+    if not words:
         return None
 
-    campos: list[str] = []
-    for palabra in palabras:
-        for clave, campo in _BLOCK3_NAMES:
-            if clave in palabra:
-                if campo in campos:  # un campo repetido delata que no es una lista de nombres
+    fields: list[str] = []
+    for word in words:
+        for key, field_name in _BLOCK3_NAMES:
+            if key in word:
+                if field_name in fields:  # a repeated field means this is not a name list
                     return None
-                campos.append(campo)
+                fields.append(field_name)
                 break
         else:
-            return None  # una palabra que no se reconoce invalida toda la línea
-    return campos
+            return None  # one unrecognized word invalidates the whole line
+    return fields
 
 
-#: Orden de los valores del bloque 3 en el formato único.
+#: Order of the values of block 3 in the single format.
 ANALYSIS_ORDER = ("DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "IVERSION", "IPIVLAB", "ICONTOUR",
                   "IREC", "ITR")
 
-_COMO_CONVERTIR = ("Si viene de una versión anterior del programa, pásalo al formato único "
-                   "con:  pivnp <directorio> --convert-par")
+_HOW_TO_CONVERT = ("If it comes from an earlier version of the program, move it to the single "
+                   "format with:  pivnp <directory> --convert-par")
 
 
 def _analysis_block(reader: _ListDirectedReader, header: str) -> dict[str, str]:
-    """Bloque 3 del formato único: nueve valores en el orden de :data:`ANALYSIS_ORDER`."""
+    """Block 3 of the single format: nine values in the order of :data:`ANALYSIS_ORDER`."""
     values = reader.line_values()
     if len(values) != len(ANALYSIS_ORDER):
         raise ConfigError(
-            f"{reader.source}: el bloque 3 tiene {len(values)} valores y el formato único "
-            f"tiene {len(ANALYSIS_ORDER)} ({' '.join(ANALYSIS_ORDER)}). {_COMO_CONVERTIR}")
-    campos = names_in_header(header)
-    if campos is not None and tuple(campos) != ANALYSIS_ORDER:
+            f"{reader.source}: block 3 carries {len(values)} values and the single format has "
+            f"{len(ANALYSIS_ORDER)} ({' '.join(ANALYSIS_ORDER)}). {_HOW_TO_CONVERT}")
+    fields = names_in_header(header)
+    if fields is not None and tuple(fields) != ANALYSIS_ORDER:
         raise ConfigError(
-            f"{reader.source}: la línea de comentario del bloque 3 nombra los campos en otro "
-            f"orden ({' '.join(campos)}). {_COMO_CONVERTIR}")
+            f"{reader.source}: the comment line of block 3 names the fields in another order "
+            f"({' '.join(fields)}). {_HOW_TO_CONVERT}")
     return dict(zip(ANALYSIS_ORDER, values, strict=True))
 
 
 @dataclass(frozen=True)
 class RawPar:
-    """Los valores de un ``.PAR``, tal cual vienen, ya identificados por su nombre.
+    """The values of a ``.PAR``, as they come, already identified by name.
 
-    Guarda las cadenas y no los números, de modo que convertir un archivo al formato único
-    sea reordenar lo que hay, sin volver a formatear ni redondear nada.
+    It keeps the strings and not the numbers, so that converting a file to the single format
+    is a matter of reordering what is there, without reformatting or rounding anything.
     """
 
     title: str
     geometry: list[str]  # NC NN NPC NFIL AXC AYC
-    analysis: dict[str, str]  # lo que traiga el bloque 3, por nombre
+    analysis: dict[str, str]  # whatever block 3 carries, by name
     density: str
     porosity: str
-    #: El ``.PAR`` está en el formato único actual. Solo el conversor lee los anteriores.
+    #: The ``.PAR`` is in the current single format. Only the converter reads the earlier ones.
     current_dialect: bool = True
 
     def value(self, name: str) -> str:
-        """Valor del bloque 3, o el que se asume cuando el archivo no lo trae."""
+        """Value from block 3, or the one assumed when the file does not carry it."""
         if name in self.analysis:
             return self.analysis[name]
         return _BLOCK3_DEFAULTS[name]
 
 
 def read_par_blocks(text: str, source: str = "<PAR>") -> RawPar:
-    """Lee un ``.PAR`` en el formato único y devuelve sus valores por nombre.
+    """Read a ``.PAR`` in the single format and return its values by name.
 
-    Los ``.PAR`` de versiones anteriores no se leen aquí: se convierten una vez con
-    ``pivnp <directorio> --convert-par`` y a partir de ahí hay un solo formato de entrada.
+    ``.PAR`` files from earlier versions are not read here: they are converted once with
+    ``pivnp <directory> --convert-par``, and from then on there is a single input format.
     """
     reader = _ListDirectedReader(text.splitlines(), source)
     title = reader.text()
@@ -281,48 +282,48 @@ def read_par_blocks(text: str, source: str = "<PAR>") -> RawPar:
     geometry = reader.values(6)
     analysis = _analysis_block(reader, reader.comment())
     if reader.at_end():
-        raise ConfigError(f"{source}: falta el bloque 4, con la densidad del suelo y la "
-                          f"porosidad. {_COMO_CONVERTIR}")
+        raise ConfigError(f"{source}: block 4 is missing, with the soil density and the "
+                          f"porosity. {_HOW_TO_CONVERT}")
     reader.comment()
     density, porosity = reader.values(2)
     return RawPar(title, geometry, analysis, density, porosity)
 
 
 def parse_par(text: str, source: str = "<PAR>") -> CaseConfig:
-    """Interpreta el contenido de un archivo ``.PAR`` (formato actual o anterior)."""
+    """Interpret the contents of a ``.PAR`` file."""
     return config_from_blocks(read_par_blocks(text, source), source)
 
 
-def config_from_blocks(crudo: RawPar, source: str = "<PAR>") -> CaseConfig:
-    """Valida los valores leídos y los convierte en la configuración del caso."""
-    nc, nn, npc, nfil, axc, ayc = crudo.geometry
-    dt, steps, imppas = (crudo.value("DT"), crudo.value("TOTAL_STEPS"), crudo.value("IMPPAS"))
-    moister, iversion = crudo.value("MOISTER"), crudo.value("IVERSION")
-    ipivlab, icontour = crudo.value("IPIVLAB"), crudo.value("ICONTOUR")
-    irec, itr = crudo.value("IREC"), crudo.value("ITR")
-    title, density, porosity = crudo.title, crudo.density, crudo.porosity
-    dialecto_actual = crudo.current_dialect
+def config_from_blocks(raw: RawPar, source: str = "<PAR>") -> CaseConfig:
+    """Validate the values read and turn them into the configuration of the case."""
+    nc, nn, npc, nfil, axc, ayc = raw.geometry
+    dt, steps, imppas = (raw.value("DT"), raw.value("TOTAL_STEPS"), raw.value("IMPPAS"))
+    moister, iversion = raw.value("MOISTER"), raw.value("IVERSION")
+    ipivlab, icontour = raw.value("IPIVLAB"), raw.value("ICONTOUR")
+    irec, itr = raw.value("IREC"), raw.value("ITR")
+    title, density, porosity = raw.title, raw.density, raw.porosity
+    current_dialect = raw.current_dialect
 
     if _to_int(itr, "ITR") != 0:
         raise ConfigError(
-            "ITR: las partículas de seguimiento PTV ya no están soportadas. Usa ITR=0 y "
-            "quita el bloque 5 del .PAR"
+            "ITR: PTV tracking particles are no longer supported. Use ITR=0 and drop block 5 "
+            "of the .PAR"
         )
 
     irec_value = _to_int(irec, "IREC")
     if irec_value not in (0, 1):
-        raise ConfigError(f"IREC={irec_value} debe ser 0 o 1")
+        raise ConfigError(f"IREC={irec_value} must be 0 or 1")
 
     moister_value = _to_int(moister, "MOISTER")
-    if not dialecto_actual and moister_value > 1:
-        # En las versiones anteriores cualquier valor distinto de 0 activaba la lectura de
-        # los archivos de humedad; el 2 de "calcular desde las imágenes" es nuevo.
-        log.info("%s: MOISTER=%d en un .PAR de una versión anterior; se entiende como 1, "
-                 "leer los Moist_<n>.TXT", source, moister_value)
+    if not current_dialect and moister_value > 1:
+        # In the earlier versions any value other than 0 turned on reading the moisture
+        # files; the 2 meaning "compute it from the images" is new.
+        log.info("%s: MOISTER=%d in a .PAR from an earlier version; it is taken as 1, read "
+                 "the Moist_<n>.TXT", source, moister_value)
         moister_value = 1
     if moister_value not in (0, 1, 2):
-        raise ConfigError(f"MOISTER={moister_value} debe ser 0 (sin humedad), 1 (leerla de "
-                          "los Moist_<n>.TXT) o 2 (calcularla desde las imágenes)")
+        raise ConfigError(f"MOISTER={moister_value} must be 0 (no moisture), 1 (read it from "
+                          "the Moist_<n>.TXT) or 2 (compute it from the images)")
 
     config = CaseConfig(
         title=title,
@@ -350,7 +351,7 @@ def config_from_blocks(crudo: RawPar, source: str = "<PAR>") -> CaseConfig:
 
 
 def read_case_name(case_dir: Path) -> str:
-    """Lee el nombre del caso desde ``PIV-NP.TXT`` (primer valor de la primera línea)."""
+    """Read the case name from ``PIV-NP.TXT`` (first value of the first line)."""
     path = find_file(case_dir, CASE_INDEX_FILE)
     first_line = path.read_text(encoding="latin-1").strip().splitlines()[0].strip()
     if first_line[:1] in ("'", '"'):
@@ -359,7 +360,7 @@ def read_case_name(case_dir: Path) -> str:
 
 
 def load_case(case_dir: Path, case_name: str | None = None) -> tuple[str, CaseConfig]:
-    """Devuelve el nombre del caso y su configuración validada."""
+    """Return the case name and its validated configuration."""
     case_dir = Path(case_dir)
     name = case_name or read_case_name(case_dir)
     par_path = find_file(case_dir, f"{name}.PAR")
@@ -367,7 +368,7 @@ def load_case(case_dir: Path, case_name: str | None = None) -> tuple[str, CaseCo
 
 
 def find_file(directory: Path, name: str) -> Path:
-    """Busca ``name`` en ``directory`` sin distinguir mayúsculas (como Windows)."""
+    """Look for ``name`` in ``directory``, ignoring case (like Windows)."""
     candidate = Path(directory) / name
     if candidate.exists():
         return candidate

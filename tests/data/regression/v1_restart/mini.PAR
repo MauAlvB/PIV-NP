@@ -1,49 +1,49 @@
 Caso de regresion PIV-NP
-BLOQUE 2: N_cel N_nod N_part_celda N_fil Ancho    Alto
-          99    120   2            11    0.212115 0.212115
-BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
-          0.8   8           4         0       1       1      0       0   0
-BLOQUE 4: s_density porosity
-          2650.0    0.4
+BLOCK 2: n_cells n_nodes n_part_cell n_rows width    height
+         99      120     2           11     0.212115 0.212115
+BLOCK 3: dt  total_steps print_every moisture mesh_version pivlab contour restart track
+         0.8 8           4           0        1            1      0       0       0
+BLOCK 4: s_density porosity
+         2650.0    0.4
 !------------------------------------------------------------------------------------------
-! Qué significa cada valor. De aquí abajo no se lee nada.
+! What every value means. Nothing below this line is read.
 !
-! BLOQUE 2 - geometría de la malla PIVlab
-!   N_cel         celdas de la malla
-!   N_nod         nodos (puntos) de la malla; N_nod = (N_cel/N_fil + 1) * (N_fil + 1)
-!   N_part_celda  filas y columnas de partículas por celda, de 1 a 6 (su cuadrado por celda)
-!   N_fil         filas de celdas
-!   Ancho, Alto   tamaño de una celda, en metros
+! BLOCK 2 - geometry of the PIVlab grid
+!   n_cells       cells of the grid
+!   n_nodes       nodes (points) of the grid; n_nodes = (n_cells/n_rows + 1) * (n_rows + 1)
+!   n_part_cell   rows and columns of particles per cell, from 1 to 6 (its square per cell)
+!   n_rows        rows of cells
+!   width, height size of one cell, in metres
 !
-! BLOQUE 3 - qué análisis se hace
-!   del_t         tiempo entre imágenes, en segundos. Tiene que ser el mismo intervalo con
-!                 el que se exportó desde PIVlab; si no, los desplazamientos salen a otra
-!                 escala. El programa lo comprueba en la cabecera de los archivos y avisa.
-!   total_steps   cuántos archivos PIVlab se procesan
-!   impresion     se escriben resultados en el paso 1 y luego cada 'impresion' pasos
-!   moister       de dónde sale la humedad
-!                   0 = no se calcula humedad
-!                   1 = se lee de los archivos Moist_<n>.TXT
-!                   2 = se calcula desde las imágenes del ensayo, con la configuración
-!                       del archivo <caso>.HUM
-!   version       dónde están las velocidades que da PIVlab
-!                   1 = en los nodos de la malla
-!                   2 = en el centro de cada elemento (malla desplazada media celda)
-!   pivlab        versión de PIVlab con la que se exportaron los archivos "Datos", que
-!                 cambian de formato de una versión a otra
-!                   1 = exportación de 4 columnas (x, y, u, v)
-!                   2 = exportación de 5 columnas (añade el tipo de vector)
-!                 El programa mira el archivo y avisa si no concuerda con lo declarado.
-!   contour       corrección de la velocidad en el contorno del material
-!                   0 = ninguna
-!                   1 = media de los nodos vecinos que sí tienen dato
-!                   2 = media de las partículas que rodean al punto
-!                   3 = extrapolación desde el interior hacia el exterior
-!   rec           0 = análisis nuevo
-!                 1 = continuar desde <caso>.REC, por ejemplo una segunda etapa del ensayo
-!   track         debe ser 0; las partículas de seguimiento PTV ya no están soportadas
+! BLOCK 3 - which analysis is run
+!   dt            time between images, in seconds. It has to be the same interval the files
+!                 were exported from PIVlab with; otherwise displacements come out at a
+!                 different scale. The program checks the file header and warns.
+!   total_steps   how many PIVlab files are processed
+!   print_every   results are written at step 1 and then every 'print_every' steps
+!   moisture      where the moisture comes from
+!                   0 = no moisture is computed
+!                   1 = it is read from the Moist_<n>.TXT files
+!                   2 = it is computed from the test images, with the settings of the
+!                       <case>.HUM file
+!   mesh_version  where the velocities given by PIVlab sit
+!                   1 = at the nodes of the grid
+!                   2 = at the centre of each element (grid shifted half a cell)
+!   pivlab        version of PIVlab the "Datos" files were exported with, whose format
+!                 changes from one version to the next
+!                   1 = 4-column export (x, y, u, v)
+!                   2 = 5-column export (adds the vector type)
+!                 The program looks at the file and warns if it does not match what is here.
+!   contour       correction of the velocity at the boundary of the material
+!                   0 = none
+!                   1 = average of the neighbouring nodes that do have data
+!                   2 = average of the particles surrounding the point
+!                   3 = extrapolation from the interior towards the exterior
+!   restart       0 = new analysis
+!                 1 = continue from <case>.REC, for instance a second stage of the test
+!   track         must be 0; PTV tracking particles are no longer supported
 !
-! BLOQUE 4 - el suelo
-!   s_density     densidad del suelo, en kg/m3
-!   porosity      porosidad inicial
+! BLOCK 4 - the soil
+!   s_density     density of the soil, in kg/m3
+!   porosity      initial porosity
 !------------------------------------------------------------------------------------------

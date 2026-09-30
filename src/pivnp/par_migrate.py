@@ -1,28 +1,28 @@
-"""Paso de los ``.PAR`` de cualquier versión al formato único.
+"""Moving the ``.PAR`` files of any version to the single format.
 
-El bloque 3 del ``.PAR`` ha cambiado de orden varias veces, y hay dialectos con los mismos
-ocho valores significando cosas distintas. En vez de arrastrar esa ambigüedad en el lector,
-los archivos se convierten una vez al formato actual::
+Block 3 of the ``.PAR`` has changed order several times, and there are dialects carrying the
+same eight values with different meanings. Instead of dragging that ambiguity through the
+reader, the files are converted once to the current format::
 
-    <título del caso>
-    BLOQUE 2: N_cel N_nod N_part_celda N_fil Ancho Alto
-              2006  2100  3            34    0.212115 0.212115
-    BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
-              0.8   149          1         0       1       1      0       0   0
-    BLOQUE 4: s_density porosity
-              2650.0    0.4
-    ! ... leyenda con el significado de cada valor, que no se lee ...
+    <case title>
+    BLOCK 2: n_cells n_nodes n_part_cell n_rows width    height
+             2006    2100    3           34     0.212115 0.212115
+    BLOCK 3: dt  total_steps print_every moisture mesh_version pivlab contour restart track
+             0.8 149         1           0        1            1      0       0       0
+    BLOCK 4: s_density porosity
+             2650.0    0.4
+    ! ... legend with the meaning of every value, which is not read ...
 
-Los valores se reordenan tal cual, sin volver a formatearlos, así que la conversión no
-cambia ni un decimal. Las dos únicas excepciones se anotan siempre:
+The values are reordered as they are, without reformatting them, so the conversion does not
+change a single decimal. The only two exceptions are always reported:
 
-* ``IPIVLAB`` se escribe según las columnas que de verdad tienen los archivos PIVlab del
-  caso. Los ``.PAR`` anteriores a 2024 no traen ese campo y el valor que se asumía (4
-  columnas) descoloca la lectura de los archivos de 5.
-* ``MOISTER=2`` en un ``.PAR`` anterior significaba "leer los archivos de humedad"; en el
-  formato actual significa "calcularla desde las imágenes", así que se escribe 1.
+* ``IPIVLAB`` is written from the number of columns the PIVlab files of the case actually
+  have. ``.PAR`` files older than 2024 do not carry that field, and the value that used to be
+  assumed (4 columns) shifts every value when reading 5-column files.
+* ``MOISTER=2`` in an older ``.PAR`` meant "read the moisture files"; in the current format it
+  means "compute it from the images", so 1 is written instead.
 
-El archivo original se conserva al lado, con el nombre ``<caso>.PAR.orig``.
+The original file is kept next to it, named ``<case>.PAR.orig``.
 """
 
 from __future__ import annotations
@@ -43,69 +43,69 @@ from .pivlab_io import VELOCITY_PATTERN, frame_interval_in_header
 
 log = logging.getLogger("pivnp")
 
-#: Sufijo del archivo original que se conserva al convertir.
+#: Suffix of the original file kept when converting.
 BACKUP_SUFFIX = ".orig"
 
-#: Nombres de los campos de cada bloque, en el orden del formato único.
-GEOMETRY_NAMES = ("N_cel", "N_nod", "N_part_celda", "N_fil", "Ancho", "Alto")
-ANALYSIS_NAMES = ("del_t", "total_steps", "impresion", "moister", "version", "pivlab",
-                  "contour", "rec", "track")
+#: Names of the fields of every block, in the order of the single format.
+GEOMETRY_NAMES = ("n_cells", "n_nodes", "n_part_cell", "n_rows", "width", "height")
+ANALYSIS_NAMES = ("dt", "total_steps", "print_every", "moisture", "mesh_version", "pivlab",
+                  "contour", "restart", "track")
 ANALYSIS_FIELDS = ("DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "IVERSION", "IPIVLAB",
                    "ICONTOUR", "IREC", "ITR")
 SOIL_NAMES = ("s_density", "porosity")
 
-_SANGRIA = " " * len("BLOQUE 3: ")
+_INDENT = " " * len("BLOCK 3: ")
 
-#: Leyenda que se escribe al final del archivo. No se lee: está para quien lo abra.
-LEYENDA = """\
+#: Legend written at the end of the file. It is not read: it is there for whoever opens it.
+LEGEND = """\
 !------------------------------------------------------------------------------------------
-! Qué significa cada valor. De aquí abajo no se lee nada.
+! What every value means. Nothing below this line is read.
 !
-! BLOQUE 2 - geometría de la malla PIVlab
-!   N_cel         celdas de la malla
-!   N_nod         nodos (puntos) de la malla; N_nod = (N_cel/N_fil + 1) * (N_fil + 1)
-!   N_part_celda  filas y columnas de partículas por celda, de 1 a 6 (su cuadrado por celda)
-!   N_fil         filas de celdas
-!   Ancho, Alto   tamaño de una celda, en metros
+! BLOCK 2 - geometry of the PIVlab grid
+!   n_cells       cells of the grid
+!   n_nodes       nodes (points) of the grid; n_nodes = (n_cells/n_rows + 1) * (n_rows + 1)
+!   n_part_cell   rows and columns of particles per cell, from 1 to 6 (its square per cell)
+!   n_rows        rows of cells
+!   width, height size of one cell, in metres
 !
-! BLOQUE 3 - qué análisis se hace
-!   del_t         tiempo entre imágenes, en segundos. Tiene que ser el mismo intervalo con
-!                 el que se exportó desde PIVlab; si no, los desplazamientos salen a otra
-!                 escala. El programa lo comprueba en la cabecera de los archivos y avisa.
-!   total_steps   cuántos archivos PIVlab se procesan
-!   impresion     se escriben resultados en el paso 1 y luego cada 'impresion' pasos
-!   moister       de dónde sale la humedad
-!                   0 = no se calcula humedad
-!                   1 = se lee de los archivos Moist_<n>.TXT
-!                   2 = se calcula desde las imágenes del ensayo, con la configuración
-!                       del archivo <caso>.HUM
-!   version       dónde están las velocidades que da PIVlab
-!                   1 = en los nodos de la malla
-!                   2 = en el centro de cada elemento (malla desplazada media celda)
-!   pivlab        versión de PIVlab con la que se exportaron los archivos "Datos", que
-!                 cambian de formato de una versión a otra
-!                   1 = exportación de 4 columnas (x, y, u, v)
-!                   2 = exportación de 5 columnas (añade el tipo de vector)
-!                 El programa mira el archivo y avisa si no concuerda con lo declarado.
-!   contour       corrección de la velocidad en el contorno del material
-!                   0 = ninguna
-!                   1 = media de los nodos vecinos que sí tienen dato
-!                   2 = media de las partículas que rodean al punto
-!                   3 = extrapolación desde el interior hacia el exterior
-!   rec           0 = análisis nuevo
-!                 1 = continuar desde <caso>.REC, por ejemplo una segunda etapa del ensayo
-!   track         debe ser 0; las partículas de seguimiento PTV ya no están soportadas
+! BLOCK 3 - which analysis is run
+!   dt            time between images, in seconds. It has to be the same interval the files
+!                 were exported from PIVlab with; otherwise displacements come out at a
+!                 different scale. The program checks the file header and warns.
+!   total_steps   how many PIVlab files are processed
+!   print_every   results are written at step 1 and then every 'print_every' steps
+!   moisture      where the moisture comes from
+!                   0 = no moisture is computed
+!                   1 = it is read from the Moist_<n>.TXT files
+!                   2 = it is computed from the test images, with the settings of the
+!                       <case>.HUM file
+!   mesh_version  where the velocities given by PIVlab sit
+!                   1 = at the nodes of the grid
+!                   2 = at the centre of each element (grid shifted half a cell)
+!   pivlab        version of PIVlab the "Datos" files were exported with, whose format
+!                 changes from one version to the next
+!                   1 = 4-column export (x, y, u, v)
+!                   2 = 5-column export (adds the vector type)
+!                 The program looks at the file and warns if it does not match what is here.
+!   contour       correction of the velocity at the boundary of the material
+!                   0 = none
+!                   1 = average of the neighbouring nodes that do have data
+!                   2 = average of the particles surrounding the point
+!                   3 = extrapolation from the interior towards the exterior
+!   restart       0 = new analysis
+!                 1 = continue from <case>.REC, for instance a second stage of the test
+!   track         must be 0; PTV tracking particles are no longer supported
 !
-! BLOQUE 4 - el suelo
-!   s_density     densidad del suelo, en kg/m3
-!   porosity      porosidad inicial
+! BLOCK 4 - the soil
+!   s_density     density of the soil, in kg/m3
+!   porosity      initial porosity
 !------------------------------------------------------------------------------------------
 """
 
 
 @dataclass
 class Conversion:
-    """Qué se ha hecho con un ``.PAR``."""
+    """What was done with one ``.PAR``."""
 
     path: Path
     changed: bool = False
@@ -115,47 +115,47 @@ class Conversion:
 
     def __str__(self) -> str:
         if self.error:
-            return f"{self.path.name}: NO se ha podido convertir - {self.error}"
-        estado = "convertido" if self.changed else "ya estaba en el formato único"
-        return f"{self.path.name}: {estado}" + "".join(f"\n    - {n}" for n in self.notes)
+            return f"{self.path.name}: could NOT be converted - {self.error}"
+        state = "converted" if self.changed else "already in the single format"
+        return f"{self.path.name}: {state}" + "".join(f"\n    - {n}" for n in self.notes)
 
 
 def _analysis_block_of_any_version(reader: _ListDirectedReader,
                                    header: str) -> tuple[dict[str, str], bool]:
-    """Bloque 3 de cualquier versión: devuelve los valores por nombre y si ya era el actual.
+    """Block 3 of any version: returns the values by name and whether it was already current.
 
-    Primero se mira la línea de comentario, que es donde cada archivo nombra sus campos y la
-    única forma fiable de saber el orden: hay dos dialectos con los mismos ocho valores
-    colocados de otra manera. Si no se entiende, se recurre al número de valores.
+    The comment line is looked at first, because that is where every file names its fields and
+    the only reliable way to know the order: there are two dialects carrying the same eight
+    values arranged differently. If it is not understood, the number of values is used.
     """
     values = reader.line_values()
-    campos = names_in_header(header)
-    if campos is not None and len(campos) == len(values):
-        log.info("%s: bloque 3 leído por su cabecera (%s)", reader.source, " ".join(campos))
-        return dict(zip(campos, values, strict=True)), "ICONTOUR" in campos
+    fields = names_in_header(header)
+    if fields is not None and len(fields) == len(values):
+        log.info("%s: block 3 read from its header (%s)", reader.source, " ".join(fields))
+        return dict(zip(fields, values, strict=True)), "ICONTOUR" in fields
 
-    orden: list[str]
+    order: list[str]
     if len(values) >= 9:
-        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "IVERSION", "IPIVLAB", "ICONTOUR",
+        order = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "IVERSION", "IPIVLAB", "ICONTOUR",
                  "IREC", "ITR"]
-        return dict(zip(orden, values[:9], strict=True)), True
+        return dict(zip(order, values[:9], strict=True)), True
     if len(values) == 8:
-        log.info("%s: .PAR con densidad y porosidad en el bloque 3", reader.source)
-        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "S_DENSITY", "POROSITY",
+        log.info("%s: .PAR with density and porosity inside block 3", reader.source)
+        order = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER", "S_DENSITY", "POROSITY",
                  "IVERSION", "ITR"]
-        return dict(zip(orden, values, strict=True)), False
+        return dict(zip(order, values, strict=True)), False
     if len(values) in (3, 4):
-        log.info("%s: .PAR en formato antiguo (%d valores en el bloque 3); se asumen "
-                 "IVERSION=1, IPIVLAB=1, ICONTOUR=0, IREC=0 e ITR=0", reader.source, len(values))
-        orden = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER"]
-        return dict(zip(orden, values, strict=False)), False
+        log.info("%s: .PAR in the old format (%d values in block 3); IVERSION=1, IPIVLAB=1, "
+                 "ICONTOUR=0, IREC=0 and ITR=0 are assumed", reader.source, len(values))
+        order = ["DT", "TOTAL_STEPS", "IMPPAS", "MOISTER"]
+        return dict(zip(order, values, strict=False)), False
     raise ConfigError(
-        f"{reader.source}: el bloque 3 tiene {len(values)} valores y su línea de comentario "
-        "no dice qué es cada uno; no se reconoce como ninguna versión conocida del .PAR")
+        f"{reader.source}: block 3 carries {len(values)} values and its comment line does not "
+        "say what each one is; it is not recognized as any known version of the .PAR")
 
 
 def read_any_par_blocks(text: str, source: str = "<PAR>") -> RawPar:
-    """Lee un ``.PAR`` de cualquier versión. Solo lo usa la conversión."""
+    """Read a ``.PAR`` of any version. Only the conversion uses it."""
     reader = _ListDirectedReader(text.splitlines(), source)
     title = reader.text()
     reader.comment()
@@ -164,7 +164,7 @@ def read_any_par_blocks(text: str, source: str = "<PAR>") -> RawPar:
 
     density, porosity = analysis.get("S_DENSITY"), analysis.get("POROSITY")
     if density is None:
-        if reader.at_end():  # los .PAR antiguos no traen el bloque 4
+        if reader.at_end():  # the old .PAR files do not carry block 4
             density = porosity = "0"
         else:
             reader.comment()
@@ -172,106 +172,106 @@ def read_any_par_blocks(text: str, source: str = "<PAR>") -> RawPar:
     return RawPar(title, geometry, analysis, density, porosity, current)
 
 
-def bloque(titulo: str, nombres: tuple[str, ...], valores: list[str]) -> list[str]:
-    """Dos líneas alineadas: los nombres de los campos y sus valores debajo."""
-    anchos = [max(len(n), len(v)) for n, v in zip(nombres, valores, strict=True)]
-    cabecera = " ".join(n.ljust(a) for n, a in zip(nombres, anchos, strict=True))
-    fila = " ".join(v.ljust(a) for v, a in zip(valores, anchos, strict=True))
-    return [f"{titulo} {cabecera}".rstrip(), f"{_SANGRIA}{fila}".rstrip()]
+def block(title: str, names: tuple[str, ...], values: list[str]) -> list[str]:
+    """Two aligned lines: the names of the fields and their values underneath."""
+    widths = [max(len(n), len(v)) for n, v in zip(names, values, strict=True)]
+    header = " ".join(n.ljust(w) for n, w in zip(names, widths, strict=True))
+    row = " ".join(v.ljust(w) for v, w in zip(values, widths, strict=True))
+    return [f"{title} {header}".rstrip(), f"{_INDENT}{row}".rstrip()]
 
 
-def to_canonical(crudo: RawPar, moister: int, pivlab_format: int) -> str:
-    """Texto del ``.PAR`` en el formato único, a partir de los valores leídos."""
-    analisis = dict(crudo.analysis)
-    analisis["MOISTER"] = str(moister)
-    analisis["IPIVLAB"] = str(pivlab_format)
-    valores = [analisis.get(campo, crudo.value(campo)) for campo in ANALYSIS_FIELDS]
-    lineas = [crudo.title]
-    lineas += bloque("BLOQUE 2:", GEOMETRY_NAMES, list(crudo.geometry))
-    lineas += bloque("BLOQUE 3:", ANALYSIS_NAMES, valores)
-    lineas += bloque("BLOQUE 4:", SOIL_NAMES, [crudo.density, crudo.porosity])
-    return "\n".join(lineas) + "\n" + LEYENDA
+def to_canonical(raw: RawPar, moister: int, pivlab_format: int) -> str:
+    """Text of the ``.PAR`` in the single format, from the values that were read."""
+    analysis = dict(raw.analysis)
+    analysis["MOISTER"] = str(moister)
+    analysis["IPIVLAB"] = str(pivlab_format)
+    values = [analysis.get(field_name, raw.value(field_name)) for field_name in ANALYSIS_FIELDS]
+    lines = [raw.title]
+    lines += block("BLOCK 2:", GEOMETRY_NAMES, list(raw.geometry))
+    lines += block("BLOCK 3:", ANALYSIS_NAMES, values)
+    lines += block("BLOCK 4:", SOIL_NAMES, [raw.density, raw.porosity])
+    return "\n".join(lines) + "\n" + LEGEND
 
 
 def columns_in_pivlab_files(case_dir: Path) -> int | None:
-    """Columnas que traen los archivos PIVlab del caso, o ``None`` si no se encuentran."""
+    """Columns the PIVlab files of the case carry, or ``None`` when they are not found."""
     try:
-        ruta = find_file(case_dir, VELOCITY_PATTERN.format(step=1))
+        path = find_file(case_dir, VELOCITY_PATTERN.format(step=1))
     except (FileNotFoundError, OSError):
         return None
-    for linea in ruta.read_text(encoding="latin-1").splitlines()[3:]:
-        if linea.strip():
-            return len([t for t in linea.replace(",", " ").split() if t])
+    for line in path.read_text(encoding="latin-1").splitlines()[3:]:
+        if line.strip():
+            return len([t for t in line.replace(",", " ").split() if t])
     return None
 
 
 def convert_file(path: Path) -> Conversion:
-    """Convierte un ``.PAR`` al formato único, guardando el original al lado."""
+    """Convert a ``.PAR`` to the single format, keeping the original next to it."""
     path = Path(path)
-    resultado = Conversion(path)
-    texto = path.read_text(encoding="latin-1")
+    result = Conversion(path)
+    text = path.read_text(encoding="latin-1")
     try:
-        crudo = read_any_par_blocks(texto, str(path))
-        config = config_from_blocks(crudo, str(path))
+        raw = read_any_par_blocks(text, str(path))
+        config = config_from_blocks(raw, str(path))
     except (ConfigError, ValueError) as error:
-        resultado.error = str(error)
-        return resultado
+        result.error = str(error)
+        return result
 
     moister = int(config.moisture) + int(config.moisture_from_images)
-    declarado = crudo.analysis.get("MOISTER")
-    if declarado is not None and declarado.strip() != str(moister):
-        resultado.notes.append(
-            f"MOISTER={declarado.strip()} de una versión anterior se escribe como {moister}: "
-            "allí significaba leer los archivos de humedad")
+    declared = raw.analysis.get("MOISTER")
+    if declared is not None and declared.strip() != str(moister):
+        result.notes.append(
+            f"MOISTER={declared.strip()} from an earlier version is written as {moister}: "
+            "there it meant reading the moisture files")
 
     pivlab = config.pivlab_format
-    columnas = columns_in_pivlab_files(path.parent)
-    if columnas is not None:
-        medido = 1 if columnas <= 4 else 2
-        if medido != pivlab:
-            resultado.notes.append(
-                f"IPIVLAB pasa de {pivlab} a {medido}: los archivos PIVlab del caso traen "
-                f"{columnas} columnas")
-        pivlab = medido
-    elif "IPIVLAB" not in crudo.analysis:
-        resultado.notes.append("IPIVLAB se deja en 1: no se han encontrado los archivos "
-                               "PIVlab para comprobar cuántas columnas tienen")
+    columns = columns_in_pivlab_files(path.parent)
+    if columns is not None:
+        measured = 1 if columns <= 4 else 2
+        if measured != pivlab:
+            result.notes.append(
+                f"IPIVLAB goes from {pivlab} to {measured}: the PIVlab files of the case "
+                f"carry {columns} columns")
+        pivlab = measured
+    elif "IPIVLAB" not in raw.analysis:
+        result.notes.append("IPIVLAB is left at 1: the PIVlab files of the case were not "
+                            "found, so their number of columns could not be checked")
 
-    _avisar_del_intervalo(path.parent, config, resultado)
+    _warn_about_the_interval(path.parent, config, result)
 
-    nuevo = to_canonical(crudo, moister, pivlab)
-    if nuevo == texto:
-        return resultado
+    new_text = to_canonical(raw, moister, pivlab)
+    if new_text == text:
+        return result
 
-    copia = path.with_name(path.name + BACKUP_SUFFIX)
-    if not copia.exists():
-        copia.write_text(texto, encoding="latin-1")
-        resultado.backup = copia
+    backup = path.with_name(path.name + BACKUP_SUFFIX)
+    if not backup.exists():
+        backup.write_text(text, encoding="latin-1")
+        result.backup = backup
     else:
-        resultado.notes.append(f"{copia.name} ya existía: se conserva el de la primera vez")
-    path.write_text(nuevo, encoding="latin-1")
-    resultado.changed = True
-    return resultado
+        result.notes.append(f"{backup.name} already existed: the first one is kept")
+    path.write_text(new_text, encoding="latin-1")
+    result.changed = True
+    return result
 
 
-def _avisar_del_intervalo(case_dir: Path, config, resultado: Conversion) -> None:
-    """El DT que no cuadra con PIVlab se avisa, pero no se toca: cambiaría los resultados."""
+def _warn_about_the_interval(case_dir: Path, config, result: Conversion) -> None:
+    """A DT that does not match PIVlab is reported, not touched: it would change results."""
     try:
-        intervalo = frame_interval_in_header(find_file(case_dir,
-                                                       VELOCITY_PATTERN.format(step=1)))
+        interval = frame_interval_in_header(find_file(case_dir,
+                                                      VELOCITY_PATTERN.format(step=1)))
     except (FileNotFoundError, OSError, ValueError):
         return
-    if intervalo and abs(intervalo - config.dt) > 1e-3 * max(intervalo, config.dt):
-        resultado.notes.append(
-            f"DT={config.dt:g} no coincide con el intervalo {intervalo:g} s con el que se "
-            "exportó desde PIVlab; se deja como está porque cambiarlo cambiaría los "
-            "resultados")
+    if interval and abs(interval - config.dt) > 1e-3 * max(interval, config.dt):
+        result.notes.append(
+            f"DT={config.dt:g} does not match the interval of {interval:g} s the files were "
+            "exported from PIVlab with; it is left as it is, because changing it would change "
+            "the results")
 
 
 def convert_tree(root: Path) -> list[Conversion]:
-    """Convierte todos los ``.PAR`` que haya bajo un directorio."""
+    """Convert every ``.PAR`` under a directory."""
     root = Path(root)
-    rutas = sorted(p for p in root.rglob("*.PAR") if p.is_file() and p.suffix == ".PAR")
-    if not rutas and root.is_file():
-        rutas = [root]
-    return [convert_file(ruta) for ruta in rutas]
+    paths = sorted(p for p in root.rglob("*.PAR") if p.is_file() and p.suffix == ".PAR")
+    if not paths and root.is_file():
+        paths = [root]
+    return [convert_file(path) for path in paths]

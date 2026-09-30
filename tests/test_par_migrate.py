@@ -1,8 +1,8 @@
-"""Paso de los .PAR de cualquier versión al formato único.
+"""Moving the .PAR files of any version to the single format.
 
-La garantía que se comprueba es la que hace segura la conversión: leer el archivo viejo y
-leer el convertido tienen que dar exactamente la misma configuración, salvo las correcciones
-que el propio conversor declara.
+The guarantee checked here is the one that makes the conversion safe: reading the old file
+and reading the converted one have to give exactly the same configuration, except for the
+corrections the converter itself reports.
 """
 
 from __future__ import annotations
@@ -23,50 +23,50 @@ from pivnp.par_migrate import (
 
 from .test_config import PAR
 
-CABECERA_PIVLAB = ("PIVlab\nFactor de conversion (px -> m): 0.001, "
-                   "(px/frame -> m/s): 0.001\nx,y,u,v\n")
+PIVLAB_HEADER = ("PIVlab\nConversion factor (px -> m): 0.001, "
+                 "(px/frame -> m/s): 0.001\nx,y,u,v\n")
 
-#: Dialectos reales del bloque 3. El orden cambió entre versiones del programa y hay dos con
-#: los mismos ocho valores en distinto orden, así que se distinguen por su cabecera.
-DIALECTOS = {
-    "antiguo, tres valores": (
+#: Real dialects of block 3. The order changed between versions of the program and two of
+#: them carry the same eight values in a different order, so they are told apart by header.
+DIALECTS = {
+    "old, three values": (
         "BLOQUE 3: del_t  Total_steps   Salto de impresión\t(Datos)\n1.\t11\t1\n",
         {"dt": 1.0, "total_steps": 11, "mesh_version": 1, "pivlab_format": 1,
          "moisture": False, "restart": False, "contour": 0,
          "soil_density": 0.0, "porosity": 0.0},
     ),
-    "antiguo, con humedad": (
+    "old, with moisture": (
         "BLOQUE 3: del_t  Total_steps   Salto de impresión\t(Datos)\n1. 11 1 1\n",
         {"dt": 1.0, "total_steps": 11, "moisture": True, "soil_density": 0.0},
     ),
-    "centrifuga 2022": (
+    "centrifuge 2022": (
         "BLOQUE 3: del_t\t total_steps  salto_impresión  v.pivnp  v.pivlab  moister  REC  "
         "PTR\t(ANALYSIS TYPE DATA)\n2\t149\t1\t2\t2\t1\t0\t0\n"
         "BLOQUE 4: s_density(kg/m3)  initial_porosity\n3600\t0.5\n",
         {"dt": 2.0, "mesh_version": 2, "pivlab_format": 2, "moisture": True,
          "restart": False, "soil_density": 3600.0, "porosity": 0.5},
     ),
-    "artículo, pruebas": (
+    "paper, test runs": (
         "BLOQUE 3: del_t Total_steps Salto_de_impresión Humedad Version  IPIVLAB  IREC  PTV\n"
         "1\t20\t1\t1\t2\t2\t1\t0\n"
         "BLOQUE 4: S_density (kg/m3) porosity \n1385.46\t0.506\n",
         {"dt": 1.0, "mesh_version": 2, "pivlab_format": 2, "moisture": True,
          "restart": True, "soil_density": 1385.46, "porosity": 0.506},
     ),
-    "artículo, etapas": (
+    "paper, stages": (
         "BLOQUE 3: del_t Total_steps Salto_de_impresión Humedad S_density (kg/m3) porosity "
         "Version PTV  IREC\n0.04\t20\t1\t1\t1385.46\t0.506\t1\t0\t1\n",
         {"dt": 0.04, "mesh_version": 1, "pivlab_format": 1, "moisture": True,
          "restart": True, "soil_density": 1385.46, "porosity": 0.506},
     ),
-    "slope, ocho sin bloque 4": (
+    "slope, eight without block 4": (
         "BLOQUE 3: del_t Total_steps Salto_de_impresión Humedad S_density (kg/m3) porosity "
         "Version PTV\n1\t149\t1\t1\t1212\t0.444\t1\t0\n",
         {"dt": 1.0, "total_steps": 149, "moisture": True, "mesh_version": 1,
          "pivlab_format": 1, "contour": 0, "restart": False,
          "soil_density": 1212.0, "porosity": 0.444},
     ),
-    "2024, el actual": (
+    "2024, the current one": (
         "BLOQUE 3: del_t Total_steps Impresion Moister Version PIVlab Contour Rec Track\n"
         "0.8\t149\t1\t1\t2\t2\t3\t1\t0\n"
         "BLOQUE 4: Densidad Porosidad\n2650.0  0.4\n",
@@ -76,175 +76,175 @@ DIALECTOS = {
 }
 
 
-def par_de(nombre: str) -> str:
-    """Un .PAR completo en el dialecto pedido."""
-    return "\n".join(PAR.splitlines()[:3]) + "\n" + DIALECTOS[nombre][0]
+def par_of(name: str) -> str:
+    """A full .PAR in the requested dialect."""
+    return "\n".join(PAR.splitlines()[:3]) + "\n" + DIALECTS[name][0]
 
 
-def leer_viejo(texto: str):
-    """Lo que entiende el conversor de un .PAR de cualquier versión."""
-    return config_from_blocks(read_any_par_blocks(texto))
+def read_old(text: str):
+    """What the converter makes of a .PAR of any version."""
+    return config_from_blocks(read_any_par_blocks(text))
 
 
-@pytest.mark.parametrize("nombre", list(DIALECTOS))
-def test_cada_dialecto_se_lee_por_su_cabecera(nombre):
-    """Cada .PAR documenta en su comentario qué es cada valor; hay que hacerle caso."""
-    esperado = DIALECTOS[nombre][1]
-    cfg = leer_viejo(par_de(nombre))
-    for campo, valor in esperado.items():
-        assert getattr(cfg, campo) == valor, campo
+def write(workdir: Path, text: str, name: str = "case.PAR") -> Path:
+    path = workdir / name
+    path.write_text(text, encoding="latin-1")
+    return path
 
 
-def test_moister_dos_en_un_dialecto_anterior_significa_leer_los_archivos():
-    texto = par_de("centrifuga 2022").replace("\t1\t0\t0", "\t2\t0\t0")
-    cfg = leer_viejo(texto)
+@pytest.mark.parametrize("dialect", list(DIALECTS))
+def test_every_dialect_is_read_from_its_header(dialect):
+    """Every .PAR documents in its comment what each value is; it has to be believed."""
+    expected = DIALECTS[dialect][1]
+    cfg = read_old(par_of(dialect))
+    for field_name, value in expected.items():
+        assert getattr(cfg, field_name) == value, field_name
+
+
+def test_moister_two_in_an_earlier_dialect_means_read_the_files():
+    text = par_of("centrifuge 2022").replace("\t1\t0\t0", "\t2\t0\t0")
+    cfg = read_old(text)
     assert cfg.moisture and not cfg.moisture_from_images
 
 
-def test_un_bloque_3_que_no_es_de_ninguna_version_se_rechaza():
-    texto = "\n".join(PAR.splitlines()[:4] + ["1. 11 1 0 1 1"]) + "\n"
-    with pytest.raises(ConfigError, match="ninguna versión conocida"):
-        leer_viejo(texto)
+def test_a_block_three_of_no_known_version_is_rejected():
+    text = "\n".join(PAR.splitlines()[:4] + ["1. 11 1 0 1 1"]) + "\n"
+    with pytest.raises(ConfigError, match="not recognized as any known version"):
+        read_old(text)
 
 
-def escribir(workdir: Path, texto: str, nombre: str = "caso.PAR") -> Path:
-    ruta = workdir / nombre
-    ruta.write_text(texto, encoding="latin-1")
-    return ruta
+@pytest.mark.parametrize("dialect", list(DIALECTS))
+def test_converting_does_not_change_the_configuration(workdir: Path, dialect):
+    text = par_of(dialect)
+    path = write(workdir, text)
+    before = read_old(text)
+
+    result = convert_file(path)
+
+    after = parse_par(path.read_text(encoding="latin-1"))
+    assert after == before, dialect
+    assert result.backup is not None and result.backup.name == "case.PAR.orig"
+    assert result.backup.read_text(encoding="latin-1") == text
 
 
-@pytest.mark.parametrize("dialecto", list(DIALECTOS))
-def test_convertir_no_cambia_la_configuracion(workdir: Path, dialecto):
-    texto = par_de(dialecto)
-    ruta = escribir(workdir, texto)
-    antes = leer_viejo(texto)
-
-    resultado = convert_file(ruta)
-
-    despues = parse_par(ruta.read_text(encoding="latin-1"))
-    assert despues == antes, dialecto
-    assert resultado.backup is not None and resultado.backup.name == "caso.PAR.orig"
-    assert resultado.backup.read_text(encoding="latin-1") == texto
-
-
-@pytest.mark.parametrize("dialecto", list(DIALECTOS))
-def test_el_convertido_ya_no_necesita_adivinar_nada(workdir: Path, dialecto):
-    """El archivo convertido se lee por su cabecera, que nombra los nueve campos."""
-    ruta = escribir(workdir, par_de(dialecto))
-    convert_file(ruta)
-    lineas = ruta.read_text(encoding="latin-1").splitlines()
-    assert lineas[3].startswith("BLOQUE 3:")
-    assert lineas[3].split(":", 1)[1].split() == list(ANALYSIS_NAMES)
-    assert len(lineas[4].split()) == len(ANALYSIS_NAMES)
-    # título y tres bloques de dos líneas; de ahí en adelante, la leyenda
-    assert not any(linea.startswith("!") for linea in lineas[:7])
-    assert all(linea.startswith("!") for linea in lineas[7:]) and len(lineas) > 7
+@pytest.mark.parametrize("dialect", list(DIALECTS))
+def test_the_converted_file_no_longer_needs_any_guessing(workdir: Path, dialect):
+    """The converted file is read from its header, which names the nine fields."""
+    path = write(workdir, par_of(dialect))
+    convert_file(path)
+    lines = path.read_text(encoding="latin-1").splitlines()
+    assert lines[3].startswith("BLOCK 3:")
+    assert lines[3].split(":", 1)[1].split() == list(ANALYSIS_NAMES)
+    assert len(lines[4].split()) == len(ANALYSIS_NAMES)
+    # title and three two-line blocks; from there on, the legend
+    assert not any(line.startswith("!") for line in lines[:7])
+    assert all(line.startswith("!") for line in lines[7:]) and len(lines) > 7
 
 
-def test_convertir_dos_veces_no_hace_nada_la_segunda(workdir: Path):
-    ruta = escribir(workdir, par_de("centrifuga 2022"))
-    original = ruta.read_text(encoding="latin-1")
-    primero = convert_file(ruta)
-    convertido = ruta.read_text(encoding="latin-1")
+def test_converting_twice_does_nothing_the_second_time(workdir: Path):
+    path = write(workdir, par_of("centrifuge 2022"))
+    original = path.read_text(encoding="latin-1")
+    first = convert_file(path)
+    converted = path.read_text(encoding="latin-1")
 
-    segundo = convert_file(ruta)
-    assert primero.changed and not segundo.changed
-    assert ruta.read_text(encoding="latin-1") == convertido
-    # la copia sigue siendo la del archivo de verdad, no la del ya convertido
-    assert primero.backup.read_text(encoding="latin-1") == original
-
-
-def test_moister_dos_de_una_version_anterior_se_escribe_como_uno(workdir: Path):
-    texto = par_de("centrifuga 2022").replace("\t1\t0\t0", "\t2\t0\t0")
-    ruta = escribir(workdir, texto)
-    resultado = convert_file(ruta)
-
-    assert any("MOISTER" in nota for nota in resultado.notes)
-    convertido = parse_par(ruta.read_text(encoding="latin-1"))
-    assert convertido.moisture and not convertido.moisture_from_images
-    assert convertido == leer_viejo(texto)
+    second = convert_file(path)
+    assert first.changed and not second.changed
+    assert path.read_text(encoding="latin-1") == converted
+    # the backup is still the real file, not the already converted one
+    assert first.backup.read_text(encoding="latin-1") == original
 
 
-def test_ipivlab_se_toma_de_los_archivos_del_caso(workdir: Path):
-    """Es la única corrección que cambia la lectura: los .PAR antiguos no traen el campo."""
-    ruta = escribir(workdir, par_de("artículo, etapas"))
-    filas = "".join(f"0.{i},0.2,1.0,2.0,1\n" for i in range(2100))
-    (workdir / "datos (1).txt").write_text(CABECERA_PIVLAB + filas)
+def test_moister_two_from_an_earlier_version_is_written_as_one(workdir: Path):
+    text = par_of("centrifuge 2022").replace("\t1\t0\t0", "\t2\t0\t0")
+    path = write(workdir, text)
+    result = convert_file(path)
 
-    antes = leer_viejo(ruta.read_text(encoding="latin-1"))
-    resultado = convert_file(ruta)
-    despues = parse_par(ruta.read_text(encoding="latin-1"))
-
-    assert antes.pivlab_format == 1 and despues.pivlab_format == 2
-    assert any("IPIVLAB" in nota and "5 columnas" in nota for nota in resultado.notes)
-    # lo demás no se toca
-    assert (dataclasses.replace(despues, pivlab_format=1)
-            == dataclasses.replace(antes, pivlab_format=1))
+    assert any("MOISTER" in note for note in result.notes)
+    converted = parse_par(path.read_text(encoding="latin-1"))
+    assert converted.moisture and not converted.moisture_from_images
+    assert converted == read_old(text)
 
 
-def test_sin_archivos_del_caso_no_se_inventa_el_formato(workdir: Path):
-    ruta = escribir(workdir, par_de("artículo, etapas"))
-    resultado = convert_file(ruta)
-    assert parse_par(ruta.read_text(encoding="latin-1")).pivlab_format == 1
-    assert any("no se han encontrado" in nota for nota in resultado.notes)
+def test_ipivlab_is_taken_from_the_files_of_the_case(workdir: Path):
+    """The only correction that changes the reading: old .PAR files lack the field."""
+    path = write(workdir, par_of("paper, stages"))
+    rows = "".join(f"0.{i},0.2,1.0,2.0,1\n" for i in range(2100))
+    (workdir / "datos (1).txt").write_text(PIVLAB_HEADER + rows)
+
+    before = read_old(path.read_text(encoding="latin-1"))
+    result = convert_file(path)
+    after = parse_par(path.read_text(encoding="latin-1"))
+
+    assert before.pivlab_format == 1 and after.pivlab_format == 2
+    assert any("IPIVLAB" in note and "5 columns" in note for note in result.notes)
+    # nothing else is touched
+    assert (dataclasses.replace(after, pivlab_format=1)
+            == dataclasses.replace(before, pivlab_format=1))
 
 
-def test_avisa_del_dt_que_no_cuadra_con_pivlab(workdir: Path):
-    ruta = escribir(workdir, par_de("artículo, pruebas"))  # DT = 1
-    cabecera = ("PIVlab\nFactor de conversion (px -> m): 0.002, "
-                "(px/frame -> m/s): 0.001\nx,y,u,v\n")  # intervalo 2 s
-    (workdir / "datos (1).txt").write_text(cabecera + "0.1,0.2,1.0,2.0\n")
-    resultado = convert_file(ruta)
-
-    assert any("DT" in nota and "PIVlab" in nota for nota in resultado.notes)
-    assert parse_par(ruta.read_text(encoding="latin-1")).dt == 1.0  # no se toca
+def test_without_the_files_of_the_case_the_format_is_not_invented(workdir: Path):
+    path = write(workdir, par_of("paper, stages"))
+    result = convert_file(path)
+    assert parse_par(path.read_text(encoding="latin-1")).pivlab_format == 1
+    assert any("were not found" in note for note in result.notes)
 
 
-def test_un_par_ilegible_no_se_toca(workdir: Path):
-    ruta = escribir(workdir, "solo una linea\n")
-    resultado = convert_file(ruta)
-    assert resultado.error and not resultado.changed
-    assert ruta.read_text(encoding="latin-1") == "solo una linea\n"
-    assert not (workdir / "caso.PAR.orig").exists()
+def test_it_warns_about_a_dt_that_does_not_match_pivlab(workdir: Path):
+    path = write(workdir, par_of("paper, test runs"))  # DT = 1
+    header = ("PIVlab\nConversion factor (px -> m): 0.002, "
+              "(px/frame -> m/s): 0.001\nx,y,u,v\n")  # 2 s interval
+    (workdir / "datos (1).txt").write_text(header + "0.1,0.2,1.0,2.0\n")
+    result = convert_file(path)
+
+    assert any("DT" in note and "PIVlab" in note for note in result.notes)
+    assert parse_par(path.read_text(encoding="latin-1")).dt == 1.0  # not touched
 
 
-def test_convertir_un_arbol_entero(workdir: Path):
-    for i, dialecto in enumerate(DIALECTOS):
-        carpeta = workdir / f"caso{i}"
-        carpeta.mkdir()
-        escribir(carpeta, par_de(dialecto), f"caso{i}.PAR")
-    resultados = convert_tree(workdir)
-    assert len(resultados) == len(DIALECTOS)
-    assert all(r.error is None for r in resultados)
-    assert sum(r.changed for r in resultados) == len(DIALECTOS)
+def test_an_unreadable_par_is_left_alone(workdir: Path):
+    path = write(workdir, "just one line\n")
+    result = convert_file(path)
+    assert result.error and not result.changed
+    assert path.read_text(encoding="latin-1") == "just one line\n"
+    assert not (workdir / "case.PAR.orig").exists()
 
 
-def test_los_valores_se_copian_sin_reformatear(workdir: Path):
-    """Convertir no puede cambiar ni un decimal: se reordena, no se recalcula."""
-    texto = par_de("artículo, pruebas").replace("1385.46", "1.38546D+03")
-    ruta = escribir(workdir, texto)
-    convert_file(ruta)
-    assert "1.38546D+03" in ruta.read_text(encoding="latin-1")
-    assert parse_par(ruta.read_text(encoding="latin-1")).soil_density == 1385.46
+def test_converting_a_whole_tree(workdir: Path):
+    for i, dialect in enumerate(DIALECTS):
+        folder = workdir / f"case{i}"
+        folder.mkdir()
+        write(folder, par_of(dialect), f"case{i}.PAR")
+    results = convert_tree(workdir)
+    assert len(results) == len(DIALECTS)
+    assert all(r.error is None for r in results)
+    assert sum(r.changed for r in results) == len(DIALECTS)
 
 
-def test_el_formato_unico_se_puede_escribir_a_mano(workdir: Path):
-    """Un caso nuevo se escribe directamente así, sin pasar por el conversor."""
-    crudo = read_any_par_blocks(par_de("2024, el actual"))
-    texto = to_canonical(crudo, moister=1, pivlab_format=2)
-    assert parse_par(texto).pivlab_format == 2
+def test_the_values_are_copied_without_reformatting(workdir: Path):
+    """Converting cannot change a single decimal: it reorders, it does not recompute."""
+    text = par_of("paper, test runs").replace("1385.46", "1.38546D+03")
+    path = write(workdir, text)
+    convert_file(path)
+    assert "1.38546D+03" in path.read_text(encoding="latin-1")
+    assert parse_par(path.read_text(encoding="latin-1")).soil_density == 1385.46
 
 
-def test_la_leyenda_del_final_no_se_lee(workdir: Path):
-    """Explica qué significa cada número; el lector se detiene en el bloque 4."""
-    ruta = escribir(workdir, par_de("2024, el actual"))
-    convert_file(ruta)
-    texto = ruta.read_text(encoding="latin-1")
-    assert "moister" in texto and "2 = se calcula desde las imágenes" in texto
-    assert "1 = en los nodos de la malla" in texto
-    assert "4 columnas" in texto and "5 columnas" in texto
+def test_the_single_format_can_be_written_by_hand(workdir: Path):
+    """A new case is written straight like this, without going through the converter."""
+    raw = read_any_par_blocks(par_of("2024, the current one"))
+    text = to_canonical(raw, moister=1, pivlab_format=2)
+    assert parse_par(text).pivlab_format == 2
 
-    sin_leyenda = "\n".join(texto.splitlines()[:7]) + "\n"
-    assert parse_par(texto) == parse_par(sin_leyenda)
-    # y da igual lo que haya ahí abajo
-    assert parse_par(texto + "cualquier cosa\n1 2 3\n") == parse_par(sin_leyenda)
+
+def test_the_legend_at_the_end_is_not_read(workdir: Path):
+    """It explains what every number means; the reader stops at block 4."""
+    path = write(workdir, par_of("2024, the current one"))
+    convert_file(path)
+    text = path.read_text(encoding="latin-1")
+    assert "moisture" in text and "2 = it is computed from the test images" in text
+    assert "1 = at the nodes of the grid" in text
+    assert "4-column export" in text and "5-column export" in text
+
+    without_legend = "\n".join(text.splitlines()[:7]) + "\n"
+    assert parse_par(text) == parse_par(without_legend)
+    # and whatever is down there makes no difference
+    assert parse_par(text + "anything at all\n1 2 3\n") == parse_par(without_legend)
