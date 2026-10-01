@@ -1,0 +1,42 @@
+{
+  "displacement_1P": {
+    "origin": "desplazamiento 1P",
+    "instants": 11
+  },
+  "displacement_4P": {
+    "origin": "desplazamiento 4P",
+    "instants": 11
+  },
+  "shear_1P": {
+    "origin": "deformacion de corte 1P",
+    "instants": 11
+  },
+  "shear_4P": {
+    "origin": "deformacion de corte 4P",
+    "instants": 11
+  },
+  "horizontal_1P": {
+    "origin": "deformacion horizontal 1P",
+    "instants": 16
+  },
+  "horizontal_4P": {
+    "origin": "deformacion horizontal 4P",
+    "instants": 16
+  },
+  "horizontal_uniform_1P": {
+    "origin": "deformacion horizontal uniforme 1P",
+    "instants": 25
+  },
+  "horizontal_uniform_4P": {
+    "origin": "deformacion horizontal uniforme 4P",
+    "instants": 25
+  },
+  "rotation_1P": {
+    "origin": "rotación 1P",
+    "instants": 51
+  },
+  "rotation_4P": {
+    "origin": "rotación 4P",
+    "instants": 51
+  }
+}
