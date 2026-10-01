@@ -19,8 +19,8 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent))
 from piv import analyse, anti_blocking, chain, high_pass, local_contrast  # noqa: E402
 from preprocessing import neighbour_scatter, outlier_fraction  # noqa: E402
-
-from test_images import masked, original as camera_image  # noqa: E402
+from test_images import masked  # noqa: E402
+from test_images import original as camera_image
 
 REGION = (slice(200, 900), slice(400, 1500))
 

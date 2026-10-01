@@ -26,7 +26,6 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
 from piv import CANDIDATES, analyse  # noqa: E402
-
 from test_images import masked  # noqa: E402
 
 PAIR = (masked(10), masked(11))
