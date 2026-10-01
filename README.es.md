@@ -23,8 +23,11 @@ original en Fortran (`legacy/`): 38 s → 2 s en el caso de la centrífuga.
 > humedad y crear tu propio caso. Este README es la referencia a la que volver después.
 
 ```bash
-pivnp examples/shear-block
+pivnp examples/shear-block                             # a partir de archivos de PIVlab
+pivnp examples/piv-from-images --source images         # a partir de fotos, sin PIVlab
 ```
+
+Los dos vienen con sus datos y los dos tienen un resultado que puedes comprobar.
 
 ---
 
@@ -116,6 +119,32 @@ python -m pivnp.compare referencia.POST.RES nuevo.POST.RES
 ```
 
 Compara línea a línea y tolera diferencias de una unidad en la sexta cifra.
+
+### Otras fuentes de desplazamiento
+
+El campo de velocidades no tiene que venir de PIVlab. El análisis sólo ve un `Frame` por
+paso, así que puede proporcionarlo cualquier origen. Dos vienen con PIV-NP:
+
+| `--source` | de dónde salen los desplazamientos |
+|---|---|
+| `pivlab` | los archivos `datos (n).txt` que exporta PIVlab (el valor por defecto) |
+| `images` | los mide PIV-NP a partir de las fotografías, sin necesidad de PIVlab |
+
+```bash
+pivnp examples/mi-caso --source images
+```
+
+`--source images` necesita un archivo [`<caso>.PIV`](#archivos-de-entrada) que diga dónde
+están las fotografías y cuántos metros vale un píxel. Está pensado como puerta de entrada: si
+tienes fotografías y ninguna experiencia en PIV, obtienes un resultado y más adelante decides
+si aprender PIVlab. **No sustituye a PIVlab.** En el ensayo contra el que se comprobó coincide
+dentro del 8 % en desplazamiento y del 7 % en cuánta deformación hay, pero sólo a grandes
+rasgos en *dónde* está la deformación — las cifras y los límites están en
+[`docs/VALIDATION.md`](docs/VALIDATION.md#8-the-built-in-piv) (en inglés).
+
+Escribir una fuente nueva es una clase y un registro; el contrato, con un ejemplo resuelto,
+está en [`src/pivnp/sources.py`](src/pivnp/sources.py) y en
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Archivos de entrada
 
@@ -252,6 +281,49 @@ Las claves están en inglés, como el resto del repositorio.
 El CSV de calibración lleva la cabecera `gray,saturation,moisture` y una fila por medida de
 laboratorio; la curva se interpola entre ellas igual que el `pchip` de MATLAB. Los valores
 fuera de la tabla se recortan a sus extremos y se informa de ello.
+
+### `<caso>.PIV` (sólo con `--source images`)
+
+Con `--source images` no hay archivos de PIVlab: PIV-NP mide los desplazamientos de las
+fotografías por su cuenta. Hay que decirle dónde están y cuántos metros vale un píxel, y eso
+va en un archivo `<caso>.PIV` — de la misma forma que el `.HUM`: cada valor con su nombre, el
+orden no importa y `!` empieza un comentario:
+
+```
+! PIV a partir de las fotografías
+IMAGES     = images/foto_{n:03d}.jpg   ! {n} es el número de imagen; {n:03d} lo rellena a 001
+SCALE      = 0.00054081                ! metros por píxel -- mídelo, no hay valor por defecto
+WINDOW     = 16                        ! ventana de interrogación final, en píxeles
+OVERLAP    = 0.5                       ! así el paso de la malla es de 8 px
+PASSES     = 2                         ! 32 px para encontrar el desplazamiento, 16 para afinarlo
+REGION     = 232, 213, 1656, 845       ! la parte de la foto donde hay material
+MASK_BELOW = 25                        ! más oscuro que esto es fondo, no suelo
+```
+
+| Clave | Por defecto | Significado |
+|---|---|---|
+| `IMAGES` | — | **obligatoria**: nombre de cada fotografía; debe contener `{n}`, y `{n:03d}` lo rellena con ceros (`foto_001.jpg`) |
+| `SCALE` | — | **obligatoria**: metros por píxel. Este único número convierte cada desplazamiento a metros, y no hay forma de adivinarlo: mide algo de longitud conocida en una fotografía, o tómalo de la calibración del ensayo |
+| `CHANNEL` | `gray` | canal usado: `1` rojo, `2` verde, `3` azul, `0`/`gray` escala de grises |
+| `WINDOW` | `32` | lado de la ventana de interrogación final, en píxeles; potencia de dos, 16 o 32 es lo habitual. Más pequeña resuelve más detalle y mide con menos fiabilidad |
+| `OVERLAP` | `0.5` | cuánto comparten las ventanas vecinas, así que el paso de la malla es `WINDOW × (1 − OVERLAP)` |
+| `PASSES` | `2` | cada pasada anterior a la última usa una ventana del doble de ancho, para encontrar un desplazamiento del que no sabe nada. Una tercera pasada aporta muy poco |
+| `FIRST_IMAGE` | `1` | número de la primera fotografía, para secuencias que no empiezan en 1 |
+| `REGION` | toda la imagen | `izquierda, arriba, derecha, abajo` en píxeles: la parte de la foto que cubre la malla. Sin ella la malla abarca todo, incluido fondo que nunca se moverá |
+| `MASK_BELOW` | — | los píxeles más oscuros que esto no son material. Para fotografías cuyo fondo ya está en negro |
+| `MASK_IMAGE` | — | una imagen que marca el material, donde todo lo que no sea negro es material. Usa ésta **o** `MASK_BELOW`, no las dos |
+| `OUTLIER_THRESHOLD` | `2.0` | cuánto puede diferir un vector de sus vecinos, medido en su propia dispersión, antes de descartarlo (test de la mediana normalizada) |
+| `SMOOTH` | `0.6` | anchura, en puntos de malla, del suavizado del campo terminado. La deformación es una diferencia entre vectores vecinos, así que la dispersión subpíxel que apenas se nota en el desplazamiento la domina. `0` deja el campo crudo |
+
+La malla de ventanas de interrogación **es** la malla PIV, así que tiene que ser la que
+describe el `BLOCK 2` del `.PAR`. No se deja al azar: si las dos no coinciden, PIV-NP se
+niega a ejecutar e imprime la línea `BLOCK 2` que necesitarían estas fotografías y estos
+ajustes, para que la pegues.
+
+Qué esperar de ello está en
+[`docs/VALIDATION.md`](docs/VALIDATION.md#8-the-built-in-piv) (en inglés): en el ensayo
+contra el que se comprobó, desplazamientos dentro del 8 % de PIVlab y la cantidad de
+deformación dentro del 7 %, pero sólo coincidencia a grandes rasgos en dónde está.
 
 ## Resultados
 
@@ -528,7 +600,9 @@ piv-np/
 ├── legacy/                código Fortran original, sin modificar
 ├── tools/                 generación de resultados de referencia
 ├── benchmarks/            medición de rendimiento
-├── examples/shear-block/  un ejemplo ejecutable, con sus datos
+├── examples/
+│   ├── shear-block/      un ejemplo ejecutable con archivos de PIVlab, datos incluidos
+│   └── piv-from-images/  lo mismo a partir de fotografías, sin PIVlab
 └── docs/
     ├── GUIDE.md           guía de inicio, paso a paso
     ├── ARCHITECTURE.md    diseño y propuestas de mejora
