@@ -445,7 +445,7 @@ piv-np/
 ├── legacy/                código Fortran original, sin modificar
 ├── tools/                 generación de resultados de referencia
 ├── benchmarks/            medición de rendimiento
-├── examples/              caso de la centrífuga
+├── examples/shear-block/  un ejemplo ejecutable, con sus datos
 └── docs/
     ├── GUIDE.md           guía de inicio, paso a paso
     ├── ARCHITECTURE.md    diseño y propuestas de mejora

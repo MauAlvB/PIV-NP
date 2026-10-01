@@ -451,7 +451,7 @@ piv-np/
 ├── legacy/                original Fortran code, unmodified
 ├── tools/                 generation of reference results
 ├── benchmarks/            performance measurement
-├── examples/              centrifuge case
+├── examples/shear-block/  a runnable example, data included
 └── docs/
     ├── GUIDE.md           getting started, step by step
     ├── ARCHITECTURE.md    design and improvement proposals
