@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pivnp"
 version = "2.0.0"
-description = "PIV-NP: seguimiento de partículas numéricas sobre campos de velocidad de PIVlab (desplazamientos, deformaciones, humedad)."
+description = "PIV-NP: tracking of numerical particles on PIVlab velocity fields (displacements, strains, moisture)."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-cov", "ruff"]
-# Solo para abrir/renderizar los VTK desde Python (ParaView no lo necesita)
+# Only to open/render the VTK files from Python (ParaView does not need it)
 viz = ["pyvista"]
 
 [project.scripts]
@@ -34,7 +34,7 @@ where = ["src"]
 testpaths = ["tests"]
 addopts = "-ra"
 markers = [
-    "slow: pruebas lentas (caso completo de regresión)",
+    "slow: slow tests (the full regression case)",
 ]
 
 [tool.ruff]

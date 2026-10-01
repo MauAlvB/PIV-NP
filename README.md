@@ -15,7 +15,7 @@ suitable for **large displacements** and accumulated strains.
 Version 2.0 is written in Python and is about **19 times faster** than the original Fortran
 version (`legacy/`): 38 s → 2 s for the centrifuge case.
 
-![Equivalent shear strain in the centrifuge test](docs/img/centrifuga_equi_strain.png)
+![Equivalent shear strain in the centrifuge test](docs/img/centrifuge_equi_strain.png)
 
 ---
 
@@ -119,21 +119,20 @@ itself.
 
 ```
 Analysis title
-BLOQUE 2: N_cel N_nod N_part_celda N_fil Ancho    Alto
-          2006  2100  3            34    0.212115 0.212115
-BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
-          0.8   149         1         0       1       1      0       0   0
-BLOQUE 4: s_density porosity
-          2650.0    0.4
-!-----------------------------------------------------------------------
-! Qué significa cada valor. De aquí abajo no se lee nada.
+BLOCK 2: n_cells n_nodes n_part_cell n_rows width    height
+         2006    2100    3           34     0.212115 0.212115
+BLOCK 3: dt  total_steps print_every moisture mesh_version pivlab contour restart track
+         0.8 149         1           0        1            1      0       0       0
+BLOCK 4: s_density porosity
+         2650.0    0.4
+!------------------------------------------------------------------------------------------
+! What every value means. Nothing below this line is read.
 ! ...
 ```
 
 A legend follows block 4 explaining what each number means and which options each variable
-takes (in Spanish, as the case files are). It is not read: it is there for whoever opens the
-file. The converter writes it, and the easiest way to set up a new case is to copy another
-case's `.PAR` and change the values.
+takes. It is not read: it is there for whoever opens the file. The converter writes it, and
+the easiest way to set up a new case is to copy another case's `.PAR` and change the values.
 
 | Parameter | Meaning |
 |---|---|
@@ -179,6 +178,41 @@ where 2 meant something else— are reported on screen.
   `x, y, water content, saturation`.
 
 File names are case-insensitive.
+
+### `<case>.HUM` (only with `MOISTER=2`)
+
+With `MOISTER=2` the moisture is measured from the test photographs instead of being read
+from `Moist_<n>.TXT`. The settings go in a `<case>.HUM` file, where every value is named,
+the order does not matter and `!` starts a comment:
+
+```
+! moisture measurement
+IMAGES        = vis_{n}.jpg               ! {n} is replaced by the step number
+CHANNEL       = gray                      ! 1 red, 2 green, 3 blue, 0 or "gray"
+SIGMA         = 40                        ! averaging radius, in pixels
+DRY_REFERENCE = ref2.jpg                  ! photo of the dry soil
+CALIBRATION   = calibration_slope_rgb.csv ! gray,saturation,moisture of the soil
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `IMAGES` | `vis_{n}.jpg` | name of the image of each step; it must contain `{n}` |
+| `CHANNEL` | `gray` | channel used: `1` red, `2` green, `3` blue, `0`/`gray` grayscale |
+| `SIGMA` | `40` | radius of the Gaussian blur applied to each image, in pixels |
+| `DRY_REFERENCE` | `ref2.jpg` | photograph of the dry soil, the reference of each pixel |
+| `DRY_OFFSET`, `SATURATED_OFFSET` | `5`, `-6` | gray levels above/below the reference that mark dry soil and saturated soil |
+| `DRY_BAND`, `SATURATED_BAND` | — | the two intensities, fixed for the whole image, instead of the per-pixel reference. Both together or neither |
+| `CALIBRATION` | — | **required**: CSV with the `gray,saturation,moisture` curve of the soil |
+| `INCREMENTAL` | `0` | `1` = the soil can only get wetter: each pixel keeps the wettest value it reached |
+| `SATURATION_THRESHOLD` | `0.95` | with `INCREMENTAL=1`, saturation above which a pixel is held at the saturated end |
+| `FIRST_STEP` | `same` | `legacy` reproduces the MATLAB code, which gave the first step water content 0 and a constant saturation |
+| `LEGACY_ROUNDING` | `0` | `1` rounds the blurred image to integers, as MATLAB did |
+| `SCALE_X`, `OFFSET_X`, `SCALE_Y`, `OFFSET_Y` | `1, 0, 1, 0` | where the PIV grid falls on the moisture image |
+| `SHEAR_XY`, `SHEAR_YX`, `PERSPECTIVE_X`, `PERSPECTIVE_Y` | `0` | the remaining terms of the projective transform, for a second camera (SWIR) looking from a different angle |
+
+The calibration CSV has a header `gray,saturation,moisture` and one row per laboratory
+measurement; the curve is interpolated between them exactly as MATLAB's `pchip` does.
+Values outside the table are clamped to its ends and reported as such.
 
 ## Results
 
@@ -264,7 +298,7 @@ pivnp-vtk path/to/case/zapatak.POST.RES
 
 Then, in ParaView: **File → Open → `zapatak_vtk/zapatak.pvd` → Apply**, colour by
 `Equi_strain` and press **Play**. Full guide (in Spanish) in
-[`docs/VISUALIZACION.md`](docs/VISUALIZACION.md).
+[`docs/VISUALIZATION.md`](docs/VISUALIZATION.md).
 
 ## Boundary correction
 
@@ -302,7 +336,7 @@ Effect on the centrifuge case (149 steps, 9378 active particles):
 "Isolated particles" are those left without any neighbour within one cell, that is, those
 that detached from the material.
 
-![Comparison of the boundary correction methods](docs/img/contorno_comparativa.png)
+![Comparison of the boundary correction methods](docs/img/contour_comparison.png)
 
 Which one is best is a physical question rather than a programming one: it is worth
 checking against PTV markers or photographs of the test. Adding another method only takes a
@@ -325,8 +359,8 @@ Excluding the first Numba compilation (about 6 s, once). To measure it on your m
 python benchmarks/benchmark.py path/to/case --threads 1 4 0 --legacy legacy/pivnp_legacy.exe
 ```
 
-Where the speed-up comes from is explained (in Spanish) in
-[`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md). The comparison uses the Fortran code built
+Where the speed-up comes from is explained in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The comparison uses the Fortran code built
 with gfortran.
 
 ## Tests
@@ -335,7 +369,7 @@ with gfortran.
 pytest
 ```
 
-* **Synthetic cases** (`tests/data/sinteticos/`): velocity fields with a known solution
+* **Synthetic cases** (`tests/data/synthetic/`): velocity fields with a known solution
   (displacement without strain, uniform and varying horizontal strain, shear and rigid-body
   rotation). The computed strains are checked against the analytical ones, and the analyses
   the group ran at the time are reproduced.
@@ -361,12 +395,18 @@ To regenerate the reference results with the Fortran version (requires gfortran)
 python tools/make_reference.py --source "path/to/caso paper centrifuga"
 ```
 
+Beyond the test suite, [`docs/VALIDATION.md`](docs/VALIDATION.md) records what was checked
+against the real cases analysed with earlier versions: where this version reproduces them
+exactly, which differences turned out to be regressions in the older code, how much each
+moisture decision moves the result, and which limits of the method are still open.
+
 ## Project layout
 
 ```
 piv-np/
 ├── src/pivnp/
 │   ├── config.py          reading and validation of PIV-NP.TXT and .PAR
+│   ├── par_migrate.py     conversion of old .PAR files to the single format
 │   ├── mesh.py            grids and particle location
 │   ├── particles.py       particle generation
 │   ├── state.py           particle and nodal arrays
@@ -380,6 +420,7 @@ piv-np/
 │   ├── simulation.py      main loop
 │   ├── compare.py         result comparison
 │   ├── vtk_export.py      VTK export for ParaView
+│   ├── moisture/          moisture from the test images (MOISTER=2)
 │   └── cli.py             command line
 ├── tests/                 unit, behaviour and regression tests
 ├── legacy/                original Fortran code, unmodified
@@ -387,11 +428,13 @@ piv-np/
 ├── benchmarks/            performance measurement
 ├── examples/              centrifuge case
 └── docs/
-    ├── ARQUITECTURA.md    design and improvement proposals (Spanish)
-    └── VISUALIZACION.md   ParaView guide (Spanish)
+    ├── ARCHITECTURE.md    design and improvement proposals
+    ├── VALIDATION.md      how it was checked, and the known limits
+    └── VISUALIZATION.md   ParaView guide
 ```
 
-Source code comments and the documents under `docs/` are written in Spanish.
+The code, its comments and the documents under `docs/` are written in English.
+[`README.es.md`](README.es.md) is the Spanish translation of this file.
 
 ## License and citation
 

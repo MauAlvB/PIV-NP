@@ -15,7 +15,7 @@ malla fija (euleriana), PIV-NP sigue cada punto del material (lagrangiano), así
 La versión 2.0 está escrita en Python y es unas **19 veces más rápida** que la versión
 original en Fortran (`legacy/`): 38 s → 2 s en el caso de la centrífuga.
 
-![Deformación de corte equivalente en el ensayo de centrífuga](docs/img/centrifuga_equi_strain.png)
+![Deformación de corte equivalente en el ensayo de centrífuga](docs/img/centrifuge_equi_strain.png)
 
 ---
 
@@ -119,20 +119,21 @@ de sus valores, de modo que el archivo se explica solo.
 
 ```
 Título del análisis
-BLOQUE 2: N_cel N_nod N_part_celda N_fil Ancho    Alto
-          2006  2100  3            34    0.212115 0.212115
-BLOQUE 3: del_t total_steps impresion moister version pivlab contour rec track
-          0.8   149         1         0       1       1      0       0   0
-BLOQUE 4: s_density porosity
-          2650.0    0.4
-!-----------------------------------------------------------------------
-! Qué significa cada valor. De aquí abajo no se lee nada.
+BLOCK 2: n_cells n_nodes n_part_cell n_rows width    height
+         2006    2100    3           34     0.212115 0.212115
+BLOCK 3: dt  total_steps print_every moisture mesh_version pivlab contour restart track
+         0.8 149         1           0        1            1      0       0       0
+BLOCK 4: s_density porosity
+         2650.0    0.4
+!------------------------------------------------------------------------------------------
+! What every value means. Nothing below this line is read.
 ! ...
 ```
 
-Después del bloque 4 va una leyenda con el significado de cada número y las opciones de cada
-variable. No se lee: está para quien abra el archivo. El conversor la escribe, y al crear un
-caso nuevo lo más cómodo es copiar el `.PAR` de otro y cambiar los valores.
+Después del bloque 4 va una leyenda (en inglés, como el resto del repositorio) con el
+significado de cada número y las opciones de cada variable. No se lee: está para quien abra
+el archivo. El conversor la escribe, y al crear un caso nuevo lo más cómodo es copiar el
+`.PAR` de otro y cambiar los valores.
 
 | Parámetro | Significado |
 |---|---|
@@ -179,6 +180,43 @@ las versiones en las que 2 significaba otra cosa— se avisan por pantalla.
   `x, y, humedad, saturación`.
 
 Los nombres no distinguen mayúsculas.
+
+### `<caso>.HUM` (solo con `MOISTER=2`)
+
+Con `MOISTER=2` la humedad se mide a partir de las fotografías del ensayo en lugar de
+leerse de los `Moist_<n>.TXT`. La configuración va en un archivo `<caso>.HUM`, donde cada
+valor lleva su nombre, el orden es indiferente y `!` empieza un comentario:
+
+```
+! moisture measurement
+IMAGES        = vis_{n}.jpg               ! {n} se sustituye por el número de paso
+CHANNEL       = gray                      ! 1 rojo, 2 verde, 3 azul, 0 o "gray"
+SIGMA         = 40                        ! radio de promediado, en píxeles
+DRY_REFERENCE = ref2.jpg                  ! foto del suelo seco
+CALIBRATION   = calibration_slope_rgb.csv ! gray,saturation,moisture del suelo
+```
+
+Las claves están en inglés, como el resto del repositorio.
+
+| Clave | Por defecto | Significado |
+|---|---|---|
+| `IMAGES` | `vis_{n}.jpg` | nombre de la imagen de cada paso; debe contener `{n}` |
+| `CHANNEL` | `gray` | canal usado: `1` rojo, `2` verde, `3` azul, `0`/`gray` escala de grises |
+| `SIGMA` | `40` | radio del desenfoque gaussiano aplicado a cada imagen, en píxeles |
+| `DRY_REFERENCE` | `ref2.jpg` | fotografía del suelo seco, la referencia de cada píxel |
+| `DRY_OFFSET`, `SATURATED_OFFSET` | `5`, `-6` | niveles de gris por encima/debajo de la referencia que marcan suelo seco y saturado |
+| `DRY_BAND`, `SATURATED_BAND` | — | las dos intensidades, fijas para toda la imagen, en lugar de la referencia por píxel. Las dos juntas o ninguna |
+| `CALIBRATION` | — | **obligatoria**: CSV con la curva `gray,saturation,moisture` del suelo |
+| `INCREMENTAL` | `0` | `1` = el suelo solo puede humedecerse: cada píxel conserva el valor más húmedo alcanzado |
+| `SATURATION_THRESHOLD` | `0.95` | con `INCREMENTAL=1`, saturación por encima de la cual el píxel se fija en el extremo saturado |
+| `FIRST_STEP` | `same` | `legacy` reproduce el código MATLAB, que daba humedad 0 y saturación constante al primer paso |
+| `LEGACY_ROUNDING` | `0` | `1` redondea la imagen desenfocada a enteros, como hacía MATLAB |
+| `SCALE_X`, `OFFSET_X`, `SCALE_Y`, `OFFSET_Y` | `1, 0, 1, 0` | dónde cae la malla PIV sobre la imagen de humedad |
+| `SHEAR_XY`, `SHEAR_YX`, `PERSPECTIVE_X`, `PERSPECTIVE_Y` | `0` | el resto de términos de la transformación proyectiva, para una segunda cámara (SWIR) que mira desde otro ángulo |
+
+El CSV de calibración lleva la cabecera `gray,saturation,moisture` y una fila por medida de
+laboratorio; la curva se interpola entre ellas igual que el `pchip` de MATLAB. Los valores
+fuera de la tabla se recortan a sus extremos y se informa de ello.
 
 ## Resultados
 
@@ -264,7 +302,7 @@ pivnp-vtk ruta/al/caso/zapatak.POST.RES
 
 Después, en ParaView: **File → Open → `zapatak_vtk/zapatak.pvd` → Apply**, colorear por
 `Equi_strain` y pulsar **Play**. Guía completa en
-[`docs/VISUALIZACION.md`](docs/VISUALIZACION.md).
+[`docs/VISUALIZATION.md`](docs/VISUALIZATION.md).
 
 ## Corrección de contorno
 
@@ -302,7 +340,7 @@ Efecto en el caso de la centrífuga (149 pasos, 9378 partículas activas):
 "Partículas aisladas" son las que acaban sin vecinas a menos de una celda, es decir, las que
 se han despegado del material.
 
-![Comparación de los métodos de corrección de contorno](docs/img/contorno_comparativa.png)
+![Comparación de los métodos de corrección de contorno](docs/img/contour_comparison.png)
 
 Cuál es el mejor es una cuestión física, no de programación: conviene contrastarlo con
 marcadores PTV o con fotografías del ensayo. Para añadir otro método basta con escribir una
@@ -327,7 +365,7 @@ equipo:
 python benchmarks/benchmark.py ruta/al/caso --threads 1 4 0 --legacy legacy/pivnp_legacy.exe
 ```
 
-El detalle de dónde sale la mejora está en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
+El detalle de dónde sale la mejora está en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 La comparación es con el Fortran compilado con gfortran.
 
 ## Pruebas
@@ -336,7 +374,7 @@ La comparación es con el Fortran compilado con gfortran.
 pytest
 ```
 
-* **Casos sintéticos** (`tests/data/sinteticos/`): campos de velocidad de solución conocida
+* **Casos sintéticos** (`tests/data/synthetic/`): campos de velocidad de solución conocida
   (desplazamiento sin deformación, deformación horizontal uniforme y variable, corte y
   rotación de sólido rígido). Se comprueba que las deformaciones calculadas coinciden con
   las analíticas y que se reproducen los análisis que el grupo hizo en su día.
@@ -363,12 +401,18 @@ Para regenerar los resultados de referencia con la versión Fortran (requiere gf
 python tools/make_reference.py --source "ruta/a/caso paper centrifuga"
 ```
 
+Además de las pruebas, [`docs/VALIDATION.md`](docs/VALIDATION.md) recoge lo comprobado
+frente a los casos reales analizados con versiones anteriores: dónde esta versión los
+reproduce exactamente, qué diferencias resultaron ser regresiones del código antiguo, cuánto
+mueve cada decisión del cálculo de humedad y qué límites del método siguen abiertos.
+
 ## Estructura del proyecto
 
 ```
 piv-np/
 ├── src/pivnp/
 │   ├── config.py          lectura y validación de PIV-NP.TXT y .PAR
+│   ├── par_migrate.py     conversión de los .PAR antiguos al formato único
 │   ├── mesh.py            mallas y localización de partículas
 │   ├── particles.py       generación de partículas
 │   ├── state.py           arrays de partículas y nodos
@@ -382,6 +426,7 @@ piv-np/
 │   ├── simulation.py      bucle principal
 │   ├── compare.py         comparación de resultados
 │   ├── vtk_export.py      conversión a VTK para ParaView
+│   ├── moisture/          humedad a partir de las imágenes del ensayo (MOISTER=2)
 │   └── cli.py             línea de comandos
 ├── tests/                 pruebas (unitarias, de comportamiento y de regresión)
 ├── legacy/                código Fortran original, sin modificar
@@ -389,9 +434,14 @@ piv-np/
 ├── benchmarks/            medición de rendimiento
 ├── examples/              caso de la centrífuga
 └── docs/
-    ├── ARQUITECTURA.md    diseño y propuestas de mejora
-    └── VISUALIZACION.md   guía de ParaView
+    ├── ARCHITECTURE.md    diseño y propuestas de mejora
+    ├── VALIDATION.md      cómo se ha comprobado, y los límites conocidos
+    └── VISUALIZATION.md   guía de ParaView
 ```
+
+El código, sus comentarios y los documentos de `docs/` están en inglés, para que cualquiera
+pueda usar y modificar el repositorio. Este archivo es la traducción al español del
+[`README.md`](README.md).
 
 ## Licencia y cita
 
