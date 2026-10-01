@@ -14,9 +14,9 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
 from piv import analyse  # noqa: E402
+from test_images import masked  # noqa: E402
 
-IMAGE = (Path(r"C:\Users\Usuario\Desktop\Prueba\casos adicionales"
-              r"\Digital image-based measurement of") / "PIVLAB" / "Masked_001.jpg")
+IMAGE = masked(1)
 
 
 def shifted(image: np.ndarray, dx: float, dy: float) -> np.ndarray:

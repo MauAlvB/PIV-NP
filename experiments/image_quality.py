@@ -16,15 +16,17 @@ This measures both, with no PIV involved:
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-BASE = Path(r"C:\Users\Usuario\Desktop\Prueba\casos adicionales"
-            r"\Digital image-based measurement of")
-PAIRS = (("as PIV saw it (recompressed)", BASE / "PIVLAB" / "Masked_001.jpg"),
-         ("the original", BASE / "visual 1 fps (1 a 21)" / "visual_375.jpg"))
+sys.path.insert(0, str(Path(__file__).parent))
+from test_images import masked, original  # noqa: E402
+
+PAIRS = (("as PIV saw it (recompressed)", masked(1)),
+         ("the original", original("visual_375.jpg")))
 
 WINDOW = 32          # a typical interrogation window
 SAMPLES = 400

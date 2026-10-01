@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from piv import analyse, anti_blocking, chain, high_pass, local_contrast  # noqa: E402
 from preprocessing import neighbour_scatter, outlier_fraction  # noqa: E402
 
-BASE = Path(r"C:\Users\Usuario\Desktop\Prueba\casos adicionales"
-            r"\Digital image-based measurement of")
+from test_images import masked, original as camera_image  # noqa: E402
+
 REGION = (slice(200, 900), slice(400, 1500))
 
 
@@ -29,10 +29,8 @@ def load(path: Path) -> np.ndarray:
     return np.asarray(Image.open(path).convert("L"), dtype=np.float64)[REGION]
 
 
-original = (load(BASE / "visual 1 fps (1 a 21)" / "visual_375.jpg"),
-            load(BASE / "visual 1 fps (1 a 21)" / "visual_376.jpg"))
-prepared = (load(BASE / "PIVLAB" / "Masked_001.jpg"),
-            load(BASE / "PIVLAB" / "Masked_002.jpg"))
+original = (load(camera_image("visual_375.jpg")), load(camera_image("visual_376.jpg")))
+prepared = (load(masked(1)), load(masked(2)))
 
 print(f"original : contrast {original[0].std():.1f}, mean {original[0].mean():.1f}")
 print(f"prepared : contrast {prepared[0].std():.1f}, mean {prepared[0].mean():.1f}\n")

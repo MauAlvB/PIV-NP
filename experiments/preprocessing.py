@@ -27,9 +27,9 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent))
 from piv import CANDIDATES, analyse  # noqa: E402
 
-BASE = (Path(r"C:\Users\Usuario\Desktop\Prueba\casos adicionales"
-             r"\Digital image-based measurement of") / "PIVLAB")
-PAIR = (BASE / "Masked_010.jpg", BASE / "Masked_011.jpg")
+from test_images import masked  # noqa: E402
+
+PAIR = (masked(10), masked(11))
 REGION = (slice(200, 900), slice(400, 1500))
 
 
