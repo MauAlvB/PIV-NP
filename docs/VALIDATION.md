@@ -368,7 +368,53 @@ Read regionally rather than particle by particle — even in well-deformed mater
 interquartile range is 0.30 to 0.88 — the map does separate the upstream face, which slides
 with little rotation, from the downstream material, which rotates as it collapses.
 
-## 7. Still open
+## 7. The finite strain, measured against the incremental one
+
+The strain the original computes is a sum of linear increments, one per step. The `Finite_*`
+results differentiate once instead, over the accumulated displacement, from the deformation
+gradient `F = I + ∂u/∂X`. Both are published; these are the measurements that justify having
+the second.
+
+| | incremental | finite | truth |
+|---|---|---|---|
+| **`rotation_1P`** — turns 50°, deforms nothing | | | |
+| equivalent shear | 0.005077 | **0.000000** | 0 |
+| volumetric / area change | −0.015230 | **0.000000** | 0 |
+| rotation | −49.9975 | **−50.0000** | 50 |
+| **`shear-block`** — simple shear γ = 0.1 | | | |
+| engineering shear | 0.100000 | 0.100000 | 0.100000 |
+| equivalent shear | 0.057735 | **0.057831** | 0.057831 |
+
+The rotation case is the sharp one: the Green-Lagrange strain is *identically* zero for any
+rigid motion, so the 1.5 % of apparent contraction the incremental measure reports simply
+does not arise. It is not a better approximation, it is a property of the measure.
+
+On `shear-block` the two differ and the finite one is exact. For engineering shear γ the
+closed form is `E_xx = 0`, `E_yy = γ²/2`, `2E_xy = γ`; putting γ = 0.1 through the same
+equivalent-shear formula gives 0.057831. The γ²/2 is a real term the linear theory drops.
+
+On the real dam-break case, measured against the velocity filters that were tried and
+rejected (see `experiments/` on the `noise-reduction` branch):
+
+| | peak kept | shear band kept | quiet-zone noise cut | scatter |
+|---|---|---|---|---|
+| incremental | 100 % | 100 % | 0 % | 0.03765 |
+| **finite, same velocities** | 144 % | **85 %** | **21 %** | **0.02802** |
+| incremental + a 3×3 average of the velocities | 63 % | 63 % | 21 % | 0.01726 |
+
+It removes as much noise as a mild spatial filter and keeps the feature the filter destroys,
+because it is not smoothing anything: it computes a more correct quantity from the same
+velocities. The spurious volumetric strain falls by 84 %.
+
+One figure there is observed and not explained: the peak comes out 44 % *higher*, and the
+finite correction accounts for only about 4 % at these strains. The rest is most likely the
+incremental sum losing deformation along a path that rotates. It should be isolated on a
+synthetic case with large shear before anyone relies on it.
+
+The cost is four more blocks in the `.POST.RES`, about 40 % more file, and a few per cent of
+run time.
+
+## 8. Still open
 
 * **How the dry–saturated band of each soil is measured.** It is the most sensitive number
   of the whole moisture method and currently comes from two clicks and four constants.
