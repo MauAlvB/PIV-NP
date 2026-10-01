@@ -376,6 +376,129 @@ file and `SMOOTH = 0` turns it off.
 
 ---
 
+## Phase 6 — why the built-in PIV and PIVlab disagree on the strain pattern
+
+Verdict first: **the question was half wrong, and the half that survives has a well-supported
+answer that has not been implemented.** Phase 5 reported that the two agree on how much
+strain there is but only broadly on where, and read a correlation of 0.5 per particle as
+evidence of something structured. That reading had an untested assumption in it — that 0.5 is
+low — and measuring the thing it was compared against changes the conclusion.
+
+Run it with `python experiments/piv_reproducibility.py` (needs `PIVNP_TEST_IMAGES`).
+
+### 1. The baseline that was missing: how well does a measurement agree with itself?
+
+The twenty steps split into the odd ones and the even ones, each run as a complete ten-step
+analysis. The two sample the same physical event, interleaved, so they should give the same
+strain pattern at about half the magnitude. How well they agree is the ceiling; nothing can
+beat it.
+
+| correlation of the equivalent strain | per particle | 20 mm patches | 40 mm | 80 mm |
+|---|---|---|---|---|
+| PIVlab against itself | 0.569 | 0.889 | 0.952 | 0.940 |
+| **the built-in PIV against itself** | **0.731** | 0.884 | 0.960 | **0.978** |
+| the built-in PIV against PIVlab | 0.528 | 0.482 | 0.608 | 0.828 |
+
+Two things follow, and the first overturns phase 5:
+
+* **0.52 per particle is not low.** It is the reproducibility floor: PIVlab manages 0.569
+  against its own data. The strain of a single particle on this test is simply not a
+  reproducible quantity, for anybody, because it is a difference between neighbouring
+  vectors at 0.16 px of movement per step. Reading 0.52 as a defect was wrong.
+* **Our field is the more reproducible of the two**, not the less — 0.73 against 0.57 per
+  particle, 0.98 against 0.94 over 80 mm patches.
+
+What survives is narrower and still real: our agreement with PIVlab climbs more slowly with
+averaging than PIVlab's agreement with itself (0.83 against 0.94 at 80 mm). Two internally
+consistent measurements that differ from each other differ *systematically*. The claim in
+phase 5 that the disagreement is structured "up to about 40 mm" was also too strong: the
+per-step difference field decorrelates within 2 to 4 grid points, which is 4 to 9 mm.
+
+### 2. Four candidates, measured and eliminated
+
+| candidate | how it was tested | verdict |
+|---|---|---|
+| peak locking | correlate the disagreement with the fractional part of the displacement | **no**: r = 0.00 to 0.03 over five steps |
+| different coverage | we measure 13.5 % of the grid PIVlab rejects; reject it too and compare | **no**, and it makes things *worse* |
+| smoothing length-scale | sweep our smoothing and watch the shear-rate pattern agreement | **no**: it peaks at our own default |
+| grid registration | compare the two sets of grid coordinates directly | **no**, but see below |
+
+The coverage test is worth keeping because it nearly convinced. The correlation peak ratio
+separates the two populations cleanly — median 1.85 where both measure, **1.14 where only we
+do** — so PIVlab is plainly rejecting the windows without a clear peak and we are keeping
+them. Thresholding at 1.10 matches its coverage almost exactly (50.6 % against 51.0 %). But
+rejecting them *degrades* the agreement, from 0.61 to 0.49 at 40 mm patches and 0.83 to 0.73
+at 80 mm, and on the synthetic case it doubles the scatter of a shear that should be
+constant. Removing a vector leaves a hole, the strain of its neighbours is then taken across
+that hole, and an interpolated vector is worse than a measured one with noise in it. So the
+extra coverage is not the cause, and `MIN_PEAK_RATIO` was implemented, measured, and **taken
+back out**.
+
+The smoothing sweep is the other informative negative. Correlating the shear rate of the two
+fields: 0.596 with no smoothing, **0.619 at σ = 0.6**, 0.535 at 1.0, 0.376 at 1.5, 0.185 at
+3.0. The default was chosen in phase 5 for a different reason and turns out to maximise this
+too, so no filter can close the gap.
+
+Grid registration found a real but small flaw: our grid sits **0.26 mm** from PIVlab's in
+both axes, a constant offset of about half a pixel, on a grid step of 4.33 mm. It comes from
+taking the window centre at `(window-1)/2` where PIVlab takes `window/2`. It cannot explain
+the disagreement — a translated field has the same strain pattern — but it means our
+coordinates are half a pixel from where they claim to be, which matters for registering
+against the moisture images. Worth fixing on its own account.
+
+### 3. What the evidence does point at, and the measurement that shows it
+
+The second pass offsets each window of the second image by what the first pass found, and
+**rounds that offset to a whole pixel**. On a test moving 0.16 px per step the rounded offset
+is zero nearly everywhere, so the second pass is the first one again with a smaller window.
+Measured: at 0.16 px, one pass and two passes give *identical* numbers — bias −0.0088 px,
+scatter 0.0394 px.
+
+PIVlab's multi-pass does shift by the fraction, interpolating the image. So the two are not
+the same estimator, which fits every observation above: a systematically different field,
+each internally consistent, differing in a way no filter and no validation threshold can
+reconcile.
+
+A prototype that shifts by the fraction, against displacements known exactly:
+
+| true displacement | bias, rounded | scatter, rounded | bias, fractional | scatter, fractional |
+|---|---|---|---|---|
+| 0.05 px | −0.0039 | 0.0123 | −0.0003 | **0.0026** |
+| 0.10 | −0.0066 | 0.0250 | −0.0003 | **0.0051** |
+| 0.16 | −0.0088 | 0.0394 | −0.0001 | **0.0077** |
+| 0.25 | −0.0095 | 0.0623 | 0.0003 | **0.0110** |
+| 0.35 | −0.0096 | 0.0842 | 0.0006 | **0.0135** |
+| 0.50 | 0.0054 | 0.1090 | 0.0219 | 0.1000 |
+| 0.65 | 0.0094 | 0.0853 | −0.0007 | **0.0163** |
+| 1.30 | −0.0094 | 0.0743 | 0.0006 | **0.0129** |
+| 2.30 | −0.0094 | 0.0743 | 0.0005 | **0.0125** |
+| 4.70 | 0.0094 | 0.0747 | −0.0006 | **0.0134** |
+
+**Bias about fifteen times smaller, scatter about five times smaller**, at every displacement
+except the half-pixel case where the two tie. This is the largest improvement found anywhere
+in this folder, and it lands exactly where this project's data lives: slow tests whose
+displacement is a fraction of a pixel.
+
+Two honest qualifications. The prototype applies one shift to the whole image, which is only
+valid because the synthetic field is uniform; a real implementation needs the fraction per
+window, which is more code and more cost, and on a field with real shear the gain will be
+smaller. And the prototype had two bugs of its own before it gave this — the image was
+shifted the wrong way, doubling the displacement, and the final outlier rejection was missing
+so the scatter was 0.65 px and meaningless. The first table it produced argued confidently
+against the idea.
+
+### 4. Where this leaves the open question
+
+Answered enough to act on, not closed. The remaining disagreement is consistent with the two
+being different estimators, and the way to find out is to implement the fractional offset and
+re-run the comparison. If agreement moves towards PIVlab's own reproducibility, that was the
+cause.
+
+Not done here, because it changes every number the built-in PIV publishes and wants its own
+round of validation.
+
+---
+
 ## A note on this machine
 
 `numpy` here crashes (`0xc06d007f`) on **any** matrix multiplication, even 3×3, and on

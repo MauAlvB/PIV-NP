@@ -473,27 +473,46 @@ while the median strain of the field was 2 % apart.
 
 ### What it does *not* do, stated plainly
 
-The two agree on how much strain there is much better than on where it is. Correlating the
-strain of the two with the particles grouped into patches:
+The two agree on how much strain there is better than on where it is. Correlating the strain
+of the two, with the particles grouped into patches, and — this is the part that makes the
+numbers mean anything — against how well each method agrees with *itself*, measured by
+splitting the twenty steps into the odd ones and the even ones:
 
-| patch | particles averaged | equivalent strain | shear |
-|---|---|---|---|
-| none | 1 | 0.53 | 0.49 |
-| 20 mm | 16 | 0.60 | 0.36 |
-| 40 mm | 48 | 0.61 | 0.34 |
-| 80 mm | 140 | 0.83 | 0.76 |
+| correlation of the equivalent strain | per particle | 20 mm | 40 mm | 80 mm |
+|---|---|---|---|---|
+| PIVlab against itself | 0.569 | 0.889 | 0.952 | 0.940 |
+| the built-in PIV against itself | **0.731** | 0.884 | 0.960 | **0.978** |
+| the built-in PIV against PIVlab | 0.528 | 0.482 | 0.608 | 0.828 |
 
-Point-to-point noise would average away as the patches grow and the correlation would climb
-steadily. It does not — flat to 48 particles, climbing only at 140. The disagreement is
-**spatially structured up to about 40 mm**: the two measure genuinely different fields at
-that scale and agree on the coarse pattern. This has not been run down. The candidates are
-the different coverage (42 % of the built-in field missing against PIVlab's 49 %, in
-different places) and whatever PIVlab's validation does that this does not.
+Read the first two rows before the third. **The strain of a single particle is not a
+reproducible quantity on this test, for either method**: PIVlab manages 0.569 against its own
+data, because the strain is a difference between neighbouring vectors and the soil moves
+0.16 px per step. So the 0.528 in the third row is at the floor, not below it, and the
+built-in PIV is the more self-consistent of the two.
 
-So the built-in PIV is good for seeing where a slope failed and roughly how hard. A strain
-*pattern* taken from it should be checked against PIVlab before it is published. That is the
+What is left is narrower: our agreement with PIVlab climbs more slowly with averaging than
+PIVlab's agreement with itself, 0.83 against 0.94 over 80 mm patches. Two internally
+consistent measurements that differ from each other differ systematically, and
+[`../experiments/results.md`](../experiments/results.md) phase 6 eliminates four candidate
+causes by measurement — peak locking, the different coverage, the smoothing length-scale and
+the grid registration — and points at a fifth: the second pass rounds its window offset to a
+whole pixel, so on a test moving a sixth of a pixel per step it contributes nothing, while
+PIVlab shifts by the fraction. A prototype of the fraction cuts the scatter about five-fold.
+Not implemented, because it would change every number here.
+
+So the built-in PIV is good for seeing where a slope failed and roughly how hard, and for the
+amount of deformation. A strain *pattern* read off a single particle is not reliable from
+either method on a test this slow; over patches of a few centimetres both are. That is the
 intended role — a way in for someone with photographs and no PIV experience — and it is
 stated the same way in the README so nobody discovers it later.
+
+#### An accuracy note found while measuring this
+
+The grid of the built-in PIV sits **0.26 mm** from PIVlab's in both axes, a constant offset
+of about half a pixel against a grid step of 4.33 mm, because the window centre is taken at
+`(window-1)/2` where PIVlab takes `window/2`. It does not affect the strain — a translated
+field has the same gradients — but the coordinates are half a pixel from where they claim to
+be, which matters when the PIV grid is registered against the moisture images.
 
 ### Two bugs, both found by tests rather than by the comparison
 

@@ -69,8 +69,17 @@ to try these again.
   before relying on it.
 * How the dry–saturated band of each soil is measured. It is the most sensitive number in the
   moisture method and currently comes from two clicks and four constants.
-* Why the built-in PIV and PIVlab disagree on the strain pattern in a way that does **not**
-  average out over 48 particles. Something structured at the scale of tens of millimetres,
-  not noise. Candidates: the different coverage of the two fields, and PIVlab's own
-  validation.
+* **Decided, not yet done: shift the second PIV pass by the fraction of a pixel.** It
+  currently rounds the offset it gets from the first pass, so on a test moving a sixth of a
+  pixel per step the second pass contributes nothing at all — one pass and two give identical
+  numbers. A prototype that shifts by the fraction cuts the bias about fifteenfold and the
+  scatter about fivefold, which is the largest improvement measured anywhere in this project
+  and lands exactly where its data lives. It is also the best remaining explanation for why
+  the built-in PIV and PIVlab differ systematically on the strain pattern, since PIVlab does
+  shift by the fraction. Needs the fraction *per window* rather than one shift for the whole
+  image, and changes every number the built-in PIV publishes, so it wants its own round of
+  validation. See [`experiments/results.md`](../experiments/results.md), phase 6.
+* The PIV grid sits 0.26 mm — half a pixel — from where its coordinates say, from taking the
+  window centre at `(window-1)/2` instead of `window/2`. Harmless to the strain, not harmless
+  to registering the grid against the moisture images.
 * Whether the experimental data of the paper case can be published.
