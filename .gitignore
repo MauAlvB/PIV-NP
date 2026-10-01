@@ -27,3 +27,6 @@ legacy/*.mod
 !tests/data/**/expected/*.REC
 runs/
 *_vtk/
+
+# Cached output of the experiments (minutes to rebuild, nothing to keep)
+experiments/_*.npz

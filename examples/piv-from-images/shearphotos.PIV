@@ -1,0 +1,19 @@
+! How the displacements are measured from the photographs.
+! Used by:  pivnp examples/piv-from-images --source images
+
+IMAGES = images/shear_{n:03d}.png   ! {n} is the image number; {n:03d} makes it 001, 002...
+SCALE  = 0.0005                     ! metres per pixel
+
+CHANNEL = gray
+WINDOW  = 16                        ! final interrogation window, in pixels
+OVERLAP = 0.5                       ! so there is a vector every 8 px
+PASSES  = 2                         ! 32 px to find the movement, then 16 to pin it down
+
+! The block of soil sits at x 32-224, y 32-160 in the first photograph, and shears to the
+! right as the test goes on. The region is a little wider than that so the grid follows it,
+! and no wider, because a grid over the black background measures nothing.
+REGION = 28, 28, 248, 164
+
+MASK_BELOW = 20                     ! the background of these photographs is black
+
+SMOOTH = 0.6                        ! the default; set it to 0 to see the raw correlation

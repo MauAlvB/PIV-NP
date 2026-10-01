@@ -443,6 +443,101 @@ class and one registration — the contract, with a worked example, is in
 
 ---
 
+## 5. A case with no PIVlab at all
+
+Everything above assumes you have PIVlab's `datos (n).txt` files. If you have only the
+photographs, PIV-NP can measure the displacements itself. There is a complete example of
+this in the repository, so try it before you build your own:
+
+```bash
+pivnp examples/piv-from-images --source images
+```
+
+It runs in about a second. Its photographs were **generated** with a shear this much and no
+more — γxy = 0.15625 — so you can check the answer rather than trust it:
+[`examples/piv-from-images/README.md`](../examples/piv-from-images/README.md) lists every
+value that has to come out, and `make_example.py` in that folder is the script that put them
+there. If the shear comes back near 0.1545 your installation is measuring correctly.
+
+Read the next paragraph before you use this on real data, because it decides whether the
+results are any use to you. The built-in PIV
+is a **way in**, not a replacement for PIVlab. Checked against PIVlab on a real dam-break
+test, it gets the displacements within 8 % and the *amount* of strain within 7 %, but it
+agrees only broadly on *where* the strain is. So it will show you where a slope failed and
+roughly how hard; if you are going to publish a strain pattern, check it against PIVlab
+first. The numbers and the reasoning are in
+[`VALIDATION.md`](VALIDATION.md#8-the-built-in-piv).
+
+### The one file you need
+
+A `<case>.PIV` next to the `.PAR` — the only file that is new, and the example's
+[`shearphotos.PIV`](../examples/piv-from-images/shearphotos.PIV) is a working one to copy.
+Two values have no default and you must supply both:
+
+```
+IMAGES = images/shot_{n:03d}.jpg   ! {n} is the image number; {n:03d} makes it 001, 002...
+SCALE  = 0.00054081                ! metres per pixel
+```
+
+`SCALE` is the one nobody can guess for you. Measure something whose length you know in one
+photograph — the width of the box, a ruler in shot — and divide metres by pixels. Everything
+the analysis reports is in metres *because of this number*, so if it is wrong every result is
+wrong by the same factor and nothing will look amiss.
+
+Then three that decide what the analysis can see:
+
+```
+WINDOW  = 16     ! the patch of soil each vector describes, in pixels
+OVERLAP = 0.5    ! so there is a vector every 8 px
+PASSES  = 2      ! 32 px first to find the movement, then 16 to pin it down
+```
+
+A smaller `WINDOW` gives more vectors and trusts each one less; 16 or 32 are the usual
+choices and it must be a power of two. And two that keep the grid off the background:
+
+```
+REGION     = 232, 213, 1656, 845   ! left, top, right, bottom: where the material is
+MASK_BELOW = 25                    ! anything darker than this is not soil
+```
+
+Without `REGION` the grid covers the whole photograph, including sky and apparatus that will
+never move — more points, no more information, and a slower run. `MASK_BELOW` suits
+photographs whose background is already blacked out; if instead you have drawn a mask image,
+use `MASK_IMAGE = mask.png` and not both.
+
+The full list of keys, with defaults, is in the
+[README](../README.md#input-files).
+
+### Making the grid and the `.PAR` agree
+
+The grid of interrogation windows *is* the PIV grid, so `BLOCK 2` of the `.PAR` has to
+describe it. You do not have to work it out: run it, and if the two disagree PIV-NP stops and
+prints the `BLOCK 2` line your photographs and settings need.
+
+```
+the photographs and the .PIV settings give a grid of 177 x 78 points, and the .PAR
+describes 100 x 50. Block 2 of the .PAR should read:
+    n_cells 13552  n_nodes 13806  n_rows 77  width 0.00432648  height 0.00432648
+```
+
+Paste that in and run again.
+
+### If the results look noisy
+
+The field is smoothed before it is used, because the strain is a difference between
+neighbouring vectors and sub-pixel scatter dominates it. `SMOOTH = 0.6` is the default and
+was chosen by measurement, not taste. Raising it to `1.0` quietens the strain further at the
+cost of flattening genuine detail; `SMOOTH = 0` shows you the raw correlation, which is
+worth looking at once to see what the smoothing is for.
+
+If the displacements themselves look wrong rather than noisy, the usual causes are a wrong
+`SCALE`, a `WINDOW` too small for how far the soil moves between photographs (keep the
+movement under about a quarter of the window), or a `DT` in the `.PAR` that does not match
+the time between the photographs — nothing in the images says what that interval was, so
+PIV-NP cannot check it for you.
+
+---
+
 ## What usually goes wrong
 
 These are the messages PIV-NP actually prints.

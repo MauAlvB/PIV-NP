@@ -23,8 +23,11 @@ version (`legacy/`): 38 s → 2 s for the centrifuge case.
 > build your own case. This README is the reference you come back to afterwards.
 
 ```bash
-pivnp examples/shear-block
+pivnp examples/shear-block                             # from PIVlab files
+pivnp examples/piv-from-images --source images         # from photographs, no PIVlab needed
 ```
+
+Both ship with their data and both have an answer you can check.
 
 ---
 
@@ -121,12 +124,27 @@ Compares line by line and tolerates differences of one unit in the sixth digit.
 ### Other sources of displacement
 
 The velocity field does not have to come from PIVlab. The analysis only ever sees one
-`Frame` per step, so any origin can provide it: a PIV analysis built into PIV-NP, another
-PIV package, or a numerical simulation. `pivnp --source <name>` picks which one, and
-`pivlab` is the default.
+`Frame` per step, so any origin can provide it. Two come with PIV-NP:
 
-Writing a new one is one class and one registration — the contract, with a worked example,
-is in [`src/pivnp/sources.py`](src/pivnp/sources.py) and in
+| `--source` | where the displacements come from |
+|---|---|
+| `pivlab` | the `datos (n).txt` files PIVlab exports (the default) |
+| `images` | measured from the photographs by PIV-NP itself, no PIVlab needed |
+
+```bash
+pivnp examples/my-case --source images
+```
+
+`--source images` needs a [`<case>.PIV`](#input-files) file saying
+where the photographs are and how many metres a pixel is worth. It is meant as a way in:
+if you have photographs and no PIV experience you get a result, and you can decide later
+whether to learn PIVlab. **It is not a replacement for PIVlab.** On the test it was checked
+against it agrees to 8 % on displacement and 7 % on how much strain there is, but only
+broadly on *where* the strain is — see [`docs/VALIDATION.md`](docs/VALIDATION.md#8-the-built-in-piv)
+for the numbers and the limits.
+
+Writing a new source is one class and one registration — the contract, with a worked
+example, is in [`src/pivnp/sources.py`](src/pivnp/sources.py) and in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Input files
@@ -259,6 +277,47 @@ CALIBRATION   = calibration_slope_rgb.csv ! gray,saturation,moisture of the soil
 The calibration CSV has a header `gray,saturation,moisture` and one row per laboratory
 measurement; the curve is interpolated between them exactly as MATLAB's `pchip` does.
 Values outside the table are clamped to its ends and reported as such.
+
+### `<case>.PIV` (only with `--source images`)
+
+With `--source images` there are no PIVlab files: PIV-NP measures the displacements from the
+photographs itself. It needs to be told where they are and how many metres a pixel is worth,
+and that goes in a `<case>.PIV` file — same shape as the `.HUM`, every value named, order
+irrelevant, `!` starts a comment:
+
+```
+! PIV from the photographs
+IMAGES     = images/shot_{n:03d}.jpg   ! {n} is the image number; {n:03d} pads it to 001
+SCALE      = 0.00054081                ! metres per pixel -- measure it, there is no default
+WINDOW     = 16                        ! final interrogation window, in pixels
+OVERLAP    = 0.5                       ! so the grid step is 8 px
+PASSES     = 2                         ! 32 px to find the displacement, 16 to refine it
+REGION     = 232, 213, 1656, 845       ! the part of the photograph with material in it
+MASK_BELOW = 25                        ! darker than this is background, not soil
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `IMAGES` | — | **required**: name of each photograph; must contain `{n}`, and `{n:03d}` pads it with zeros (`shot_001.jpg`) |
+| `SCALE` | — | **required**: metres per pixel. This one number turns every displacement into metres, and there is no way to guess it — measure something of known length in a photograph, or take it from the calibration of the test |
+| `CHANNEL` | `gray` | channel used: `1` red, `2` green, `3` blue, `0`/`gray` grayscale |
+| `WINDOW` | `32` | side of the final interrogation window, in pixels; a power of two, 16 or 32 is usual. Smaller resolves more detail and measures less reliably |
+| `OVERLAP` | `0.5` | how much neighbouring windows share, so the grid step is `WINDOW × (1 − OVERLAP)` |
+| `PASSES` | `2` | each pass before the last uses a window twice as wide, to find a displacement it knows nothing about. A third pass buys very little |
+| `FIRST_IMAGE` | `1` | number of the first photograph, for sequences that do not start at 1 |
+| `REGION` | whole image | `left, top, right, bottom` in pixels: the part of the photograph the grid covers. Without it the grid spans everything, including background that will never move |
+| `MASK_BELOW` | — | pixels darker than this are not material. For photographs whose background has been blacked out |
+| `MASK_IMAGE` | — | an image marking the material instead, anything non-black being material. Use this *or* `MASK_BELOW`, not both |
+| `OUTLIER_THRESHOLD` | `2.0` | how far a vector may differ from its neighbours, in their own spread, before it is rejected (the normalised median test) |
+| `SMOOTH` | `0.6` | width, in grid points, of the smoothing of the finished field. The strain is a difference between neighbouring vectors, so the sub-pixel scatter that hardly shows in the displacement dominates it. `0` keeps the raw field |
+
+The grid of interrogation windows **is** the PIV grid, so it has to be the grid `BLOCK 2` of
+the `.PAR` describes. It is not left to chance: if the two disagree PIV-NP refuses to run and
+prints the `BLOCK 2` line these photographs and settings would need, so you can paste it in.
+
+What to expect of it is in [`docs/VALIDATION.md`](docs/VALIDATION.md#8-the-built-in-piv): on
+the test it was checked against, displacements within 8 % of PIVlab and the amount of strain
+within 7 %, but only broad agreement on where the strain is.
 
 ## Results
 
@@ -531,7 +590,9 @@ piv-np/
 ├── legacy/                original Fortran code, unmodified
 ├── tools/                 generation of reference results
 ├── benchmarks/            performance measurement
-├── examples/shear-block/  a runnable example, data included
+├── examples/
+│   ├── shear-block/      a runnable example from PIVlab files, data included
+│   └── piv-from-images/  the same idea from photographs, with no PIVlab
 └── docs/
     ├── GUIDE.md           getting started, step by step
     ├── ARCHITECTURE.md    design and improvement proposals

@@ -258,6 +258,124 @@ Not started.
 
 ---
 
+## Phase 5 — PIV from the photographs, inside PIV-NP
+
+Verdict first: **it works, within the 10 % agreed, and it is an entry point rather than a
+replacement for PIVlab.** The displacements agree to 8 %, the amount of strain to 7 %, and
+the two agree on *where* the strain is only in broad strokes. Which is the honest version of
+what was asked for: something a newcomer can run from photographs alone, and then decide
+whether to go and learn PIVlab.
+
+Run it with `python experiments/end_to_end_piv.py` (needs `PIVNP_TEST_IMAGES`; add
+`--fresh` to ignore the cached runs).
+
+### What was compared, after two wrong attempts
+
+Both wrong attempts are worth recording, because each made the implementation look worse
+than it was and nearly sent the work off after the wrong thing.
+
+1. **Accumulating with `nan_to_num`.** The first comparison added the twenty step fields
+   together after turning every `NaN` into zero. About 45 % of each field has no data, in
+   *different places* in the two, so this quietly compared a sum of twenty measurements
+   against a sum of eleven. It reported 19 % and the real figure was never that bad. (The
+   script that did it is not in the repository; it would print a believable wrong number.)
+2. **Judging the strain particle by particle.** The second comparison asked for the strain
+   of each particle to match within 10 %. The strain is a difference between neighbouring
+   vectors, and at 0.16 px of movement per step it is a small difference between two noisy
+   numbers; two runs of PIVlab with different validation settings would not agree either.
+   It reported 105 % while the median strain of the whole field was 2 % apart.
+
+What is compared now: the **displacement particle by particle**, which is a fair question
+and the strict one, and the **strain over the field** — how much of it there is, and whether
+it sits in the same places.
+
+### The result
+
+| | from PIVlab | from the photographs | difference |
+|---|---|---|---|
+| displacement x, per particle | 2.437 mm | 2.243 mm | 7.6 % |
+| displacement y, per particle | 3.105 mm | 2.959 mm | 5.8 % |
+| equivalent strain, field | 0.08325 | 0.08187 | 1.7 % |
+| shear strain, field | 0.06075 | 0.06416 | 5.6 % |
+| volumetric strain, field | 0.05874 | 0.06290 | 7.1 % |
+
+Particle by particle, the two put 60 % of particles within 10 % of each other and 91 %
+within 25 %; the median particle ends 0.29 mm from where PIVlab put it, having travelled
+about 3.9 mm.
+
+### Where it does *not* agree, and what that means
+
+The two agree on how much strain there is far better than on where it is. Grouping the
+particles into patches and correlating:
+
+| patch | particles averaged | equivalent strain | shear |
+|---|---|---|---|
+| none | 1 | 0.53 | 0.49 |
+| 10 mm | 5 | 0.58 | 0.42 |
+| 20 mm | 16 | 0.60 | 0.36 |
+| 40 mm | 48 | 0.61 | 0.34 |
+| 80 mm | 140 | 0.83 | 0.76 |
+
+If the difference were point-to-point noise it would average away as the patches grow and
+the correlation would climb steadily. **It does not.** It is flat from 1 to 48 particles and
+only climbs at 140, which says the disagreement is *spatially structured* at scales up to
+about 40 mm — the two measure genuinely different fields at that scale and agree on the
+coarse pattern. Not yet run down; candidates are the different coverage (42 % of our field
+missing against PIVlab's 49 %, in different places) and whatever PIVlab's own validation
+does that this does not.
+
+So: good enough to see where a slope failed and roughly how hard, not good enough to publish
+a strain pattern from without checking it against PIVlab.
+
+### Two bugs found by the tests, not by the comparison
+
+* **The window pushed past the edge.** The second pass takes each window of the second image
+  from where the first pass said the soil went. Near the border of the photograph that
+  offset points outside the image, and the window is pulled back in — but the code added
+  back the offset it had *asked for*, so a true −1.7 px came back as −3.7. It hid itself:
+  the vectors were wrong enough that the outlier test discarded them, and a discarded row
+  looks like the edge of the material rather than like a mistake. Fixing it kept **100 % of
+  the windows of a synthetic pair instead of 93 %** — the bug had been eating the border of
+  every field. It changes nothing on the dam-break case, which moves 0.16 px per step: the
+  integer offset is zero almost everywhere, so the clipping never triggers. It would bite
+  any faster test.
+* **Smoothing that flattened the gradient at the edge.** Phase 1 had already measured that a
+  kernel renormalised over the neighbours that exist leans inwards and flattens the very
+  gradient being measured, and that continuing the field outwards first removes the reason
+  for it. The first version of the PIV smoothing renormalised anyway. On a field with a
+  known gradient and 42 % of its points missing:
+
+  | | typical point | worst point | full grid |
+  |---|---|---|---|
+  | continued outwards | 0.012 | 0.147 | exact |
+  | renormalised | 0.060 | 0.196 | 0.154 |
+
+  Five times better at the typical point, so the shipping version continues the field
+  outwards. **The test that should have caught this checked only `[2:-2, 2:-2]`** — it
+  passed over a smoother that was wrong at every edge, which is the lesson worth keeping.
+
+### Why the field is smoothed at all
+
+The raw field is 1.45× rougher than PIVlab's between neighbouring windows (0.082 px against
+0.055), and the strain gap was 1.38× — essentially all of it. PIVlab's exported field is
+smoothed by its own post-processing, so comparing a raw field to it compares two different
+things. Sweeping the width:
+
+| σ (grid points) | roughness vs PIVlab | distance to PIVlab's vectors |
+|---|---|---|
+| 0 | 1.46× | 0.119 px |
+| 0.4 | 1.29× | 0.109 |
+| **0.6** | **0.84×** | **0.092** |
+| 1.0 | 0.46× | 0.101 |
+| 2.0 | 0.18× | 0.130 |
+
+σ = 0.6 both matches PIVlab's roughness and *minimises* the distance to its vectors, which
+is the independent evidence that what is removed is noise and not soil — had it only matched
+the roughness, this would just be fitting to PIVlab. It is the `SMOOTH` key of the `.PIV`
+file and `SMOOTH = 0` turns it off.
+
+---
+
 ## A note on this machine
 
 `numpy` here crashes (`0xc06d007f`) on **any** matrix multiplication, even 3×3, and on

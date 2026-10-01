@@ -1,0 +1,26 @@
+PIV from photographs: a sheared block whose answer is known
+BLOCK 2: n_cells n_nodes n_part_cell n_rows width height
+         375     416     2           15     0.004 0.004
+BLOCK 3: dt  total_steps print_every moisture mesh_version pivlab contour restart track
+         1.0 10          1           0        1            1      0       0       0
+BLOCK 4: s_density porosity
+         2650.0    0.4
+!------------------------------------------------------------------------------------------
+! This case has no PIVlab files. The displacements are measured from the photographs in
+! images/, by PIV-NP itself, with the settings in shearphotos.PIV:
+!
+!     pivnp examples/piv-from-images --source images
+!
+! BLOCK 2 describes the grid of interrogation windows, not a PIVlab grid. It has to match
+! what the photographs and the .PIV settings give, and PIV-NP refuses to run if it does not,
+! printing the line it wants. With a 256 x 192 photograph, a 16 px window at 0.5 overlap and
+! REGION = 28, 28, 248, 164, that grid is 26 x 16 points: 15 rows of cells, 375 cells,
+! 416 nodes, each cell 8 px = 0.004 m across.
+!
+! 'pivlab' and 'mesh_version' are read but mean nothing here: there is no PIVlab export to
+! describe. 'dt' does matter -- it is the only statement anywhere of how far apart in time
+! the photographs were taken, and nothing in an image can confirm it.
+!
+! The meaning of every other value is in examples/shear-block/shearblock.PAR and in the
+! README. Nothing below this line is read.
+!------------------------------------------------------------------------------------------
