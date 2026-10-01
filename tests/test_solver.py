@@ -20,13 +20,13 @@ from pivnp.state import Nodes
 
 from .legacy_reference import invar2
 
-# Malla de 3x2 celdas de 1 m, 2x2 partículas por celda, dt = 0.5
-PAR = """titulo
-bloque 2
+# Grid of 3x2 cells of 1 m, 2x2 particles per cell, dt = 0.5
+PAR = """title
+block 2
 6 12 2 2 1.0 1.0
-bloque 3
+block 3
 0.5 10 1 0 1 1 0 0 0
-bloque 4
+block 4
 2000 0.4
 """
 
@@ -59,7 +59,7 @@ def test_deviatoric_q_matches_invar2(values):
 
 
 def test_deviatoric_q_uniaxial():
-    # Deformación uniaxial e: q = sqrt(3 J2) = e
+    # Uniaxial strain e: q = sqrt(3 J2) = e
     assert deviatoric_q(0.3, 0.0, 0.0, 0.0) == pytest.approx(0.3)
 
 
@@ -77,7 +77,7 @@ def test_uniform_velocity_translates_without_strain(case):
 def test_linear_velocity_field_gives_uniform_strain(case):
     cfg, grid, p, nodes = case
     x, _ = _node_xy(grid)
-    rate = 0.01  # u = rate * x  ->  eps_xx = rate * dt por paso
+    rate = 0.01  # u = rate * x  ->  eps_xx = rate * dt per step
     nodes.velocity[:, 0] = rate * x
     for step in (1, 2):
         _step(cfg, grid, p, nodes, step)
@@ -91,7 +91,7 @@ def test_linear_velocity_field_gives_uniform_strain(case):
 def test_particles_in_all_nan_cells_are_frozen(case):
     cfg, grid, p, nodes = case
     nodes.velocity[:] = [1.0, 0.0]
-    nodes.is_nan[[0, 1, 4, 5]] = 1  # los 4 nodos de la celda 0
+    nodes.is_nan[[0, 1, 4, 5]] = 1  # the 4 nodes of cell 0
     cell0 = grid.locate(p.position) == 0
     start = p.position.copy()
     _step(cfg, grid, p, nodes, 1)
@@ -103,7 +103,7 @@ def test_particles_in_all_nan_cells_are_frozen(case):
 
 def test_particle_leaving_the_mesh_is_lost(case):
     cfg, grid, p, nodes = case
-    nodes.velocity[:] = [10.0, 0.0]  # 5 m en un paso: todas salen por la derecha
+    nodes.velocity[:] = [10.0, 0.0]  # 5 m in one step: they all leave through the right
     _step(cfg, grid, p, nodes, 1)
     assert not output_mask(p, grid, 2).any()
 

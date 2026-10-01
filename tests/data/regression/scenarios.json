@@ -1,5 +1,5 @@
 {
-  "description": "Escenarios de regresión: cada uno se ejecuta con el Fortran original (tools/make_reference.py) y con la versión Python en modo compatibilidad (tests/test_regression.py); las salidas deben ser idénticas byte a byte.",
+  "description": "Regression scenarios: each one is run with the original Fortran (tools/make_reference.py) and with the Python version in compatibility mode (tests/test_regression.py); the outputs must be identical byte for byte.",
   "window": {
     "source_grid": [60, 35],
     "cols": [24, 34],

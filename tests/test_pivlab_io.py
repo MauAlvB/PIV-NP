@@ -15,11 +15,11 @@ def test_pivlab_to_node_matches_iconectividad(nch, nfil):
     conn = iconectividad(nch, nfil)
     ours = pivlab_to_node(nch, nfil)
     assert [ours[p - 1] + 1 for p in sorted(conn)] == [conn[p] for p in sorted(conn)]
-    assert sorted(ours.tolist()) == list(range((nch + 1) * (nfil + 1)))  # permutación
+    assert sorted(ours.tolist()) == list(range((nch + 1) * (nfil + 1)))  # a permutation
 
 
 def test_pivlab_order_is_column_major_from_top():
-    # 2x2 celdas -> 3x3 puntos. El primer punto PIVlab (columna 0, arriba) es el nodo 6.
+    # 2x2 cells -> 3x3 points. The first PIVlab point (column 0, top) is node 6.
     assert pivlab_to_node(2, 2).tolist() == [6, 3, 0, 7, 4, 1, 8, 5, 2]
 
 
@@ -46,10 +46,10 @@ def test_read_five_column_file(workdir: Path):
 
 
 def test_five_columns_are_detected_even_if_the_par_says_four(workdir: Path):
-    """Un .PAR con IPIVLAB=1 y un archivo de cinco columnas: manda el archivo.
+    """A .PAR with IPIVLAB=1 and a five-column file: the file wins.
 
-    Leer cinco columnas como si fueran cuatro descoloca todos los valores, y es lo que
-    ocurre con los .PAR antiguos, que no traen IPIVLAB y toman 1 por defecto.
+    Reading five columns as if they were four shifts every value out of place, and that is
+    what happens with the old .PAR files, which carry no IPIVLAB and default to 1.
     """
     path = workdir / "d.txt"
     path.write_text(HEADER + "0.1,0.2,1.0,2.0,1\n0.1,0.4,3.0,4.0,0\n")
@@ -67,7 +67,7 @@ def test_missing_values_raise(workdir: Path):
 
 def test_read_moisture(workdir: Path):
     path = workdir / "Moist_1.TXT"
-    path.write_text("titulo\n0,0,0.1,0.5\n0,1,NaN,NaN\n")
+    path.write_text("title\n0,0,0.1,0.5\n0,1,NaN,NaN\n")
     moisture, saturation = read_moisture_file(path, 2)
     assert moisture[0] == 0.1 and saturation[0] == 0.5 and np.isnan(moisture[1])
 
@@ -90,15 +90,15 @@ def test_frame_source_without_prefetch_or_moisture(workdir: Path):
     assert frame.moisture.tolist() == [0.0] and frame.saturation.tolist() == [0.0]
 
 
-CABECERA_CON_FACTORES = ("PIVlab\nFactor de conversion (px -> m): 0.004, "
-                         "(px/frame -> m/s): 0.004\nx,y,u,v\n")
+HEADER_WITH_FACTORS = ("PIVlab\nconversion factor xy (px -> m): 0.004, "
+                       "conversion factor uv (px/frame -> m/s): 0.004\nx,y,u,v\n")
 
 
 def test_mesh_in_metres(workdir: Path):
-    (workdir / "datos (1).txt").write_text(CABECERA_CON_FACTORES + "0.1,0.2,1,0\n0.3,0.4,NaN,0\n")
-    x, y, factor, con_dato = FrameSource(workdir, n_nodes=2).mesh_in_metres()
+    (workdir / "datos (1).txt").write_text(HEADER_WITH_FACTORS + "0.1,0.2,1,0\n0.3,0.4,NaN,0\n")
+    x, y, factor, has_data = FrameSource(workdir, n_nodes=2).mesh_in_metres()
     assert x.tolist() == [0.1, 0.3] and y.tolist() == [0.2, 0.4]
-    assert factor == 0.004 and con_dato.tolist() == [True, False]
+    assert factor == 0.004 and has_data.tolist() == [True, False]
 
 
 def test_header_without_conversion_factor(workdir: Path):

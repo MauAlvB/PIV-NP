@@ -1,7 +1,7 @@
-"""Traducción literal (Python puro, índices base 1) de fragmentos del Fortran original.
+"""Literal translation (plain Python, 1-based indices) of fragments of the original Fortran.
 
-Sirve como oráculo en las pruebas unitarias: las funciones optimizadas deben dar lo mismo
-que estos bucles, escritos tal como están en ``legacy/MainCodePIV-NP.for``.
+It serves as the oracle of the unit tests: the optimised functions must give the same as
+these loops, written just as they stand in ``legacy/MainCodePIV-NP.for``.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import numpy as np
 
 
 def mesh_arrays(nc: int, nfil: int, axc: float, ayc: float, staggered: bool = False):
-    """NCF, NNF, NNFA, XF, YF de PIVLAB_DATA (malla 1 o malla desplazada 2)."""
+    """NCF, NNF, NNFA, XF, YF of PIVLAB_DATA (mesh 1 or staggered mesh 2)."""
     nch = nc // nfil
     if staggered:
         nfil, nch = nfil + 1, nch + 1
@@ -34,7 +34,7 @@ def mesh_arrays(nc: int, nfil: int, axc: float, ayc: float, staggered: bool = Fa
 
 
 def ucelda(x: float, y: float, arrays, axc: float):
-    """Búsqueda lineal de UCELDA: devuelve (INDC, IN(1:4)) en base 1, o None."""
+    """Linear search of UCELDA: returns (INDC, IN(1:4)) 1-based, or None."""
     nch, nfil, ncf, nnf, nnfa, xf0, yf = arrays
     ifi = 0
     for j in range(1, nfil + 1):
@@ -54,7 +54,7 @@ def ucelda(x: float, y: float, arrays, axc: float):
 
 def generate_particles(nc: int, nfil: int, npc: int, axc: float, ayc: float, gauss,
                        staggered: bool = False) -> np.ndarray:
-    """Bucle de generación de partículas de PIVLAB_DATA."""
+    """The particle-generation loop of PIVLAB_DATA."""
     nch, nfil, ncf, _, _, xf0, yf = mesh_arrays(nc, nfil, axc, ayc, staggered)
     axp, ayp = axc / npc, ayc / npc
     xp = []
@@ -73,7 +73,7 @@ def generate_particles(nc: int, nfil: int, npc: int, axc: float, ayc: float, gau
 
 
 def iconectividad(nch: int, nfil: int) -> dict[int, int]:
-    """ICONECTIVIDAD(punto PIVlab) = nodo PIV-NP, base 1."""
+    """ICONECTIVIDAD(PIVlab point) = PIV-NP node, 1-based."""
     conn = {}
     for i in range(1, nch + 2):
         for j in range(1, nfil + 2):

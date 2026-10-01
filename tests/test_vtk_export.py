@@ -13,7 +13,7 @@ EXPECTED = Path(__file__).parent / "data" / "regression" / "v1_npc3" / "expected
 
 
 def _decode(element) -> np.ndarray:
-    """Decodifica un DataArray binario comprimido (UInt32, un bloque zlib)."""
+    """Decode a compressed binary DataArray (UInt32, a single zlib block)."""
     text = element.text.strip()
     header = np.frombuffer(base64.b64decode(text[:24]), "<u4")  # 16 bytes -> 24 chars
     raw = zlib.decompress(base64.b64decode(text[24:]))

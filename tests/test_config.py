@@ -40,7 +40,7 @@ def test_values_may_span_lines_commas_and_fortran_exponents():
     cfg = parse_par(text)
     assert (cfg.n_cells, cfg.n_nodes, cfg.particles_per_side) == (2006, 2100, 3)
     assert cfg.dt == 0.8
-    assert cfg.total_steps == 149  # REAL truncado, como el DO del original
+    assert cfg.total_steps == 149  # a truncated REAL, like the DO of the original
 
 
 @pytest.mark.parametrize(("text", "message"), [

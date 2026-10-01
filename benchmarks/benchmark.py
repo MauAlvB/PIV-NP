@@ -1,12 +1,11 @@
-"""Mide el tiempo de un caso real con la versión Python (y opcionalmente con el Fortran).
+"""Time a real case with the Python version (and, optionally, with the Fortran one).
 
-Copia el caso a un directorio temporal para no sobrescribir resultados. Ejemplo::
+The case is copied to a temporary directory so that no results are overwritten. Example::
 
-    python benchmarks/benchmark.py "../caso" --threads 1 4 0 --legacy legacy/pivnp_legacy.exe
+    python benchmarks/benchmark.py "../case" --threads 1 4 0 --legacy legacy/pivnp_legacy.exe
 
-``--threads 0`` significa "todos los núcleos". La primera ejecución de Python incluye la
-compilación JIT de Numba si la caché está vacía; se descarta con una ejecución de
-calentamiento.
+``--threads 0`` means "every core". The first Python run includes Numba's JIT compilation
+when the cache is empty; a warm-up run throws that away.
 """
 
 from __future__ import annotations
@@ -50,22 +49,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("case_dir", type=Path)
     parser.add_argument("--threads", type=int, nargs="+", default=[0])
-    parser.add_argument("--legacy", type=Path, help="ejecutable Fortran para comparar")
+    parser.add_argument("--legacy", type=Path, help="Fortran executable to compare against")
     parser.add_argument("--repeat", type=int, default=2)
     args = parser.parse_args()
 
-    time_python(args.case_dir, 0)  # calentamiento / compilación JIT
+    time_python(args.case_dir, 0)  # warm-up / JIT compilation
     rows = []
     if args.legacy:
-        rows.append(("Fortran original", min(time_legacy(args.case_dir, args.legacy)
+        rows.append(("Original Fortran", min(time_legacy(args.case_dir, args.legacy)
                                              for _ in range(args.repeat))))
     for threads in args.threads:
-        label = f"Python, {threads or numba.config.NUMBA_NUM_THREADS} hilos"
+        label = f"Python, {threads or numba.config.NUMBA_NUM_THREADS} threads"
         rows.append((label, min(time_python(args.case_dir, threads)
                                 for _ in range(args.repeat))))
 
     base = rows[0][1]
-    print(f"{'Versión':<28}{'Tiempo (s)':>12}{'Aceleración':>14}")
+    print(f"{'Version':<28}{'Time (s)':>12}{'Speed-up':>14}")
     for label, seconds in rows:
         print(f"{label:<28}{seconds:>12.2f}{base / seconds:>13.1f}x")
 

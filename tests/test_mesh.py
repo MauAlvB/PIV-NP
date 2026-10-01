@@ -66,5 +66,5 @@ def test_grids_from_config():
     cfg = parse_par(PAR)
     g1, g2 = pivnp_grid(cfg), staggered_grid(cfg)
     assert (g1.n_cols, g1.n_rows, g1.n_nodes) == (59, 34, 2100)
-    assert (g2.n_cols, g2.n_rows, g2.n_cells) == (60, 35, 2100)  # una celda por punto PIVlab
+    assert (g2.n_cols, g2.n_rows, g2.n_cells) == (60, 35, 2100)  # one cell per PIVlab point
     assert g2.x0 == -cfg.cell_width / 2 and g2.y0 == -cfg.cell_height / 2

@@ -1,8 +1,8 @@
-"""Equivalencia con el código Fortran original.
+"""Equivalence with the original Fortran code.
 
-Cada escenario de ``tests/data/regression`` se ejecutó con el Fortran original
-(``tools/make_reference.py``). Aquí se ejecuta la versión Python y se exige que las salidas
-(``.POST.RES``, ``.POST.MSH`` y ``.REC``) sean idénticas byte a byte.
+Every scenario in ``tests/data/regression`` was run with the original Fortran
+(``tools/make_reference.py``). Here the Python version is run and the outputs
+(``.POST.RES``, ``.POST.MSH`` and ``.REC``) are required to be identical byte for byte.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from pivnp.simulation import RunOptions, run_case
 REGRESSION = Path(__file__).parent / "data" / "regression"
 SCENARIOS = json.loads((REGRESSION / "scenarios.json").read_text(encoding="utf-8"))["scenarios"]
 CASE = "mini"
-# Modo compatibilidad: reproduce el comportamiento del Fortran original.
+# Compatibility mode: reproduces the behaviour of the original Fortran.
 OPTIONS = RunOptions(eol="\r\n", prefetch=2, legacy_compat=True)
 
 
@@ -38,9 +38,9 @@ def _assert_same_text(expected_gz: Path, actual: Path, directory: Path) -> None:
         shutil.copyfileobj(fin, fout)
     if expected.read_bytes() != actual.read_bytes():
         report = compare_files(expected, actual)
-        details = "\n".join(f"  línea {n}:\n    ref: {a}\n    new: {b}"
+        details = "\n".join(f"  line {n}:\n    ref: {a}\n    new: {b}"
                             for n, a, b in report.examples)
-        pytest.fail(f"{actual.name} difiere del Fortran: {report.summary()}\n{details}")
+        pytest.fail(f"{actual.name} differs from the Fortran: {report.summary()}\n{details}")
 
 
 @pytest.mark.parametrize("name", sorted(SCENARIOS))
