@@ -79,7 +79,10 @@ Options:
 | `--contour-layers N` | with `ICONTOUR=1` and `3`: layers of points to rebuild (default 1) |
 | `--contour-min-particles N` | with `ICONTOUR=2`: particles required around the point (default 1) |
 | `--legacy-compat` | reproduce the behaviour of the Fortran version exactly |
+| `--legacy-2023-average` | reproduce the staggered-grid average of the 2023 version (`IVERSION=2` only) |
 | `--vtk` | also export to VTK for ParaView |
+| `--write-moisture` | write the `Moist_<n>.TXT` from the test images and stop, without running the analysis |
+| `--convert-par` | rewrite every `.PAR` below the directory in the single format and stop |
 | `-q` | errors only |
 
 `python -m pivnp path/to/case` works as well.

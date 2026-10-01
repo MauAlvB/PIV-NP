@@ -1,5 +1,5 @@
-!     Stub de CONTOUR para poder compilar el codigo legado.
-!     La subrutina original no existe todavia: aqui no hace nada,
-!     igual que ICONTOUR=0 en la version Python.
+!     CONTOUR stub, needed to build the legacy code.
+!     The original subroutine was never written: this one does nothing,
+!     just like ICONTOUR=0 in the Python version.
 	SUBROUTINE CONTOUR
 	END

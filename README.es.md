@@ -79,7 +79,10 @@ Opciones:
 | `--contour-layers N` | con `ICONTOUR=1` y `3`: capas de puntos a reconstruir (por defecto 1) |
 | `--contour-min-particles N` | con `ICONTOUR=2`: partículas necesarias alrededor (por defecto 1) |
 | `--legacy-compat` | reproducir exactamente el comportamiento de la versión Fortran |
+| `--legacy-2023-average` | reproducir la media en la malla desplazada de la versión de 2023 (solo `IVERSION=2`) |
 | `--vtk` | exportar también a VTK para ParaView |
+| `--write-moisture` | escribir los `Moist_<n>.TXT` desde las imágenes del ensayo y parar, sin analizar |
+| `--convert-par` | reescribir todos los `.PAR` bajo el directorio al formato único y parar |
 | `-q` | solo mostrar errores |
 
 También funciona `python -m pivnp ruta/al/caso`.

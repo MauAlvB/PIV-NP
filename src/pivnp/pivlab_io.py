@@ -201,5 +201,5 @@ class FrameSource:
                 ahead = k + self.prefetch
                 if ahead < len(steps):
                     pending.append(pool.submit(self.read, steps[ahead]))
-                pending[k] = None  # libera memoria
+                pending[k] = None  # releases the memory of the frame already consumed
                 yield self._with_moisture(frame)

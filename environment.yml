@@ -1,4 +1,4 @@
-# Entorno de desarrollo reproducible.
+# Reproducible development environment.
 #   conda env create -f environment.yml
 #   conda activate pivnp
 #   pip install -e .
@@ -10,10 +10,11 @@ dependencies:
   - python=3.12
   - numpy>=1.24
   - numba>=0.58
+  - pillow>=10.0
   - pytest
   - pytest-cov
   - ruff
   - git
-  # Solo para compilar el código Fortran original y regenerar resultados de referencia
-  # (legacy/make_reference.py). En Linux/macOS usa el gfortran del sistema.
+  # Only to build the original Fortran code and regenerate the reference results
+  # (tools/make_reference.py). On Linux/macOS use the system gfortran.
   - m2w64-gcc-fortran  # [win]

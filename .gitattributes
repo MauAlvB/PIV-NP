@@ -1,4 +1,4 @@
-# Archivos de referencia: no convertir finales de línea
+# Reference files: do not convert line endings
 *.REC binary
 *.gz binary
 tests/data/** -text

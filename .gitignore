@@ -9,16 +9,16 @@ htmlcov/
 build/
 dist/
 
-# Caché de compilación de Numba
+# Numba compilation cache
 *.nbi
 *.nbc
 
-# Binarios del código legado
+# Binaries of the legacy code
 legacy/*.exe
 legacy/*.o
 legacy/*.mod
 
-# Resultados de ejecución (se regeneran)
+# Run results (they are regenerated)
 *.POST.RES
 *.POST.MSH
 *.REC
