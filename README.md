@@ -9,8 +9,8 @@ slope in a geotechnical centrifuge). Unlike classic PIV, which reports velocitie
 fixed (Eulerian) grid, PIV-NP follows each material point (Lagrangian), which makes it
 suitable for **large displacements** and accumulated strains.
 
-> Pinyol, N.M. & Alvarado, M. (2017). *Novel PIV-based analysis for large displacement*.
-> Canadian Geotechnical Journal 54(7): 933-944.
+> Pinyol, N.M. & Alvarado, M. (2017). *Novel analysis for large strains based on particle image velocimetry*.
+> Canadian Geotechnical Journal 54(7): 933-944. doi:10.1139/cgj-2016-0327
 
 Version 2.0 is written in Python and is about **19 times faster** than the original Fortran
 version (`legacy/`): 38 s → 2 s for the centrifuge case.
@@ -547,5 +547,5 @@ The code, its comments and the documents under `docs/` are written in English.
 BSD 4-clause (see [`LICENSE`](LICENSE)). All advertising materials mentioning features or
 use of this software must cite:
 
-> Pinyol, N.M. & Alvarado, M. (2017). Novel PIV-based analysis for large displacement.
-> Canadian Geotechnical Journal 54(7): 933-944.
+> Pinyol, N.M. & Alvarado, M. (2017). Novel analysis for large strains based on particle image velocimetry.
+> Canadian Geotechnical Journal 54(7): 933-944. doi:10.1139/cgj-2016-0327

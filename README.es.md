@@ -9,8 +9,8 @@ ejemplo, un talud en centrífuga). A diferencia del PIV clásico, que da velocid
 malla fija (euleriana), PIV-NP sigue cada punto del material (lagrangiano), así que permite
 **grandes desplazamientos** y deformaciones acumuladas.
 
-> Pinyol, N.M. & Alvarado, M. (2017). *Novel PIV-based analysis for large displacement*.
-> Canadian Geotechnical Journal 54(7): 933-944.
+> Pinyol, N.M. & Alvarado, M. (2017). *Novel analysis for large strains based on particle image velocimetry*.
+> Canadian Geotechnical Journal 54(7): 933-944. doi:10.1139/cgj-2016-0327
 
 La versión 2.0 está escrita en Python y es unas **19 veces más rápida** que la versión
 original en Fortran (`legacy/`): 38 s → 2 s en el caso de la centrífuga.
@@ -545,5 +545,5 @@ pueda usar y modificar el repositorio. Este archivo es la traducción al españo
 BSD de 4 cláusulas (ver [`LICENSE`](LICENSE)). Todo material que mencione el uso de este
 software debe citar:
 
-> Pinyol, N.M. & Alvarado, M. (2017). Novel PIV-based analysis for large displacement.
-> Canadian Geotechnical Journal 54(7): 933-944.
+> Pinyol, N.M. & Alvarado, M. (2017). Novel analysis for large strains based on particle image velocimetry.
+> Canadian Geotechnical Journal 54(7): 933-944. doi:10.1139/cgj-2016-0327
