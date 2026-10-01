@@ -24,7 +24,7 @@ ICONTOUR     Method
 With any method other than 0, the staggered grid (IVERSION=2) also averages the
 contributions each node receives instead of leaving the sum of quarters.
 
-Which one to use, measured on real cases (see ``docs/validacion-casos.md``): hide nodes that
+Which one to use, measured on real cases (see ``docs/VALIDATION.md``): hide nodes that
 *do* have a measurement and sit next to the boundary, rebuild them with each method and
 compare against what PIVlab measured. Across five case/step combinations, **method 1 came
 out best every time**, getting closer to the truth than leaving the zero in 76 % to 98 % of

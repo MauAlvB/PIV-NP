@@ -306,5 +306,5 @@ def write_moisture_files(case_dir: Path, case_name: str | None = None,
 
 def run_case(case_dir: Path, case_name: str | None = None,
              options: RunOptions = DEFAULT_OPTIONS) -> RunSummary:
-    """Ejecuta el caso descrito por ``PIV-NP.TXT`` (o ``case_name``) en ``case_dir``."""
+    """Run the case described by ``PIV-NP.TXT`` (or by ``case_name``) in ``case_dir``."""
     return Simulation.from_directory(case_dir, case_name, options).run()

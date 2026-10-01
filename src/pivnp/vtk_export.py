@@ -34,7 +34,7 @@ COMPONENT_NAMES = {
     "Inc_strain": ("xx", "yy", "xy"),
     "E_kinetic": ("x", "y"),
 }
-RENAMES = {"Inst_displaceme": "Inst_displacement"}  # nombre recortado por el formato A15
+RENAMES = {"Inst_displaceme": "Inst_displacement"}  # a name cut short by the A15 format
 
 
 @dataclass(frozen=True)
@@ -99,7 +99,7 @@ def iter_time_steps(path: Path) -> Iterator[tuple[float, dict[str, ResultBlock]]
 
 # --- writing VTK -----------------------------------------------------------------------------
 def _encode(array: np.ndarray) -> str:
-    """Datos binarios comprimidos con zlib en base64 (formato 'binary' de VTK XML)."""
+    """Binary data compressed with zlib and base64-encoded (the 'binary' format of VTK XML)."""
     raw = np.ascontiguousarray(array).tobytes()
     compressed = zlib.compress(raw, 6)
     header = np.array([1, len(raw), len(raw), len(compressed)], dtype="<u4").tobytes()

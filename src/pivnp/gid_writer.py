@@ -79,10 +79,10 @@ RESULTS: tuple[ResultSpec, ...] = (
 
 
 def result_specs(legacy_compat: bool = False) -> tuple[ResultSpec, ...]:
-    """Bloques del ``.POST.RES``.
+    """Blocks of the ``.POST.RES``.
 
-    En modo compatibilidad, "NaNs" vuelve a ser el contador nodal del original y
-    "E_kinetic" sus dos componentes.
+    In compatibility mode, "NaNs" goes back to being the nodal counter of the original and
+    "E_kinetic" its two components.
     """
     if not legacy_compat:
         return RESULTS
@@ -91,12 +91,12 @@ def result_specs(legacy_compat: bool = False) -> tuple[ResultSpec, ...]:
 
 
 def result_header(name: str, kind: str, time: float) -> str:
-    """Cabecera ``Result`` (formatos 11 y 18 del original: nombres en campos A15)."""
+    """``Result`` header (formats 11 and 18 of the original: names in A15 fields)."""
     return (f"Result {name[:15]:>15} Isochrones {format_e(time)} {kind} {'OnNodes':>15}")
 
 
 class GidWriter:
-    """Escribe ``<caso>.POST.MSH`` y ``<caso>.POST.RES`` en ``directory``."""
+    """Writes ``<case>.POST.MSH`` and ``<case>.POST.RES`` into ``directory``."""
 
     def __init__(self, directory: Path, case_name: str, eol: str = os.linesep,
                  legacy_compat: bool = False) -> None:
@@ -143,9 +143,9 @@ class GidWriter:
 
     def write_step(self, time: float, particles: Particles, nodes: Nodes,
                    located: np.ndarray, with_moisture: bool) -> None:
-        """Formatea todos los bloques del instante y los encola para escritura."""
+        """Format every block of the instant and queue them to be written."""
         if self._file is None:
-            raise RuntimeError("Llama a start_results() antes de write_step()")
+            raise RuntimeError("call start_results() before write_step()")
         active = located & (particles.nan_initial == ACTIVE)
         chunks = []
         for spec in self.specs:
@@ -183,7 +183,7 @@ class GidWriter:
         return "".join(line + self.eol for line in lines).encode("ascii")
 
     def _submit(self, data: bytes) -> None:
-        # Como mucho dos bloques en cola: limita la memoria si el disco es lento.
+        # At most two blocks queued: this caps the memory used when the disk is slow.
         while len(self._pending) >= 2:
             self._pending.pop(0).result()
         self._pending.append(self._executor.submit(self._file.write, data))

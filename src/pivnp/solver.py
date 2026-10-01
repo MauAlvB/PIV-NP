@@ -89,18 +89,18 @@ def _advance_kernel(lost, cells, cell_x, cell_y, n_cols, dx, dy, dt,
                     saturation[i] = saturation[i] + nodal_saturation[node] * f1
                 if mesh_version == 1:
                     nan_corners += node_is_nan[node]
-                elif node_is_nan[cell] == 1:  # celda desplazada centrada en un nodo sin datos
+                elif node_is_nan[cell] == 1:  # staggered cell centred on a node without data
                     if step == 1 and not restart:
                         nan_initial[i] = NAN_AT_START
                     nan_step[i] = 1
 
-            if mesh_version == 1 and nan_corners == 4:  # los 4 nodos sin datos
+            if mesh_version == 1 and nan_corners == 4:  # all 4 nodes without data
                 if step == 1 and not restart:
                     nan_initial[i] = NAN_AT_START
                 else:
                     nan_step[i] = 1
 
-        if nan_initial[i] == NAN_AT_START:  # sin datos desde el inicio: no se mueve
+        if nan_initial[i] == NAN_AT_START:  # no data from the start: it does not move
             increment[i, 0] = 0.0
             increment[i, 1] = 0.0
             displacement[i, 0] = 0.0
@@ -226,12 +226,12 @@ def _count_nan_kernel(lost, cells, n_cols, node_is_nan, mesh_version, out):
         if lost[i]:
             out[i] = 0
             continue
-        if mesh_version == 1:  # nodos del elemento sin dato (0 a 4)
+        if mesh_version == 1:  # nodes of the element without data (0 to 4)
             total = 0
             for j in range(4):
                 total += node_is_nan[cell_node(cells[i], n_cols, j)]
             out[i] = total
-        else:  # el punto PIVlab del centro del elemento no tiene dato (0 o 1)
+        else:  # the PIVlab point at the centre of the element has no data (0 or 1)
             out[i] = node_is_nan[cells[i]]
 
 

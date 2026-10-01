@@ -334,7 +334,7 @@ def config_from_blocks(raw: RawPar, source: str = "<PAR>") -> CaseConfig:
         cell_width=_to_float(axc, "AXC"),
         cell_height=_to_float(ayc, "AYC"),
         dt=_to_float(dt, "DT"),
-        # TOTAL_STEPS es REAL en el original: el bucle DO trunca su valor.
+        # TOTAL_STEPS is REAL in the original: the DO loop truncates its value.
         total_steps=max(0, math.trunc(_to_float(steps, "TOTAL_STEPS"))),
         print_every=_to_int(imppas, "IMPPAS"),
         moisture=moister_value >= 1,
