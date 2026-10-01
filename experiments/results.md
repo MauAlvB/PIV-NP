@@ -185,6 +185,73 @@ floor stays where it is:
 
 The cheapest of the three by far is the first, and it is available on data already recorded.
 
+## Phase 2 — not smoothing, but differentiating once
+
+**This is the one worth putting in PIV-NP.**
+
+The particles start on a regular lattice, so the accumulated displacement can be
+differentiated with respect to the initial coordinates directly, giving the deformation
+gradient `F = I + du/dX`. From it the Green-Lagrange strain `E = (F'F − I)/2`, the rotation
+from the polar decomposition (closed form for 2×2, so no LAPACK), and the true area change
+`det(F) − 1`. One differentiation over the whole analysis instead of one per step.
+
+### On the cases whose answer is known
+
+| | incremental | finite |
+|---|---|---|
+| **`rotation_1P`** — turns 50°, does not deform | | |
+| equivalent shear | 0.005077 | **0.000000** |
+| volumetric | −0.015230 | **0.000000** |
+| rotation | −49.9975 | **−50.0000** |
+| **`shear-block`** — simple shear γ = 0.1 | | |
+| engineering shear | 0.100000 | **0.100000** |
+| equivalent shear | 0.057735 | 0.057831 |
+| volumetric | 0 | 0 |
+
+The rotation artifact is gone outright: zero strain, zero volume change, and the rotation
+exact to four decimals. That is not a better approximation, it is a property of the measure
+— `E` is identically zero for any rigid motion.
+
+The difference on `shear-block` is not an error either. For engineering shear γ the exact
+Green-Lagrange strain is `E_xx = 0`, `E_yy = γ²/2`, `2E_xy = γ`. Putting γ = 0.1 through the
+same equivalent-shear formula gives **0.057831**, which is what came out. The γ²/2 is a real
+term the linear theory drops.
+
+### On the real case, against the filters of phase 1
+
+| method | peak kept | band kept | quiet-zone noise cut | scatter |
+|---|---|---|---|---|
+| incremental (as shipped) | 100 % | 100 % | 0 % | 0.03765 |
+| **finite, same velocities** | **144 %** | **85 %** | **21 %** | **0.02802** |
+| incremental + edge: average 3×3 | 63 % | 63 % | 21 % | 0.01726 |
+| incremental + edge: median 5×5 | 52 % | 48 % | 9 % | 0.01362 |
+| incremental + edge: gaussian σ=1.5 | 40 % | 45 % | 32 % | 0.00944 |
+
+It removes the same noise as the 3×3 average and keeps the feature the average destroys. It
+is not trading signal for noise, because it is not smoothing anything: it computes a more
+correct quantity from the same velocities. The spurious volumetric strain drops by 84 % as
+well, from −0.00286 to −0.00047.
+
+**One thing is observed and not explained.** The peak comes out 44 % *higher*, not lower.
+The finite correction itself only accounts for about 4 % at these strains — checked by hand
+on simple shear — so the rest is most likely the incremental sum losing deformation along a
+path that rotates, which is a known effect. It should be isolated on a synthetic case with
+large shear before anyone leans on it.
+
+### What it would take in PIV-NP
+
+The arithmetic is small and the inputs already exist: `initial_position` and `displacement`
+are kept per particle, and the initial lattice is regular by construction. What needs
+deciding is not the arithmetic but the contract:
+
+* whether the finite measure **replaces** the incremental one or is published beside it.
+  Replacing changes every existing result, which is a break; publishing both costs two more
+  blocks and lets them be compared on real work before anything is retired.
+* `--legacy-compat` has to keep the incremental one exactly, as it does for the other
+  additions.
+* lost particles and gaps must stay out of the differences, or a particle that stopped moving
+  when it left the mesh drags its neighbours. The prototype already does this.
+
 ## Phase 4 — moisture
 
 Not started.
