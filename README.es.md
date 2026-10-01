@@ -17,6 +17,15 @@ original en Fortran (`legacy/`): 38 s → 2 s en el caso de la centrífuga.
 
 ![Deformación de corte equivalente en el ensayo de centrífuga](docs/img/centrifuge_equi_strain.png)
 
+> **¿Primera vez?** Empieza por la [**guía de inicio**](docs/GUIDE.md) (en inglés). Lleva
+> desde un clon recién hecho hasta analizar tu propio ensayo: instalar, ejecutar el ejemplo
+> que viene en el repositorio, comprobar que el resultado es correcto, encender la medida de
+> humedad y crear tu propio caso. Este README es la referencia a la que volver después.
+
+```bash
+pivnp examples/shear-block
+```
+
 ---
 
 ## Índice
@@ -438,6 +447,7 @@ piv-np/
 ├── benchmarks/            medición de rendimiento
 ├── examples/              caso de la centrífuga
 └── docs/
+    ├── GUIDE.md           guía de inicio, paso a paso
     ├── ARCHITECTURE.md    diseño y propuestas de mejora
     ├── VALIDATION.md      cómo se ha comprobado, y los límites conocidos
     └── VISUALIZATION.md   guía de ParaView

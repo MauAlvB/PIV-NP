@@ -8,9 +8,17 @@
 # gray        normalized gray: 0 = soil at the saturated reference, 100 = at the dry one
 # saturation  degree of saturation, between 0 and 1
 # moisture    water content, in %
+#
+# Note the two outer rows, at -10 and 110. The table deliberately reaches past the range
+# the test is expected to produce, so that a node sitting exactly at 0 or 100 still counts
+# as a measurement. A table that stopped at 0 and 100 would report every fully dry node as
+# "at most this wet", a bound instead of a measurement. Saturation cannot go above 1 or
+# below 0, so those rows simply repeat the end values.
 gray,saturation,moisture
+-10,1.00,25.0
 0,1.00,25.0
 25,0.75,18.0
 50,0.45,11.0
 75,0.20,5.0
 100,0.00,0.0
+110,0.00,0.0

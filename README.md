@@ -17,6 +17,15 @@ version (`legacy/`): 38 s → 2 s for the centrifuge case.
 
 ![Equivalent shear strain in the centrifuge test](docs/img/centrifuge_equi_strain.png)
 
+> **New here?** Start with the [**getting-started guide**](docs/GUIDE.md). It takes you from
+> a fresh clone to analysing your own test: install it, run the example that ships with the
+> repository, check that the answer is right, turn the moisture measurement on, and then
+> build your own case. This README is the reference you come back to afterwards.
+
+```bash
+pivnp examples/shear-block
+```
+
 ---
 
 ## Contents
@@ -118,7 +127,7 @@ PIV package, or a numerical simulation. `pivnp --source <name>` picks which one,
 
 Writing a new one is one class and one registration — the contract, with a worked example,
 is in [`src/pivnp/sources.py`](src/pivnp/sources.py) and in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#p5-data-input-decoupled-from-pivlab--done).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Input files
 
@@ -444,6 +453,7 @@ piv-np/
 ├── benchmarks/            performance measurement
 ├── examples/              centrifuge case
 └── docs/
+    ├── GUIDE.md           getting started, step by step
     ├── ARCHITECTURE.md    design and improvement proposals
     ├── VALIDATION.md      how it was checked, and the known limits
     └── VISUALIZATION.md   ParaView guide

@@ -95,7 +95,20 @@ def test_turning_the_moisture_on_adds_fields_without_touching_the_mechanics(work
     assert saturation.max() == pytest.approx(1.0, abs=1e-9)
     assert 0.5 < saturation.min() < 0.6
     assert moisture.max() == pytest.approx(25.0, abs=1e-9)   # the wet end of the table
-    assert (saturation >= 0).all() and (saturation <= 1).all()
+    # the cubic can land one ulp past 1.0 where the exact answer is 1.0
+    assert (saturation >= 0).all() and (saturation <= 1.0 + 1e-12).all()
+
+
+def test_every_moisture_value_of_the_example_is_a_measurement(workdir: Path):
+    """The guide shows a quality line of "100 % measured", so it has to stay that way.
+
+    Its calibration reaches one row past each end of the range the test produces, which is
+    what keeps a node sitting exactly at 0 or 100 from being reported as a mere bound.
+    """
+    wet = _run(workdir / "wet", moisture=2)
+    summary = wet.frames.images.quality_summary()
+    assert "100 %) measured" in summary, summary
+    assert "limit" not in summary, summary
 
 
 def test_the_example_needs_no_boundary_correction(workdir: Path):

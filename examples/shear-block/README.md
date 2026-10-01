@@ -64,4 +64,13 @@ into the motion.
 
 At the last step the wetting front has climbed the whole block, so the saturation goes from
 **1.00** at the base to about **0.55** at the top, and the water content from 25 % to
-around 13 %.
+around 13 %. The log ends with
+
+```
+Moisture: of 2340 values with data: 2340 (100 %) measured
+```
+
+which is the point of the calibration in `calibration.csv` carrying one row past each end
+of the range: a node whose gray lands exactly on the dry or the saturated reference still
+counts as a measurement instead of a bound. See
+[`docs/GUIDE.md`](../../docs/GUIDE.md#read-that-quality-line).
