@@ -103,12 +103,16 @@ def read_velocity_file(path: Path, n_nodes: int = 0,
     """
     lines = [line for line in Path(path).read_text(encoding="latin-1").splitlines()[3:]
              if line.strip()]
-    by_lines = (len(lines) >= n_nodes > 0
-                and all(len(_TOKENS.split(line.strip())) >= 4 for line in lines[:n_nodes]))
+    per_line = [len(_TOKENS.split(line.strip())) for line in lines[:n_nodes]]
+    by_lines = len(lines) >= n_nodes > 0 and all(count >= 4 for count in per_line)
     if by_lines:
-        if pivlab_format == 1:
-            log.warning("%s: the .PAR says IPIVLAB=1 (a single list of values), but the file "
-                        "carries one node per line; it is read by lines", path.name)
+        # A four-column file is what IPIVLAB=1 describes, so there is nothing to say. Only a
+        # file with more columns is worth a warning: read as if it had four, every value
+        # would shift from the first one on.
+        if pivlab_format == 1 and min(per_line) >= 5:
+            log.warning("%s: the .PAR says IPIVLAB=1 (four columns), but the file carries %d "
+                        "per line; the extra ones are ignored. Set pivlab = 2 in the .PAR.",
+                        path.name, min(per_line))
         data = np.array([_TOKENS.split(line.strip())[:4] for line in lines[:n_nodes]],
                         dtype=np.float64)
     else:

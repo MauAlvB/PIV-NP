@@ -1,0 +1,16 @@
+! Moisture measurement of the shear-block example.
+! Only read when block 3 of the .PAR says moisture = 2.
+! Every value is named, the order does not matter, and ! starts a comment.
+
+IMAGES      = images/wet_{n}.png   ! {n} is replaced by the step number
+CHANNEL     = gray                 ! 1 red, 2 green, 3 blue, 0 or "gray" for grayscale
+SIGMA       = 3                    ! averaging radius, in pixels
+CALIBRATION = calibration.csv      ! gray,saturation,moisture of this soil
+
+! The two ends of the band, as gray values of the image. Giving them here means no
+! reference photograph is needed: they hold for the whole image. Leave them out and the
+! dry value is taken from DRY_REFERENCE pixel by pixel instead (see docs/GUIDE.md).
+DRY_BAND       = 150               ! gray of the dry soil
+SATURATED_BAND = 100               ! gray of the saturated soil
+
+INCREMENTAL = 0                    ! 1 = the soil can only get wetter (a ratchet)

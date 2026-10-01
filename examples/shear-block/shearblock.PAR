@@ -1,0 +1,49 @@
+Shear block: a synthetic example with a known solution
+BLOCK 2: n_cells n_nodes n_part_cell n_rows width height
+         96      117     2           8      0.01  0.01
+BLOCK 3: dt  total_steps print_every moisture mesh_version pivlab contour restart track
+         0.1 20          1           0        1            1      0       0       0
+BLOCK 4: s_density porosity
+         2650.0    0.4
+!------------------------------------------------------------------------------------------
+! What every value means. Nothing below this line is read.
+!
+! BLOCK 2 - geometry of the PIVlab grid
+!   n_cells       cells of the grid
+!   n_nodes       nodes (points) of the grid; n_nodes = (n_cells/n_rows + 1) * (n_rows + 1)
+!   n_part_cell   rows and columns of particles per cell, from 1 to 6 (its square per cell)
+!   n_rows        rows of cells
+!   width, height size of one cell, in metres
+!
+! BLOCK 3 - which analysis is run
+!   dt            time between images, in seconds. It has to be the same interval the files
+!                 were exported from PIVlab with; otherwise displacements come out at a
+!                 different scale. The program checks the file header and warns.
+!   total_steps   how many PIVlab files are processed
+!   print_every   results are written at step 1 and then every 'print_every' steps
+!   moisture      where the moisture comes from
+!                   0 = no moisture is computed
+!                   1 = it is read from the Moist_<n>.TXT files
+!                   2 = it is computed from the test images, with the settings of the
+!                       <case>.HUM file
+!   mesh_version  where the velocities given by PIVlab sit
+!                   1 = at the nodes of the grid
+!                   2 = at the centre of each element (grid shifted half a cell)
+!   pivlab        version of PIVlab the "Datos" files were exported with, whose format
+!                 changes from one version to the next
+!                   1 = 4-column export (x, y, u, v)
+!                   2 = 5-column export (adds the vector type)
+!                 The program looks at the file and warns if it does not match what is here.
+!   contour       correction of the velocity at the boundary of the material
+!                   0 = none
+!                   1 = average of the neighbouring nodes that do have data
+!                   2 = average of the particles surrounding the point
+!                   3 = extrapolation from the interior towards the exterior
+!   restart       0 = new analysis
+!                 1 = continue from <case>.REC, for instance a second stage of the test
+!   track         must be 0; PTV tracking particles are no longer supported
+!
+! BLOCK 4 - the soil
+!   s_density     density of the soil, in kg/m3
+!   porosity      initial porosity
+!------------------------------------------------------------------------------------------

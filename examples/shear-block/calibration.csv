@@ -1,0 +1,16 @@
+# Calibration curve of the soil of the shear-block example.
+#
+# This one is invented, with round numbers, so that the example is easy to follow. For a
+# real test it comes from the laboratory: you wet samples of the soil to known degrees of
+# saturation, photograph them under the light of the test, and write down the gray value of
+# each one. See docs/GUIDE.md.
+#
+# gray        normalized gray: 0 = soil at the saturated reference, 100 = at the dry one
+# saturation  degree of saturation, between 0 and 1
+# moisture    water content, in %
+gray,saturation,moisture
+0,1.00,25.0
+25,0.75,18.0
+50,0.45,11.0
+75,0.20,5.0
+100,0.00,0.0
