@@ -1,20 +1,20 @@
-# Código Fortran original
+# Original Fortran code
 
-* `MainCodePIV-NP.for`, `common_PIV-NP.for`: fuentes originales (v.2024.04.17), **sin
-  modificar**. Sirven de referencia para las pruebas de regresión.
-* `contour_stub.for`: subrutina `CONTOUR` vacía, necesaria para enlazar: el original la
-  llama pero nunca llegó a escribirse.
+* `MainCodePIV-NP.for`, `common_PIV-NP.for`: the original sources (v.2024.04.17),
+  **unmodified**. They are the reference for the regression tests.
+* `contour_stub.for`: an empty `CONTOUR` subroutine, needed to link: the original calls it
+  but it was never written.
 
-## Compilar
+## Building
 
 ```bash
 gfortran -O2 -finit-local-zero -ffixed-line-length-none -Wno-tabs -static -o pivnp_legacy.exe MainCodePIV-NP.for contour_stub.for
 ```
 
-* `-ffixed-line-length-none` es **obligatoria**: hay líneas que pasan de la columna 72 y,
-  sin ella, gfortran las trunca en silencio y cambia los resultados. Con Intel Fortran,
-  el equivalente es `/extend-source`.
-* `-finit-local-zero` da un valor determinista a las variables locales sin inicializar
-  (`NP1`, y `GAUSS` cuando NPC está entre 7 y 10).
+* `-ffixed-line-length-none` is **mandatory**: some lines run past column 72 and, without
+  it, gfortran truncates them silently and the results change. With Intel Fortran the
+  equivalent is `/extend-source`.
+* `-finit-local-zero` gives a deterministic value to the uninitialised local variables
+  (`NP1`, and `GAUSS` when NPC is between 7 and 10).
 
-`tools/make_reference.py` compila el ejecutable automáticamente si no existe.
+`tools/make_reference.py` builds the executable automatically when it is not there.
