@@ -104,14 +104,86 @@ the same particles throughout, it cuts 9 %. The mask is now fixed from the unfil
   touching the spatial resolution — and it removes the rigid-rotation artifact at the same
   time.
 
-## Phase 2 — not smoothing, but differentiating once
+## Phase 3 — the images, and why none of this was ever going to work
 
-Next. The strain from the deformation gradient of the accumulated displacement.
+This phase was supposed to ask whether preprocessing the photographs would give PIV a better
+field. It answered that, and then answered a larger question that makes the rest of the
+investigation moot.
 
-## Phase 3 — vector validation upstream
+A small PIV was written for it (`piv.py`): window cross-correlation by FFT with a Gaussian
+three-point sub-pixel fit. Not a competitor to PIVlab — no multi-pass, no window deformation
+— but the *same* algorithm applied to two versions of an image, so that the difference
+between them is the preprocessing and nothing else. It was checked first against known
+shifts of a real photograph and recovers them to **0.07–0.14 px**, the normal range for a
+sub-pixel PIV. That number matters later.
 
-Not started. Worth checking whether the PIVlab exports carry the normalised median test
-before anything else is attempted.
+### Preprocessing: already done, and more makes it worse
+
+The `Masked_*.jpg` the analysis ran on carry **52 % more local contrast** than the camera
+originals, so they had already been enhanced. Running the same PIV on both:
+
+| Image | scatter | outliers |
+|---|---|---|
+| original, untouched | 0.5972 px | 3.9 % |
+| **as delivered (enhanced)** | **0.4716 px** | **1.9 %** |
+| original + local contrast | 1.7518 px | 7.7 % |
+| original + high-pass σ=8 | 1.4490 px | 6.4 % |
+| original + anti-blocking | 0.5754 px | 3.9 % |
+
+The enhancement already applied is worth 21 % of the scatter and half the outliers. Every
+further step tried makes things worse, some by a factor of three.
+
+The reason is worth keeping: these are photographs of **soil texture**, not of tracer
+particles. Soil carries strong large-scale texture — grains, shadows — that correlates well,
+and a high-pass throws exactly that away and keeps the fine detail, which on a 177 KB JPEG
+is mostly compression noise. PIV preprocessing recipes are written for particle images;
+borrowing them for soil is counterproductive.
+
+One measurable defect remains, and it is small: the JPEG 8×8 grid is 37 % stronger than the
+detail around it, which is structure locked to the pixels that does not move with the soil.
+Damping it buys about 4 % of scatter on the originals and nothing on the delivered images.
+For future tests the lesson is to mask and enhance **once**, from the camera file, and save
+lossless.
+
+### The measurement that ends the investigation
+
+| | |
+|---|---|
+| Image scale | 0.54 mm/px |
+| **Typical displacement between two photographs** | **0.163 px** |
+| Scatter between neighbouring vectors | 0.129 px |
+| **Signal to noise** | **1.3 : 1** |
+| What sub-pixel PIV can resolve | ~0.1 px |
+
+**The soil moves about a sixth of a pixel per frame, and PIV resolves about a tenth.** The
+scatter is not noise left behind by something: it is the resolution limit of the method, and
+the signal sits barely above it.
+
+That explains every result above at once. No filter helped because there was nothing to
+separate. The quiet zones look like noise because they are moving *below* what can be
+measured at all. Spatial smoothing removed signal because at that level the signal has no
+spatial redundancy left to exploit.
+
+### What to do instead
+
+Not a better filter. A **bigger displacement**, which raises the signal while the 0.1 px
+floor stays where it is:
+
+1. **Correlate frames further apart.** Nothing in PIV-NP has to change: it is a choice when
+   exporting from PIVlab, and the `.PAR` already checks that `DT` matches the interval the
+   files were exported with. Going from every frame to every fifth would take the
+   displacement from 0.16 px to about 0.8 px and the signal-to-noise from 1.3 to roughly 6.
+   The classic quarter-rule limit for a 32 px window is 8 px, so there is a lot of headroom —
+   the current data uses about 2 % of what the window could carry. The cost is temporal
+   resolution, and the limit is that the soil must not deform so much between frames that
+   the windows stop looking alike.
+2. **Photograph at a finer scale.** More pixels per millimetre is more pixels of
+   displacement for the same motion.
+3. **Phase 2 still stands**, and for the same reason: differentiating once over twenty steps
+   of accumulated displacement uses the signal twenty times over against a floor that does
+   not grow.
+
+The cheapest of the three by far is the first, and it is available on data already recorded.
 
 ## Phase 4 — moisture
 
