@@ -33,11 +33,19 @@ RQ2 is a subset of RQ1 in subject but not in search strategy: one is a database 
 other a citation search. PRISMA 2020 reports those as separate streams feeding one flow
 diagram, which is exactly how they will be reported.
 
-**The anchor record for RQ2:**
+**The anchor records for RQ2.** Three, because the method this code implements and the
+moisture measurement it was joined to were published separately, and a work extending either
+may cite only one of them:
 
-> Pinyol, N.M. & Alvarado, M. (2017). *Novel analysis for large strains based on particle
-> image velocimetry*. Canadian Geotechnical Journal 54(7): 933-944.
-> doi:[10.1139/cgj-2016-0327](https://doi.org/10.1139/cgj-2016-0327)
+| | Record | What it anchors |
+|---|---|---|
+| **A1** | Pinyol, N.M. & Alvarado, M. (2017). *Novel analysis for large strains based on particle image velocimetry*. Canadian Geotechnical Journal 54(7): 933-944. doi:[10.1139/cgj-2016-0327](https://doi.org/10.1139/cgj-2016-0327) | the numerical-particle method this code implements |
+| **A2** | Parera, F., Pinyol, N.M. & Alonso, E.E. (2021). *Massive, continuous, and non-invasive surface measurement of degree of saturation by shortwave infrared images*. Canadian Geotechnical Journal 58(6): 749-762. doi:[10.1139/cgj-2019-0051](https://doi.org/10.1139/cgj-2019-0051) | saturation from SWIR images, which `MOISTER=2` implements |
+| **A3** | Morales, G., Pinyol, N.M., Alvarado, M. & Alonso, E.E. (2025). *Digital image-based measurement of degree of saturation on moving soil*. Canadian Geotechnical Journal 62: 1-7. doi:[10.1139/cgj-2023-0760](https://doi.org/10.1139/cgj-2023-0760) | the two joined, and the test `examples/dam-break-swir` reproduces |
+
+A3 being recent matters for the reading of the counts: it will have few citations yet, and a
+low number there is a fact about its age, not about its uptake. That has to be said in the
+results rather than left for a reviewer to point out.
 
 ## 3. Sources, and what each is for
 
@@ -132,15 +140,21 @@ TITLE-ABS-KEY (
 
 ### C1 — citation search (the whole of RQ2)
 
-Not a string but a navigation, on each source:
+Not a string but a navigation, repeated for **each of the three anchors** on **each of the
+three sources**: nine exports in all.
 
-* **Scopus**: find the record by its DOI `10.1139/cgj-2016-0327`, open *Cited by*, export all.
-* **Web of Science**: find the record, open *Times Cited*, export all.
-* **Google Scholar**: find the record, open *Cited by*, export the first 200.
-* Also export the *Cited by* lists of the group's later related publications, so the method's
-  descendants are not missed because they cite a newer paper instead.
+| Anchor | DOI |
+|---|---|
+| A1 | `10.1139/cgj-2016-0327` |
+| A2 | `10.1139/cgj-2019-0051` |
+| A3 | `10.1139/cgj-2023-0760` |
 
-Record the count from each source **and the date**, because these grow.
+* **Scopus**: search the DOI, open the record, *Cited by*, export all.
+* **Web of Science**: search the DOI, *Times Cited*, export all.
+* **Google Scholar**: find the record, *Cited by*, export the first 200.
+
+Record the count from each source **and the date of the search**, because these grow. The
+step-by-step for running them is in [`review-step-1.md`](review-step-1.md).
 
 ## 5. Inclusion and exclusion
 
