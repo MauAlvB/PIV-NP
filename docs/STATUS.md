@@ -44,7 +44,11 @@ artifact outright and cuts the scatter without costing signal.
 * **Export PIVlab with frames further apart.** Costs nothing, needs no code change, and is
   the largest single improvement available to the data: the soil moves about a sixth of a
   pixel per frame while PIV resolves a tenth.
-* **A paper**, with the literature review built to PRISMA. Not started.
+* **Two papers in parallel**, a software one and a methodological one, sharing the same
+  validation data. The review protocol is written ([`review-protocol.md`](review-protocol.md))
+  and the next move is the user's: nine citation exports, as set out in
+  [`review-step-1.md`](review-step-1.md). Nothing else in the review can start until those
+  arrive, so it is parked rather than in progress.
 
 ## Open questions
 
