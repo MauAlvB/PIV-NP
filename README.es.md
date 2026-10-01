@@ -274,6 +274,8 @@ Resultados del `.POST.RES`:
 | `Vol_strain`, `Ins_vol_strain` | escalar | deformación volumétrica acumulada / del paso |
 | `Vorticity` | escalar | rotacional del campo de velocidades, ∂v/∂x − ∂u/∂y [s⁻¹], positivo antihorario |
 | `Rotation` | escalar | rotación acumulada por la partícula [grados] |
+| `Vorticity_num` | escalar | número cinemático de vorticidad: 0 corte puro, 1 corte simple, más = domina la rotación. `NaN` donde no está definido |
+| `Rot_angle` | escalar | lo mismo acotado: 0° corte puro, 45° corte simple, 90° rotación rígida |
 | `E_potential`, `E_kinetic`, `E_total` | escalar | energías por unidad de masa (`E_total` = potencial + cinética) |
 | `Moisture`, `Saturation` | escalar | solo con `MOISTER=1` |
 
@@ -295,6 +297,18 @@ simétrica y antisimétrica del mismo gradiente de velocidades, que el solver ya
 esos mismos casos, con el contorno reconstruido, `Rotation` queda a **0,01°** de los 50°
 verdaderos y es idéntica en todas las partículas: donde la deformación miente, la rotación
 no.
+
+`Vorticity_num` pone las dos en una sola escala, el **número cinemático de vorticidad** que
+se usa en geología estructural: 0 significa que el material se deforma sin girar, 1 es corte
+simple (una banda de corte), y por encima domina la rotación. Es un cociente, así que una
+rotación rígida lo hace infinito; ese caso se escribe como `NaN`, que es en sí mismo la
+respuesta. `Rot_angle` es su arcotangente, acotada entre 0° y 90°, y es la que conviene usar
+para colorear un mapa — `Vorticity_num = tan(Rot_angle)` pasa de una a otra.
+
+Las dos describen **la deformación acumulada hasta ese instante**, que es como se estima el
+número a partir de la deformación finita en rocas. Ninguna significa nada donde el material
+apenas se movió: allí el cociente es ruido entre ruido. Filtra por `Equi_strain` antes de
+leerlas.
 
 ### Continuar un análisis
 

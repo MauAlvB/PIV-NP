@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 from .fortran_format import format_e, format_float_rows, format_int_rows
-from .solver import ACTIVE
+from .solver import ACTIVE, rotation_angle, vorticity_number
 from .state import Nodes, Particles
 
 RES_HEADER = "GiD Post Results File 1.0"
@@ -78,6 +78,12 @@ RESULTS: tuple[ResultSpec, ...] = (
     #: the two things.
     ResultSpec("Vorticity", "Scalar", lambda p, n: p.vorticity, absent_in_fortran=True),
     ResultSpec("Rotation", "Scalar", lambda p, n: p.rotation, absent_in_fortran=True),
+    #: How the two divide the deformation up: the citable number, and the same thing
+    #: bounded between 0 and 90 degrees so that it can be drawn without a singularity.
+    ResultSpec("Vorticity_num", "Scalar", lambda p, n: vorticity_number(p),
+               absent_in_fortran=True),
+    ResultSpec("Rot_angle", "Scalar", lambda p, n: rotation_angle(p),
+               absent_in_fortran=True),
     ResultSpec("E_potential", "Scalar", lambda p, n: p.potential_energy),
     KINETIC_ENERGY,
     ResultSpec("E_total", "Scalar", lambda p, n: p.total_energy),

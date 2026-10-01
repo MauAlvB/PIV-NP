@@ -62,6 +62,12 @@ Tips:
   rotation shows up in the first and, misleadingly, in the second too: see the note in the
   [README](../README.md) on telling rotation apart from shear. Use a diverging colour map
   (*Cool to Warm*) centred on zero, since the sign is the direction of the turn.
+* **Which regime is each zone in?** Colour by `Rot_angle` with the range fixed to 0–90:
+  blue is material deforming without turning, 45 is a shear band, 90 is a block rotating
+  rigidly. **Threshold by `Equi_strain` first** (*Filters → Threshold*, keeping the upper
+  part): where the material barely moved the field is a ratio of two near-zero numbers and
+  shows only noise. Without that filter the map looks like static — that is the single most
+  common way to misread it.
 * **Saving the setup** to reuse it with other tests: *File → Save State* (`.pvsm`) and,
   when loading it, *Search files under specified directory* with the new folder.
 * **Video**: *File → Save Animation* (`.avi`/`.ogv`) or a series of `.png`.
@@ -79,6 +85,7 @@ The coordinates are the **current** positions of the particles at each instant (
 | `Equi_strain`, `In_E_strain`, `Vol_strain`, `Ins_vol_strain` | scalar |
 | `Vorticity` | scalar (s⁻¹): the curl, which tells rotation apart from shear |
 | `Rotation` | scalar (degrees): rotation accumulated by the particle |
+| `Vorticity_num`, `Rot_angle` | scalar: how the deformation splits between shear and rotation |
 | `E_potential`, `E_kinetic`, `E_total` | scalar |
 | `NaNs` | data missing around the particle (0 to 4 with IVERSION=1; 0 or 1 with IVERSION=2) |
 | `Moisture`, `Saturation` | scalar (only with `MOISTER=1`) |

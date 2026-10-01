@@ -281,6 +281,8 @@ Results in `.POST.RES`:
 | `Vol_strain`, `Ins_vol_strain` | scalar | volumetric strain, accumulated / per step |
 | `Vorticity` | scalar | curl of the velocity field, ∂v/∂x − ∂u/∂y [s⁻¹], positive counter-clockwise |
 | `Rotation` | scalar | rotation accumulated by the particle [degrees] |
+| `Vorticity_num` | scalar | kinematic vorticity number: 0 pure shear, 1 simple shear, more = rotation dominates. `NaN` where undefined |
+| `Rot_angle` | scalar | the same thing bounded: 0° pure shear, 45° simple shear, 90° rigid rotation |
 | `E_potential`, `E_kinetic`, `E_total` | scalar | energies per unit mass (`E_total` = potential + kinetic) |
 | `Moisture`, `Saturation` | scalar | only with `MOISTER=1` |
 
@@ -302,6 +304,17 @@ the symmetric and the antisymmetric halves of the same velocity gradient, which 
 already computes. On those same cases, with the boundary rebuilt, `Rotation` lands within
 **0.01°** of the true 50° and is identical on every particle — so where the strain lies, the
 rotation does not.
+
+`Vorticity_num` puts the two on one scale, as the **kinematic vorticity number** used in
+structural geology: 0 means the material deforms without turning, 1 is simple shear (a shear
+band), and above that the rotation dominates. It is a ratio, so a rigid rotation makes it
+infinite; that case is written as `NaN`, which is itself the answer. `Rot_angle` is its
+arctangent, bounded between 0° and 90°, which is the one to colour a map by — `Vorticity_num
+= tan(Rot_angle)` converts between them.
+
+Both describe **the deformation accumulated so far**, which is how the number is estimated
+from finite strain in deformed rocks. Neither means anything where the material barely
+moved: there the ratio is noise over noise. Threshold by `Equi_strain` before reading them.
 
 ### Continuing an analysis
 

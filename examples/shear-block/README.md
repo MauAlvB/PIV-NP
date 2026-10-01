@@ -33,6 +33,8 @@ After 2 s of shearing at 0.05 s⁻¹:
 | `Displacement` y | 0 |
 | `Vorticity` | **−0.0500** s⁻¹ on every particle |
 | `Rotation` | **−2.8648°** on every particle |
+| `Vorticity_num` | **1.0000** — the textbook value for simple shear |
+| `Rot_angle` | **45.00°** — the same thing on the bounded scale |
 | particles published | **372** of 384 |
 
 The vorticity is not zero, which surprises people: simple shear is pure shear **plus** a

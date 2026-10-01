@@ -322,6 +322,52 @@ was checked against a finite 50° rotation rather than assumed; it is carried in
 Neither result is written in `--legacy-compat` mode: the original Fortran had no such blocks,
 and the regression suite compares the whole file against it.
 
+### The rotation artifact is not shear: it is an apparent contraction
+
+Breaking the spurious strain of that case into its components turned out to matter more than
+the magnitude. On a material that does not deform at all:
+
+| Component | Value |
+|---|---|
+| εxx | −0.0076152 |
+| εyy | −0.0076152 |
+| γxy | **0.0000000** |
+| `Vol_strain` | **−0.0152305** |
+
+The two normal strains are **equal** and the shear is **exactly zero**. So the artifact is an
+apparent isotropic in-plane contraction, and what it shows up in is **`Vol_strain`: a volume
+loss of 1.5 % that never happened**. `Equi_strain` reports 0.0051 only because the deviatoric
+invariant includes εzz = 0, which makes an in-plane isotropic contraction deviatoric in 3D.
+
+This is worth knowing before reading a volumetric map over a rotating zone. In soil
+mechanics a contraction means densification and pore-pressure build-up, so a rotating block
+can be mistaken for a compacting one. The ratio of rotation to shear is what tells them
+apart: on this case the deviatoric shear is zero to machine precision, which makes
+`Vorticity_num` infinite and `Rot_angle` exactly 90° — "this is a rotation", stated as
+plainly as it can be.
+
+### How the deformation splits, on a real case
+
+`Vorticity_num` and `Rot_angle` are the kinematic vorticity number of the accumulated
+deformation and its arctangent. Measured on the dam-break case at the last step, keeping only
+the particles that actually deformed:
+
+| How much the material deformed | Particles | Median vorticity number | Quartiles |
+|---|---|---|---|
+| `Equi_strain` < 0.01 (practically intact) | 553 | 1.31 | 0.60 – 2.44 |
+| 0.01 – 0.025 | 1971 | 0.60 | 0.27 – 1.19 |
+| 0.025 – 0.05 | 1301 | 0.51 | 0.24 – 0.94 |
+| 0.05 – 0.10 | 1059 | 0.64 | 0.30 – 0.98 |
+| over 0.10 (well deformed) | 1032 | 0.60 | 0.30 – 0.88 |
+
+The first row is the warning: where nothing happened the number is a ratio of two near-zero
+quantities and means nothing, and it is *also* where it looks most dramatic. From the second
+row on it settles around 0.5–0.6, between pure and simple shear, with half the scatter.
+
+Read regionally rather than particle by particle — even in well-deformed material the
+interquartile range is 0.30 to 0.88 — the map does separate the upstream face, which slides
+with little rotation, from the downstream material, which rotates as it collapses.
+
 ## 7. Still open
 
 * **How the dry–saturated band of each soil is measured.** It is the most sensitive number

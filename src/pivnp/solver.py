@@ -224,6 +224,57 @@ def update_strains(particles: Particles, nodes: Nodes, grid: Grid, config: CaseC
     )
 
 
+#: Below this, a strain or a rotation is numerical noise rather than deformation.
+_NOTHING_HAPPENED = 1e-12
+
+
+def _turn_and_shear(particles: Particles) -> tuple[np.ndarray, np.ndarray]:
+    """The two magnitudes the kinematics are judged by, from the accumulated deformation.
+
+    ``turn`` is twice the rotation in radians, which is what the curl integrates to, and
+    ``shear`` is the in-plane deviatoric strain. For simple shear the two are equal, which
+    is what makes their ratio 1 there.
+    """
+    strain = particles.strain
+    turn = 2.0 * np.abs(np.radians(particles.rotation))
+    shear = np.hypot(strain[:, 0] - strain[:, 1], strain[:, 2])
+    return turn, shear
+
+
+def vorticity_number(particles: Particles) -> np.ndarray:
+    """Kinematic vorticity number of the deformation accumulated so far.
+
+    ``0`` pure shear (it deforms without turning), ``1`` simple shear (a shear band), and
+    the larger it grows the more the rotation dominates. ``NaN`` where it is not defined:
+    a rigid rotation has no deviatoric strain to divide by, and a particle that neither
+    turned nor deformed has no kinematics to describe.
+
+    Taking the ratio of the accumulated quantities is how the number is estimated from
+    finite strain in deformed rocks. It equals the time average of the instantaneous
+    vorticity number when the deformation is steady; when it is not, it describes the
+    deformation as a whole. The instantaneous one can be had from ``Vorticity`` and
+    ``Inc_strain``, which are both published.
+    """
+    turn, shear = _turn_and_shear(particles)
+    out = np.full(turn.shape, np.nan)
+    usable = shear > _NOTHING_HAPPENED
+    out[usable] = turn[usable] / shear[usable]
+    return out
+
+
+def rotation_angle(particles: Particles) -> np.ndarray:
+    """The same thing bounded, in degrees, so that it can be drawn without a singularity.
+
+    ``0`` pure shear, ``45`` simple shear, ``90`` rigid rotation. It is the arctangent of
+    :func:`vorticity_number`, so one converts into the other: ``Wm = tan(angle)``. ``NaN``
+    where nothing happened at all.
+    """
+    turn, shear = _turn_and_shear(particles)
+    out = np.degrees(np.arctan2(turn, shear))
+    out[(turn <= _NOTHING_HAPPENED) & (shear <= _NOTHING_HAPPENED)] = np.nan
+    return out
+
+
 def output_mask(particles: Particles, grid: Grid, step: int) -> np.ndarray:
     """Particles located in the grid when printing (``IDONDE /= -1`` in IMPRES_GiD)."""
     n = particles.position.shape[0]

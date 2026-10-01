@@ -23,7 +23,13 @@ from pivnp.nodal import compute_nodal_momentum_v1
 from pivnp.particles import create_particles
 from pivnp.restart import read_restart
 from pivnp.simulation import RunOptions, Simulation, run_case
-from pivnp.solver import advance_particles, output_mask, update_strains
+from pivnp.solver import (
+    advance_particles,
+    output_mask,
+    rotation_angle,
+    update_strains,
+    vorticity_number,
+)
 from pivnp.state import Nodes
 
 SYNTHETIC = Path(__file__).parent / "data" / "synthetic"
@@ -179,16 +185,97 @@ def test_the_rotation_survives_a_restart(workdir: Path):
                                read_restart(whole / "zapatak.REC").rotation, rtol=1e-12)
 
 
+# --- how the deformation divides between shear and rotation ------------------------------
+def test_pure_shear_is_zero_and_zero_degrees():
+    """Stretching along one axis and shortening along the other: it deforms, it does not turn."""
+    cfg, grid, p, nodes = _case()
+    x, y = _node_xy(grid)
+    nodes.velocity[:, 0] = 0.01 * x
+    nodes.velocity[:, 1] = -0.01 * y
+    _step(cfg, grid, p, nodes, 1)
+
+    located = output_mask(p, grid, 1)
+    np.testing.assert_allclose(vorticity_number(p)[located], 0.0, atol=1e-12)
+    np.testing.assert_allclose(rotation_angle(p)[located], 0.0, atol=1e-9)
+
+
+def test_simple_shear_is_one_and_forty_five_degrees():
+    """The reference point of the scale: a shear band."""
+    cfg, grid, p, nodes = _case()
+    _, y = _node_xy(grid)
+    nodes.velocity[:, 0] = 0.04 * y
+    _step(cfg, grid, p, nodes, 1)
+
+    located = output_mask(p, grid, 1)
+    np.testing.assert_allclose(vorticity_number(p)[located], 1.0, rtol=1e-12)
+    np.testing.assert_allclose(rotation_angle(p)[located], 45.0, rtol=1e-12)
+
+
+def test_rigid_rotation_is_undefined_and_ninety_degrees():
+    """No deviatoric strain to divide by, which is exactly what makes it a rigid rotation."""
+    cfg, grid, p, nodes = _case()
+    x, y = _node_xy(grid)
+    nodes.velocity[:, 0] = -0.03 * y
+    nodes.velocity[:, 1] = 0.03 * x
+    _step(cfg, grid, p, nodes, 1)
+
+    located = output_mask(p, grid, 1)
+    assert np.isnan(vorticity_number(p)[located]).all()      # the ratio has no value here
+    np.testing.assert_allclose(rotation_angle(p)[located], 90.0, rtol=1e-12)
+
+
+def test_a_particle_that_did_nothing_describes_nothing():
+    cfg, grid, p, nodes = _case()
+    _step(cfg, grid, p, nodes, 1)                            # the field is zero everywhere
+    located = output_mask(p, grid, 1)
+    assert np.isnan(vorticity_number(p)[located]).all()
+    assert np.isnan(rotation_angle(p)[located]).all()
+
+
+def test_the_angle_is_the_arctangent_of_the_number():
+    """They are one quantity in two shapes, so Wm = tan(angle) has to hold."""
+    cfg, grid, p, nodes = _case()
+    _, y = _node_xy(grid)
+    nodes.velocity[:, 0] = 0.04 * y
+    nodes.velocity[:, 1] = 0.01 * y                          # something less tidy
+    _step(cfg, grid, p, nodes, 1)
+
+    located = output_mask(p, grid, 1)
+    number = vorticity_number(p)[located]
+    angle = rotation_angle(p)[located]
+    np.testing.assert_allclose(np.tan(np.radians(angle)), number, rtol=1e-10)
+
+
+def test_the_synthetic_rotation_case_is_called_a_rotation(workdir: Path):
+    """The case we know is a rigid rotation has to be reported as one, not as shear."""
+    work = workdir / "rotation"
+    shutil.copytree(SYNTHETIC / "rotation_1P", work, dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns("expected"))
+    sim = Simulation.from_directory(work)
+    sim.contour = make_contour_correction(3)
+    sim.run()
+
+    p = sim.particles
+    alive = output_mask(p, sim.grid, sim.config.total_steps) & (p.nan_initial == 0)
+    np.testing.assert_allclose(rotation_angle(p)[alive], 90.0, atol=1e-6)
+    # the strain it reports is an apparent isotropic contraction, with no shear in it
+    np.testing.assert_allclose(p.strain[alive, 0], p.strain[alive, 1], atol=1e-12)
+    np.testing.assert_allclose(p.strain[alive, 2], 0.0, atol=1e-12)
+    assert p.vol_strain[alive].mean() < -0.01      # and it claims a volume loss
+
+
 # --- what gets written -------------------------------------------------------------------
 def test_the_two_results_are_published():
     names = [spec.name for spec in result_specs()]
     assert "Vorticity" in names and "Rotation" in names
+    assert "Vorticity_num" in names and "Rot_angle" in names
 
 
 def test_compatibility_mode_leaves_them_out():
     """The original Fortran wrote no such block, and the regression suite compares bytes."""
     names = [spec.name for spec in result_specs(legacy_compat=True)]
-    assert "Vorticity" not in names and "Rotation" not in names
+    for new in ("Vorticity", "Rotation", "Vorticity_num", "Rot_angle"):
+        assert new not in names
 
 
 def test_they_reach_the_results_file(workdir: Path):
