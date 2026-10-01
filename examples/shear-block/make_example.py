@@ -3,10 +3,14 @@
 The example is already in the repository, so you do not need to run this: it is here so that
 you can see exactly what the data is, and change it to try something else. It writes
 
-* ``datos (1).txt`` ... ``datos (20).txt`` -- the velocity field, in the format PIVlab
+* ``pivlab/datos (1).txt`` ... ``(20).txt`` -- the velocity field, in the format PIVlab
   exports, as if a PIV analysis had measured it;
 * ``images/wet_1.png`` ... ``wet_20.png`` -- photographs of the same test, in which a
   wetting front rises through the block.
+
+The inputs go in subfolders so that the case root holds only the configuration and, later,
+the results. PIV-NP also reads them straight from the root, which is how older cases are
+laid out.
 
 The field is a **simple shear**: the horizontal velocity grows linearly with the height
 above the base, and the vertical velocity is zero. That has an exact solution, which is what
@@ -89,6 +93,8 @@ def write_velocity_files() -> None:
         f"conversion factor uv (px/frame -> m/s): {METRES_PER_PIXEL / DT}\n"
         "x [m],y [m],u [m/s],v [m/s]\n"
     )
+    folder = HERE / "pivlab"
+    folder.mkdir(exist_ok=True)
     for step in range(1, STEPS + 1):
         rows = [
             f"{xi:.6f},{yi:.6f},"
@@ -97,7 +103,7 @@ def write_velocity_files() -> None:
             for xi, yi, ui, vi in zip(x, y, u, v, strict=True)
         ]
         text = header.format(step=step, next=step + 1) + "\n".join(rows) + "\n"
-        (HERE / f"datos ({step}).txt").write_text(text, encoding="ascii")
+        (folder / f"datos ({step}).txt").write_text(text, encoding="ascii")
 
 
 def wet_image(step: int) -> np.ndarray:

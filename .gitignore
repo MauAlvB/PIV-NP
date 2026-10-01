@@ -26,3 +26,4 @@ legacy/*.mod
 !tests/data/**/expected/*.POST.MSH
 !tests/data/**/expected/*.REC
 runs/
+*_vtk/

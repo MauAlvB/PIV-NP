@@ -231,17 +231,24 @@ case-insensitive.
 my-test/
 ├── PIV-NP.TXT          one line: the case name, say  mytest
 ├── mytest.PAR          what to analyse
-└── datos (1).txt       the velocity field of each step
-    datos (2).txt
-    ...
+└── pivlab/             the velocity field of each step
+    ├── datos (1).txt
+    ├── datos (2).txt
+    └── ...
 ```
+
+The velocity files go in a `pivlab/` subfolder. A test of 149 steps has 149 of them, and
+leaving them in the case root buries the two configuration files among them — and the
+results land there too once you run it. PIV-NP also reads them straight from the root,
+which is how every case was laid out before, so an old case needs no reorganising. What it
+will not do is take them from both places at once: that is an error, not a silent choice.
 
 #### `PIV-NP.TXT`
 
 A single line with the case name, no extension. Every other file is named after it. If you
 would rather not have this file, pass `pivnp my-test --case mytest` instead.
 
-#### `datos (n).txt` — the velocity field
+#### `pivlab/datos (n).txt` — the velocity field
 
 These are what PIVlab exports. One file per step, numbered from 1 with no gaps, with
 **three header lines** and then one line per grid point:
@@ -334,10 +341,14 @@ my-test/
 ├── mytest.PAR          with  moisture = 2
 ├── mytest.HUM          how to measure the moisture
 ├── calibration.csv     the curve of your soil
-├── datos (1..n).txt
+├── pivlab/             datos (1..n).txt
 └── images/
     └── wet_1.png ...   one photograph per step
 ```
+
+With `moisture = 1` instead, where the fields come from another program rather than from
+the photographs, the `Moist_<n>.TXT` go in a `moisture/` subfolder (or in the root) and
+neither the `.HUM`, the calibration nor the images are needed.
 
 #### The photographs
 
@@ -469,7 +480,11 @@ Set `pivlab = 2` in block 3.
 
 **`FileNotFoundError: ... datos (7).txt`**
 A gap in the numbering, or `total_steps` larger than the number of files you have. The files
-must run 1, 2, 3 … with nothing missing.
+must run 1, 2, 3 … with nothing missing. The path in the message tells you where it looked.
+
+**`datos (1).txt is both in ... and in its pivlab/ subfolder`**
+You have two copies of the same input. Delete the one you do not want: PIV-NP refuses to
+guess, because editing a file that turns out not to be the one being read costs hours.
 
 **`MOISTER=... must be 0 ..., 1 ... or 2 ...`**
 Only those three values. Note that in some pre-2024 cases `2` meant "read the files", which

@@ -42,23 +42,41 @@ def build_legacy(exe: Path) -> Path:
 
 
 def crop_frames(source: Path, window: dict, dest: Path, dest5: Path) -> None:
-    """Crop every ``datos (n).txt`` to the window and build the five-column variant."""
+    """Crop every ``datos (n).txt`` to the window and build the five-column variant.
+
+    The files go into the ``pivlab/`` and ``moisture/`` subfolders of each frame set, which
+    is the layout of a case. ``stage_flat`` undoes that when the Fortran has to read them.
+    """
     n_cols_src, n_rows_src = window["source_grid"]
     c0, c1 = window["cols"]
     r0, r1 = window["rows_from_top"]
     keep = [c * n_rows_src + r for c in range(c0, c1) for r in range(r0, r1)]
-    dest.mkdir(parents=True, exist_ok=True)
-    dest5.mkdir(parents=True, exist_ok=True)
+    for folder in (dest, dest5):
+        (folder / "pivlab").mkdir(parents=True, exist_ok=True)
+        (folder / "moisture").mkdir(parents=True, exist_ok=True)
     for step in range(1, window["n_frames"] + 1):
         lines = (source / f"datos ({step}).txt").read_text(encoding="latin-1").splitlines()
         assert len(lines) - 3 == n_cols_src * n_rows_src
         header, body = lines[:3], lines[3:]
         rows = [body[k] for k in keep]
-        (dest / f"datos ({step}).txt").write_text("\n".join(header + rows) + "\n")
+        (dest / "pivlab" / f"datos ({step}).txt").write_text("\n".join(header + rows) + "\n")
         rows5 = [f"{row},1" for row in rows]
-        (dest5 / f"datos ({step}).txt").write_text("\n".join(header + rows5) + "\n")
-        _write_moisture(dest / f"Moist_{step}.TXT", rows, step)
-        shutil.copy(dest / f"Moist_{step}.TXT", dest5 / f"Moist_{step}.TXT")
+        (dest5 / "pivlab" / f"datos ({step}).txt").write_text("\n".join(header + rows5) + "\n")
+        moist = dest / "moisture" / f"Moist_{step}.TXT"
+        _write_moisture(moist, rows, step)
+        shutil.copy(moist, dest5 / "moisture" / f"Moist_{step}.TXT")
+
+
+def stage_flat(frames: Path, work: Path) -> None:
+    """Copy a frame set into ``work`` with every file in one directory.
+
+    The original Fortran reads ``datos (n).txt`` from its own working directory and knows
+    nothing about subfolders, so the files have to be flattened before running it. The
+    Python version reads either layout; this is only for the executable.
+    """
+    for path in frames.rglob("*"):
+        if path.is_file():
+            shutil.copy(path, work / path.name)
 
 
 def _write_moisture(path: Path, rows: list[str], step: int) -> None:
@@ -116,7 +134,7 @@ def make_scenario(name: str, spec: dict, exe: Path, window: dict, size: float) -
     frames = REGRESSION / ("frames5" if spec.get("pivlab_format", 1) != 1 else "frames")
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
-        shutil.copytree(frames, work, dirs_exist_ok=True)
+        stage_flat(frames, work)  # the Fortran cannot read the subfolders
         shutil.copy(scenario_dir / "PIV-NP.TXT", work)
         shutil.copy(scenario_dir / f"{CASE}.PAR", work)
         run_legacy(exe, work)

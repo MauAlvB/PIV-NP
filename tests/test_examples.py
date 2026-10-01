@@ -50,8 +50,10 @@ def test_the_example_ships_every_file_it_needs():
     names = {p.name for p in EXAMPLE.iterdir()}
     assert {"PIV-NP.TXT", f"{CASE}.PAR", f"{CASE}.HUM", "calibration.csv",
             "make_example.py", "README.md"} <= names
-    assert (EXAMPLE / "datos (1).txt").exists() and (EXAMPLE / "datos (20).txt").exists()
+    # the inputs live in their own subfolders, so the case root stays readable
+    assert len(list((EXAMPLE / "pivlab").glob("datos (*).txt"))) == 20
     assert len(list((EXAMPLE / "images").glob("wet_*.png"))) == 20
+    assert not list(EXAMPLE.glob("datos (*).txt"))
 
 
 def test_the_example_gives_the_exact_solution(workdir: Path):

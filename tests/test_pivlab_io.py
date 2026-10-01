@@ -3,11 +3,60 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from pivnp.config import ConfigError
 from pivnp.pivlab_io import FrameSource, pivlab_to_node, read_moisture_file, read_velocity_file
 
 from .legacy_reference import iconectividad
 
 HEADER = "PIVlab\nFRAME: 1\nx [m],y [m],u [m/s],v [m/s]\n"
+
+
+# --- where the input files live ----------------------------------------------------------
+def _write_step(directory: Path, step: int, u: float, moisture: float | None = None) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"datos ({step}).txt").write_text(HEADER + f"0,0,{u},0\n")
+    if moisture is not None:
+        (directory / f"Moist_{step}.TXT").write_text(f"t\n0,0,{moisture},1\n")
+
+
+def test_inputs_are_read_from_the_case_root(workdir: Path):
+    """How every case was laid out before the subfolders: everything beside the .PAR."""
+    _write_step(workdir, 1, 1.5, moisture=0.3)
+    frame = FrameSource(workdir, n_nodes=1, moisture=True, prefetch=0).read(1)
+    assert frame.u[0] == 1.5 and frame.moisture[0] == 0.3
+
+
+def test_inputs_are_read_from_their_subfolders(workdir: Path):
+    _write_step(workdir / "pivlab", 1, 2.5)
+    _write_step(workdir / "moisture", 1, 0.0, moisture=0.7)
+    (workdir / "moisture" / "datos (1).txt").unlink()  # only the Moist file belongs there
+    source = FrameSource(workdir, n_nodes=1, moisture=True, prefetch=0)
+    frame = source.read(1)
+    assert frame.u[0] == 2.5 and frame.moisture[0] == 0.7
+    assert source.velocity_path(1).parent.name == "pivlab"
+
+
+def test_the_two_layouts_can_be_mixed(workdir: Path):
+    """Velocities in their subfolder and moisture in the root, or the other way round."""
+    _write_step(workdir / "pivlab", 1, 3.5)
+    (workdir / "Moist_1.TXT").write_text("t\n0,0,0.9,1\n")
+    frame = FrameSource(workdir, n_nodes=1, moisture=True, prefetch=0).read(1)
+    assert frame.u[0] == 3.5 and frame.moisture[0] == 0.9
+
+
+def test_the_same_file_in_both_places_is_refused(workdir: Path):
+    """Choosing one in silence is how someone edits a file that is not the one being read."""
+    _write_step(workdir, 1, 1.0)
+    _write_step(workdir / "pivlab", 1, 9.0)
+    with pytest.raises(ConfigError, match="pivlab/ subfolder"):
+        FrameSource(workdir, n_nodes=1, prefetch=0)
+
+
+def test_a_missing_step_names_the_file(workdir: Path):
+    _write_step(workdir / "pivlab", 1, 1.0)
+    source = FrameSource(workdir, n_nodes=1, prefetch=0)
+    with pytest.raises(FileNotFoundError, match=r"datos \(2\)"):
+        source.read(2)
 
 
 @pytest.mark.parametrize(("nch", "nfil"), [(1, 1), (3, 2), (59, 34)])

@@ -42,11 +42,15 @@ once a particle leaves it stops being computed, which is what happens in a real 
 |---|---|
 | `PIV-NP.TXT` | the case name, `shearblock` |
 | `shearblock.PAR` | what to analyse: the grid, the 20 steps, and the options |
-| `datos (1..20).txt` | the velocity field of each step, in the format PIVlab exports |
 | `shearblock.HUM` | moisture settings, only read when `moisture = 2` |
 | `calibration.csv` | the curve of this soil: gray → saturation and water content |
+| `pivlab/datos (1..20).txt` | the velocity field of each step, in the format PIVlab exports |
 | `images/wet_1..20.png` | photographs of the test, with a wetting front climbing the block |
 | `make_example.py` | regenerates the data files and the images |
+
+The inputs are in subfolders so that the case root holds only the configuration and, after
+running it, the results. PIV-NP reads them from the root as well, which is how older cases
+are laid out.
 
 ## Turning the moisture on
 

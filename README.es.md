@@ -193,6 +193,29 @@ las versiones en las que 2 significaba otra cosa— se avisan por pantalla.
 
 Los nombres no distinguen mayúsculas.
 
+#### Dónde van
+
+Los archivos de entrada pueden estar **junto al `.PAR`** o agrupados en una **subcarpeta
+del caso**:
+
+```
+mi-caso/
+├── PIV-NP.TXT  micaso.PAR  micaso.HUM  calibration.csv   configuración
+├── micaso.POST.RES  .POST.MSH  .REC                      resultados
+├── pivlab/     datos (1..n).txt
+├── moisture/   Moist_1..n.TXT
+└── images/     las fotos del ensayo (la ruta se indica en el .HUM)
+```
+
+Un ensayo de 149 pasos tiene 149 archivos de entrada, que sepultan los cuatro de
+configuración. Se busca primero en la raíz del caso, así que un caso plano —como estaban
+todos hasta ahora— sigue funcionando sin tocarlo. El mismo archivo en los dos sitios es un
+error, no una elección silenciosa. Las fotos no necesitan convención: su ruta es la que
+diga la clave `IMAGES` del `.HUM`.
+
+El Fortran original solo lee la disposición plana, así que `tools/make_reference.py` aplana
+los archivos antes de ejecutarlo.
+
 ### `<caso>.HUM` (solo con `MOISTER=2`)
 
 Con `MOISTER=2` la humedad se mide a partir de las fotografías del ensayo en lugar de

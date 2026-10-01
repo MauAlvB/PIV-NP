@@ -209,10 +209,10 @@ def test_legacy_restart_sends_everything_to_the_first_cell(workdir: Path):
 def _mini_case(directory: Path, steps: int, restart: bool, first_frame: int = 1) -> Path:
     """Case with the real data cut down, starting at instant ``first_frame``."""
     regression = Path(__file__).parent / "data" / "regression"
-    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "pivlab").mkdir(parents=True, exist_ok=True)
     for k in range(steps):
-        shutil.copy(regression / "frames" / f"datos ({first_frame + k}).txt",
-                    directory / f"datos ({k + 1}).txt")
+        shutil.copy(regression / "frames" / "pivlab" / f"datos ({first_frame + k}).txt",
+                    directory / "pivlab" / f"datos ({k + 1}).txt")
     (directory / "PIV-NP.TXT").write_text("mini\n")
     par = (regression / "v1_npc3" / "mini.PAR").read_text().splitlines()
     par[4] = f"0.8 {steps} 1 0 1 1 0 {int(restart)} 0"

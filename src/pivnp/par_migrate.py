@@ -32,11 +32,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import (
+    VELOCITY_SUBFOLDER,
     ConfigError,
     RawPar,
     _ListDirectedReader,
     config_from_blocks,
-    find_file,
+    find_input_file,
     names_in_header,
 )
 from .pivlab_io import VELOCITY_PATTERN, frame_interval_in_header
@@ -196,7 +197,7 @@ def to_canonical(raw: RawPar, moister: int, pivlab_format: int) -> str:
 def columns_in_pivlab_files(case_dir: Path) -> int | None:
     """Columns the PIVlab files of the case carry, or ``None`` when they are not found."""
     try:
-        path = find_file(case_dir, VELOCITY_PATTERN.format(step=1))
+        path = find_input_file(case_dir, VELOCITY_PATTERN.format(step=1), VELOCITY_SUBFOLDER)
     except (FileNotFoundError, OSError):
         return None
     for line in path.read_text(encoding="latin-1").splitlines()[3:]:
@@ -257,8 +258,8 @@ def convert_file(path: Path) -> Conversion:
 def _warn_about_the_interval(case_dir: Path, config, result: Conversion) -> None:
     """A DT that does not match PIVlab is reported, not touched: it would change results."""
     try:
-        interval = frame_interval_in_header(find_file(case_dir,
-                                                      VELOCITY_PATTERN.format(step=1)))
+        interval = frame_interval_in_header(
+            find_input_file(case_dir, VELOCITY_PATTERN.format(step=1), VELOCITY_SUBFOLDER))
     except (FileNotFoundError, OSError, ValueError):
         return
     if interval and abs(interval - config.dt) > 1e-3 * max(interval, config.dt):

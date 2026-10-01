@@ -20,6 +20,11 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from .config import (
+    MOISTURE_SUBFOLDER,
+    VELOCITY_SUBFOLDER,
+    ConfigError,
+)
 from .sources import Frame, register_source
 
 if TYPE_CHECKING:  # types only: the moisture package does not depend on this module
@@ -127,6 +132,30 @@ def read_moisture_file(path: Path, n_nodes: int) -> tuple[np.ndarray, np.ndarray
     return data[:, 2].copy(), data[:, 3].copy()
 
 
+def _index_of(directory: Path, subfolder: str) -> dict[str, Path]:
+    """Map lowercase file name to path, for the case root and one of its subfolders.
+
+    The inputs of a case may sit beside the ``.PAR`` (how every case used to be laid out) or
+    grouped in a subfolder, which keeps a 149-step case readable. The root wins, and a name
+    in both places raises instead of choosing in silence.
+    """
+    index = {p.name.lower(): p for p in directory.iterdir() if p.is_file()}
+    nested = directory / subfolder
+    if not nested.is_dir():
+        return index
+    for path in nested.iterdir():
+        if not path.is_file():
+            continue
+        name = path.name.lower()
+        if name in index:
+            raise ConfigError(
+                f"{path.name} is both in {directory} and in its {subfolder}/ subfolder, and "
+                f"there is no way to tell which one you mean. Leave only one of the two."
+            )
+        index[name] = path
+    return index
+
+
 class PivlabSource:
     """Provider of PIVlab steps, reading ahead on threads.
 
@@ -150,12 +179,17 @@ class PivlabSource:
         self.moisture = moisture and images is None
         self.prefetch = max(0, prefetch)
         self.images = images
-        self._index = {p.name.lower(): p for p in self.directory.iterdir()}
+        # One index per kind of file, because each one has its own subfolder. Indexing once
+        # avoids walking the directory on every step: a 149-step case asks ~300 times.
+        self._index = {
+            VELOCITY_PATTERN: _index_of(self.directory, VELOCITY_SUBFOLDER),
+            MOISTURE_PATTERN: _index_of(self.directory, MOISTURE_SUBFOLDER),
+        }
 
     def _path(self, pattern: str, step: int) -> Path:
         name = pattern.format(step=step)
         try:
-            return self._index[name.lower()]
+            return self._index[pattern][name.lower()]
         except KeyError:
             raise FileNotFoundError(self.directory / name) from None
 

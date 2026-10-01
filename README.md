@@ -203,6 +203,28 @@ where 2 meant something else— are reported on screen.
 
 File names are case-insensitive.
 
+#### Where they go
+
+The inputs may sit **beside the `.PAR`** or be grouped in a **subfolder of the case**:
+
+```
+my-case/
+├── PIV-NP.TXT  mycase.PAR  mycase.HUM  calibration.csv   configuration
+├── mycase.POST.RES  .POST.MSH  .REC                      results
+├── pivlab/     datos (1..n).txt
+├── moisture/   Moist_1..n.TXT
+└── images/     the test photographs (the path is set in the .HUM)
+```
+
+A 149-step test has 149 input files, which buries the handful of configuration files among
+them. The case root is searched first, so a flat case — the layout of every case before
+this — keeps working untouched. The same file in both places is an error, not a silent
+choice. The photographs need no convention: their path is whatever the `IMAGES` key of the
+`.HUM` says.
+
+The original Fortran reads only the flat layout, so `tools/make_reference.py` flattens the
+files before running it.
+
 ### `<case>.HUM` (only with `MOISTER=2`)
 
 With `MOISTER=2` the moisture is measured from the test photographs instead of being read

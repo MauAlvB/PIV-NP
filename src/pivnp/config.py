@@ -369,11 +369,53 @@ def load_case(case_dir: Path, case_name: str | None = None) -> tuple[str, CaseCo
 
 def find_file(directory: Path, name: str) -> Path:
     """Look for ``name`` in ``directory``, ignoring case (like Windows)."""
-    candidate = Path(directory) / name
+    found = look_up(Path(directory), name)
+    if found is None:
+        raise FileNotFoundError(Path(directory) / name)
+    return found
+
+
+def look_up(directory: Path, name: str) -> Path | None:
+    """``directory / name`` ignoring case, or ``None`` when it is not there."""
+    candidate = directory / name
     if candidate.exists():
         return candidate
+    if not directory.is_dir():
+        return None
     lowered = name.lower()
-    for entry in Path(directory).iterdir():
+    for entry in directory.iterdir():
         if entry.name.lower() == lowered:
             return entry
-    raise FileNotFoundError(candidate)
+    return None
+
+
+#: Subfolder of a case where the PIVlab velocity files may live instead of the case root.
+VELOCITY_SUBFOLDER = "pivlab"
+#: Subfolder of a case where the ``Moist_<n>.TXT`` files may live instead of the case root.
+MOISTURE_SUBFOLDER = "moisture"
+
+
+def find_input_file(directory: Path, name: str, subfolder: str) -> Path:
+    """Look for an input file of a case, in the case root or in its own subfolder.
+
+    A case with hundreds of steps holds hundreds of input files, which buries the handful of
+    configuration files among them, so the inputs may be grouped in a subfolder:
+    ``pivlab/`` for the velocity files and ``moisture/`` for the ``Moist_<n>.TXT``. The root
+    is searched first, so a flat case -- every file beside the ``.PAR``, which is how every
+    case was laid out before -- keeps working untouched.
+
+    A name present in both places is an error rather than a silent choice: picking one
+    without saying so is how someone ends up editing a file that is not the one being read.
+    """
+    directory = Path(directory)
+    in_root = look_up(directory, name)
+    in_subfolder = look_up(directory / subfolder, name)
+    if in_root and in_subfolder:
+        raise ConfigError(
+            f"{name} is both in {directory} and in its {subfolder}/ subfolder, and there is "
+            f"no way to tell which one you mean. Leave only one of the two."
+        )
+    found = in_root or in_subfolder
+    if found is None:
+        raise FileNotFoundError(directory / subfolder / name)
+    return found
