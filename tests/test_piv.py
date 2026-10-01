@@ -96,10 +96,16 @@ def test_an_impossible_overlap_is_refused():
 def test_a_uniform_shift_is_recovered_to_a_fraction_of_a_pixel():
     """The numbers here were measured first and written down after, not chosen to pass.
 
-    Over six different speckle patterns at this shift: worst single window 0.33 px, 99th
+    Over six different speckle patterns at this shift: worst single window 0.20 px, 99th
     percentile 0.15, median 0.05, and every window measured. The limits sit just above the
     worst of that, so a change that makes the correlation less accurate fails rather than
     quietly degrades.
+
+    The gap between the median and the 99th percentile is the shape of PIV error and worth
+    knowing: nearly every window is accurate to a hundredth of a pixel, and a handful locked
+    onto the wrong correlation peak and are wrong by a tenth. Reading the windows between
+    pixels improved the median fivefold and left that tail alone -- it cannot rescue a window
+    whose first pass went to the wrong place.
     """
     first = speckle()
     second = shifted(first, SHIFT_X, SHIFT_Y)
@@ -113,27 +119,47 @@ def test_a_uniform_shift_is_recovered_to_a_fraction_of_a_pixel():
     assert np.median(error) < 0.08, "the typical window, which is what the result rests on"
 
 
-def test_the_error_is_worst_at_a_half_pixel_and_vanishes_at_a_whole_one():
-    """Peak locking, which every correlation PIV has and which should be visible here.
+def test_the_error_does_not_depend_on_where_the_displacement_falls():
+    """Peak locking, and that reading the windows between pixels is what removes it.
 
-    The three-point fit is exact when the peak sits on a sample and least certain when it
-    sits between two, so the error is zero at an integer shift and largest near a half. It
-    is checked because it is the shape of the error that says the sub-pixel fit is doing its
-    job: an implementation that quietly rounded to whole pixels would pass a test on the
-    average error and fail this one.
+    Peak locking is the characteristic fault of correlation PIV: the three-point fit is
+    exact when the peak sits on a sample and least certain when it sits between two, so the
+    error swings with the *fractional part* of the displacement. An estimator that rounds
+    its second-pass offset to a whole pixel has it in full. Measured on this pattern:
 
-    Judged away from the rim of the grid, where the second pass cannot offset its window
-    past the edge of the photograph and so measures the whole displacement in one go. There
-    the integer shift is not exact either, by about 0.12 px.
+    ====== ========= ============
+    shift  rounded   interpolated
+    ====== ========= ============
+    1.00   0.0000    0.0225
+    1.25   0.0784    0.0254
+    1.50   0.1439    0.0211
+    1.75   0.0804    0.0182
+    2.00   0.0000    0.0226
+    ====== ========= ============
+
+    Rounding is exact at a whole pixel and worst at a half; interpolating is flat. The trade
+    is real and worth stating: interpolating is *worse* at an exactly whole displacement,
+    0.023 against nothing, and five times better at the half that matters, 0.021 against
+    0.144. What is tested is the flatness, because that is the property, and that the worst
+    case across the fractions beats the rounded estimator's.
     """
     first = speckle()
-    kept = {}
-    for shift in (1.0, 1.5):
-        field = analyse(first, shifted(first, shift, 0.0), window=32, overlap=0.5,
-                        passes=2, smoothing=0.0)
-        kept[shift] = np.max(np.abs(field.u[1:-1, 1:-1] - shift))
-    assert kept[1.0] < 1e-9, "a whole-pixel shift needs no fit and must be exact"
-    assert 0.05 < kept[1.5] < 0.35, "a half-pixel shift is the hardest case"
+    fractions = (1.0, 1.25, 1.5, 1.75, 2.0)
+    worst = {}
+    for rounded in (False, True):
+        errors = []
+        for shift in fractions:
+            field = analyse(first, shifted(first, shift, 0.0), window=32, overlap=0.5,
+                            passes=2, smoothing=0.0, between_pixels=not rounded)
+            errors.append(np.max(np.abs(field.u[1:-1, 1:-1] - shift)))
+        worst[rounded] = errors
+
+    interpolated = worst[False]
+    assert max(interpolated) < 0.04, "interpolating should be accurate at every fraction"
+    assert max(interpolated) - min(interpolated) < 0.02, "and flat across them"
+    # the rounded estimator swings instead, which is what peak locking looks like
+    assert max(worst[True]) > 4 * max(interpolated), "the fault should still be visible"
+    assert min(worst[True]) < 1e-9, "rounding is exact at a whole pixel, and only there"
 
 
 def test_the_displacement_is_not_systematically_small():
@@ -143,8 +169,8 @@ def test_the_displacement_is_not_systematically_small():
     signed error -- because the fault was not scatter: every window was wrong in the same
     direction. And it is stated in pixels rather than as a percentage, because the bias of a
     correlation does not scale with the displacement; 0.02 px is 1 % of a 2 px shift and
-    0.1 % of a 20 px one, and the pixel is the honest number. Measured: 0.019 px at worst
-    over six speckle patterns.
+    0.1 % of a 20 px one, and the pixel is the honest number. Measured: 0.0040 px at worst
+    over six speckle patterns. Reading the windows between pixels brings it to 0.0040.
     """
     first = speckle()
     second = shifted(first, SHIFT_X, SHIFT_Y)
@@ -471,6 +497,13 @@ def test_an_unrecognized_key_is_reported_not_silently_dropped():
 def test_a_value_that_is_not_a_number_says_which_key():
     with pytest.raises(PivSettingsError, match="WINDOW must be a number"):
         parse(MINIMAL + "WINDOW = large\n")
+
+
+def test_reading_between_pixels_is_off_unless_asked_for():
+    """Off by default, because of what it does to the accumulated answer; see the module."""
+    assert parse(MINIMAL).between_pixels is False
+    assert parse(MINIMAL + "SUBPIXEL_OFFSET = 1\n").between_pixels is True
+    assert parse(MINIMAL + "SUBPIXEL_OFFSET = 0\n").between_pixels is False
 
 
 def test_every_key_has_a_default_or_is_required():

@@ -108,6 +108,75 @@ def _windows(image: np.ndarray, corner_r: np.ndarray, corner_c: np.ndarray,
     return image[r, c]                                             # (rows, cols, w, w)
 
 
+def _windows_between_pixels(image: np.ndarray, corner_r: np.ndarray, corner_c: np.ndarray,
+                            window: int, fraction_r: np.ndarray,
+                            fraction_c: np.ndarray) -> np.ndarray:
+    """The window at each corner, taken a fraction of a pixel further along.
+
+    This is what lets the second pass finish the job. The offset it gets from the first pass
+    is a real number, and taking only its whole part leaves the fractional part still to be
+    measured -- on a slow test that *is* the whole displacement, so the pass contributes
+    nothing at all. Measured on a known shift of 0.16 px: one pass and two gave identical
+    numbers until this existed.
+
+    Each pixel of the window is read between the four pixels of the photograph around it,
+    weighted by how close it falls to each. The four readings are accumulated one at a time
+    rather than built and then summed, which keeps the memory to two of these stacks instead
+    of five; on a 1920x1080 photograph one stack is already hundreds of megabytes.
+
+    ``fraction_r`` and ``fraction_c`` are in ``[0, 1)``, so the four pixels are always the
+    corner and its neighbours below and to the right.
+
+    The interpolation is **cubic**, over four pixels along each axis, and that is not
+    refinement for its own sake. Reading between pixels with a straight line average does to
+    the photograph what a blur does: it takes out the fine detail the correlation lives on.
+    The residual then comes back smaller than it is, so the offset that was already applied
+    is confirmed rather than corrected, and whatever the first pass under-read stays
+    under-read. Measured on a shear whose answer is known, the straight-line version turned
+    an error of -1.1 % into -8.6 % while improving everything else -- it is the reason this
+    is cubic and not two lines shorter.
+
+    The indices are kept inside the photograph, which near an edge means a tap falls on the
+    edge pixel twice. Reserving room by pulling the *window* in instead costs the last row
+    and column of the grid a whole pixel of offset they never asked for, which then has to be
+    measured and comes back with the 0.12 px that a one-pixel shift costs; the first version
+    did that and the test on two identical photographs caught it.
+    """
+    inside = np.arange(window)
+    r = corner_r[:, :, None, None] + inside[None, None, :, None]
+    c = corner_c[:, :, None, None] + inside[None, None, None, :]
+    rows, cols = image.shape
+
+    weights_r = _cubic_weights(fraction_r)
+    weights_c = _cubic_weights(fraction_c)
+    # the sixteen terms are accumulated into one array, one gather at a time. A separable
+    # version with a buffer per axis is tidier and needs a third array of this size, which
+    # on a real photograph is another hundred megabytes for nothing.
+    out = np.zeros(r.shape[:2] + (window, window))
+    for i, wr in enumerate(weights_r):
+        taken_r = np.clip(r + i - 1, 0, rows - 1)
+        for j, wc in enumerate(weights_c):
+            taken_c = np.clip(c + j - 1, 0, cols - 1)
+            out += (wr * wc)[:, :, None, None] * image[taken_r, taken_c]
+    return out
+
+
+def _cubic_weights(fraction: np.ndarray) -> tuple[np.ndarray, ...]:
+    """Catmull-Rom weights for the four pixels around a fractional position.
+
+    The standard cubic convolution kernel, which passes through the samples and keeps the
+    gradient continuous across them. The four weights sum to one at every fraction, so a
+    uniform patch of photograph comes back unchanged.
+    """
+    t = fraction
+    t2 = t * t
+    t3 = t2 * t
+    return (-0.5 * t3 + t2 - 0.5 * t,
+            1.5 * t3 - 2.5 * t2 + 1.0,
+            -1.5 * t3 + 2.0 * t2 + 0.5 * t,
+            0.5 * t3 - 0.5 * t2)
+
+
 def _overlap_weight(window: int) -> np.ndarray:
     """How many pixels two windows still share at each displacement.
 
@@ -211,21 +280,62 @@ def _sub_pixel(power: np.ndarray, peak_row: np.ndarray,
     return np.where(inside_x, along_x, 0.0), np.where(inside_y, along_y, 0.0)
 
 
+def _split(offset: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """An offset as a whole number of pixels and a fraction in ``[0, 1)``.
+
+    A fraction that is a hair short of a whole pixel is counted as the whole pixel. Without
+    that, an offset of -1e-16 -- which is what two identical photographs produce, from
+    round-off in the transform -- comes out as one pixel back plus a fraction of 0.999...,
+    and the window is then resampled where there was nothing to resample. The arithmetic
+    still lands in the right place, but the interpolation no longer returns the pixel
+    exactly, and two identical photographs stop measuring exactly no movement.
+    """
+    whole = np.floor(offset)
+    fraction = offset - whole
+    at_the_top = fraction > 1.0 - 1e-9
+    whole = np.where(at_the_top, whole + 1.0, whole)
+    fraction = np.where(at_the_top | (fraction < 1e-9), 0.0, fraction)
+    return whole.astype(np.int64), fraction
+
+
 def one_pass(first: np.ndarray, second: np.ndarray, rows: np.ndarray, cols: np.ndarray,
              window: int, offset_u: np.ndarray | None = None,
-             offset_v: np.ndarray | None = None) -> tuple[np.ndarray, ...]:
+             offset_v: np.ndarray | None = None,
+             between_pixels: bool = False) -> tuple[np.ndarray, ...]:
     """One correlation pass, returning the displacement in pixels and the peak ratio.
 
-    ``offset_u``/``offset_v`` are what a previous pass found, as whole pixels. The result
-    includes them, so the caller always gets a total displacement.
+    ``offset_u``/``offset_v`` are what a previous pass found. The result includes whatever
+    part of them was applied, so the caller always gets a total displacement.
+
+    With ``between_pixels`` the offset is applied in full, the fractional part included, by
+    reading each window between the pixels of the photograph. What is then left to measure is
+    near zero, which is where the correlation peak is sharpest and the three-point fit least
+    biased. Without it only the whole pixels are applied, which is what the first version
+    did and which leaves a slow test no better off for the second pass at all.
     """
-    shift_c = None if offset_u is None else np.rint(offset_u).astype(np.int64)
-    shift_r = None if offset_v is None else np.rint(offset_v).astype(np.int64)
+    whole_c = whole_r = None
+    extra_c = extra_r = 0.0
+    if offset_u is not None:
+        if between_pixels:
+            # floor rather than rint, so the fraction is never negative and the four pixels
+            # read are always the corner and its neighbours below and to the right
+            whole_c, extra_c = _split(offset_u)
+            whole_r, extra_r = _split(offset_v)
+        else:
+            whole_c = np.rint(offset_u).astype(np.int64)
+            whole_r = np.rint(offset_v).astype(np.int64)
 
     base_r, base_c = _corners(rows, cols, window, first.shape)
-    moved_r, moved_c = _corners(rows, cols, window, second.shape, shift_r, shift_c)
     a = _windows(first, base_r, base_c, window)
-    b = _windows(second, moved_r, moved_c, window)
+    if whole_c is None:
+        moved_r, moved_c = _corners(rows, cols, window, second.shape)
+        b = _windows(second, moved_r, moved_c, window)
+    elif between_pixels:
+        moved_r, moved_c = _corners(rows, cols, window, second.shape, whole_r, whole_c)
+        b = _windows_between_pixels(second, moved_r, moved_c, window, extra_r, extra_c)
+    else:
+        moved_r, moved_c = _corners(rows, cols, window, second.shape, whole_r, whole_c)
+        b = _windows(second, moved_r, moved_c, window)
     power = _correlate(a, b)
 
     # Only the middle of the plane is searched. Past half a window the two windows barely
@@ -241,17 +351,20 @@ def one_pass(first: np.ndarray, second: np.ndarray, rows: np.ndarray, cols: np.n
     peak_row, peak_col, ratio = _peak(power)
     fine_c, fine_r = _sub_pixel(power, peak_row, peak_col)
 
-    # what is added back is the distance between the two windows that were actually
-    # correlated, which near the border is not the offset that was asked for
-    u = (peak_col - middle_c) + fine_c + (moved_c - base_c)
-    v = (peak_row - middle_r) + fine_r + (moved_r - base_r)
+    # What is added back is the distance between the two windows that were actually
+    # correlated, which near the border is not the offset that was asked for: the window
+    # gets pulled back inside the photograph and the whole-pixel part of the offset is lost
+    # with it. The fraction survives, because it is applied by interpolation and not by
+    # where the window was taken from.
+    u = (peak_col - middle_c) + fine_c + (moved_c - base_c) + extra_c
+    v = (peak_row - middle_r) + fine_r + (moved_r - base_r) + extra_r
     return u.astype(np.float64), v.astype(np.float64), ratio
 
 
 def analyse(first: np.ndarray, second: np.ndarray, window: int = 32, overlap: float = 0.5,
             passes: int = 2, mask: np.ndarray | None = None, threshold: float = 2.0,
             region: tuple[int, int, int, int] | None = None,
-            smoothing: float = 0.6) -> Field:
+            smoothing: float = 0.6, between_pixels: bool = False) -> Field:
     """Displacement between two photographs, in pixels, on a grid of windows.
 
     The first pass uses a window twice as large for every pass that follows, which is what
@@ -266,6 +379,19 @@ def analyse(first: np.ndarray, second: np.ndarray, window: int = 32, overlap: fl
     ``smoothing`` is the width, in grid points, of the Gaussian applied to the finished
     field; see :func:`~pivnp.piv.validation.smooth` for why it is on by default and set to
     this value. Zero returns the raw correlation result.
+
+    ``between_pixels`` reads each window between the pixels of the photograph, so the offset
+    a pass inherits is applied in full instead of rounded to a whole pixel. On the field it
+    produces, it is better by a wide margin: four to five times less bias and scatter on
+    known shifts, and it removes peak locking, the error that otherwise swings with where the
+    displacement happens to fall between two pixels.
+
+    **It is off by default anyway**, and the reason is the one measurement that matters more
+    than those. On the example whose accumulated answer is known, it makes the accumulated
+    shear *worse* -- 8.4 % low against 1.1 % -- while making the artifacts that should be
+    zero about five times smaller. Both estimators read the gradient of each single step to
+    within 1.3 %, so the loss is somewhere in ten steps of accumulation and is not
+    understood. Until it is, the better per-step field is not worth a worse answer.
     """
     if passes < 1:
         raise ValueError(f"passes must be at least 1 and it is {passes}")
@@ -283,7 +409,8 @@ def analyse(first: np.ndarray, second: np.ndarray, window: int = 32, overlap: fl
         grow = (size - window) // 2
         rows = np.clip(corner_r - grow, 0, first.shape[0] - size)
         cols = np.clip(corner_c - grow, 0, first.shape[1] - size)
-        u, v, ratio = one_pass(first, second, rows, cols, size, offset_u=u, offset_v=v)
+        u, v, ratio = one_pass(first, second, rows, cols, size, offset_u=u, offset_v=v,
+                               between_pixels=between_pixels)
         if step < passes - 1:
             from .validation import find_outliers, replace
             bad = find_outliers(u, v, threshold)

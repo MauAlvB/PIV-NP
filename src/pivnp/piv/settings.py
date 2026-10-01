@@ -33,6 +33,7 @@ DEFAULTS: dict[str, str] = {
     "PASSES": "2",
     "FIRST_IMAGE": "1",
     "OUTLIER_THRESHOLD": "2.0",
+    "SUBPIXEL_OFFSET": "0",
     "SMOOTH": "0.6",
     "MASK_BELOW": "",
     "MASK_IMAGE": "",
@@ -58,6 +59,12 @@ class PivSettings:
     #: Number of the first photograph, for sequences that do not start at 1.
     first_image: int
     outlier_threshold: float
+    #: Whether the passes after the first read their windows *between* the pixels of the
+    #: photograph, applying the offset they were given in full instead of rounding it to a
+    #: whole pixel. Off by default: it gives a four to five times better field per step and
+    #: removes peak locking, but on the example whose accumulated answer is known it makes
+    #: the accumulated shear worse, for a reason not yet found. See the correlation module.
+    between_pixels: bool
     #: Width in grid points of the Gaussian smoothing of the finished field. The strain is a
     #: difference between neighbouring vectors, so the sub-pixel scatter that hardly shows in
     #: the displacement dominates it; 0 keeps the raw field.
@@ -179,6 +186,7 @@ def parse(text: str, source: str = "<memory>") -> PivSettings:
         passes=int(number("PASSES", 2)),
         first_image=int(number("FIRST_IMAGE", 1)),
         outlier_threshold=number("OUTLIER_THRESHOLD", 2.0),
+        between_pixels=number("SUBPIXEL_OFFSET", 0.0) != 0.0,
         smoothing=number("SMOOTH", 0.6),
         mask_below=number("MASK_BELOW") if values["MASK_BELOW"].strip() else None,
         mask_image=values["MASK_IMAGE"],

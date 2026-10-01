@@ -314,6 +314,7 @@ MASK_BELOW = 25                        ! más oscuro que esto es fondo, no suelo
 | `MASK_IMAGE` | — | una imagen que marca el material, donde todo lo que no sea negro es material. Usa ésta **o** `MASK_BELOW`, no las dos |
 | `OUTLIER_THRESHOLD` | `2.0` | cuánto puede diferir un vector de sus vecinos, medido en su propia dispersión, antes de descartarlo (test de la mediana normalizada) |
 | `SMOOTH` | `0.6` | anchura, en puntos de malla, del suavizado del campo terminado. La deformación es una diferencia entre vectores vecinos, así que la dispersión subpíxel que apenas se nota en el desplazamiento la domina. `0` deja el campo crudo |
+| `SUBPIXEL_OFFSET` | `0` | con `1`, las pasadas posteriores a la primera leen sus ventanas *entre* los píxeles, aplicando el desplazamiento completo en vez de redondearlo. Da un campo por paso cuatro o cinco veces mejor y elimina el peak locking, pero en el ejemplo de respuesta conocida empeora la deformación *acumulada*, por una razón aún no hallada. Déjalo apagado salvo que estés comparando; ver [`docs/VALIDATION.md`](docs/VALIDATION.md#8-the-built-in-piv) |
 
 La malla de ventanas de interrogación **es** la malla PIV, así que tiene que ser la que
 describe el `BLOCK 2` del `.PAR`. No se deja al azar: si las dos no coinciden, PIV-NP se

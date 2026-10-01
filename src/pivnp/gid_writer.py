@@ -49,7 +49,15 @@ class ResultSpec:
 
 #: Last deformation gradient computed, so the four blocks that come out of it do not each
 #: redo the work. ``write_step`` evaluates them one after another on the same state.
-_LAST_FINITE: tuple[int, int, tuple[np.ndarray, ...]] | None = None
+#:
+#: The displacement array itself is held, not its ``id``. An ``id`` is only unique while the
+#: object is alive: Python hands the same number to the next array once the first is freed,
+#: so a cache keyed on one can answer with another analysis's results. That is not
+#: hypothetical -- it was reached, between two cases in the same test session whose
+#: displacements summed to the same number, and the reply was an array of the wrong length.
+#: Holding the array keeps its ``id`` from being handed out again, and ``is`` then means what
+#: it looks like it means.
+_LAST_FINITE: tuple[np.ndarray, tuple[int, float], tuple[np.ndarray, ...]] | None = None
 
 
 def _finite(p: Particles) -> tuple[np.ndarray, ...]:
@@ -61,8 +69,8 @@ def _finite(p: Particles) -> tuple[np.ndarray, ...]:
     global _LAST_FINITE
     n = p.position.shape[0]
     stamp = (int(p.lost[:n].sum()), float(p.displacement.sum()))
-    if _LAST_FINITE is not None and _LAST_FINITE[0] == id(p.displacement) \
-            and _LAST_FINITE[1] == stamp:
+    if (_LAST_FINITE is not None and _LAST_FINITE[0] is p.displacement
+            and _LAST_FINITE[1] == stamp):
         return _LAST_FINITE[2]
 
     usable = ~p.lost[:n] & (p.nan_initial == ACTIVE)
@@ -70,7 +78,7 @@ def _finite(p: Particles) -> tuple[np.ndarray, ...]:
     strain = green_lagrange(gradient)
     values = (np.column_stack(strain), equivalent_shear(strain),
               rotation_degrees(gradient), area_change(gradient))
-    _LAST_FINITE = (id(p.displacement), stamp, values)
+    _LAST_FINITE = (p.displacement, stamp, values)
     return values
 
 

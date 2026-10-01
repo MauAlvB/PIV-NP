@@ -310,6 +310,7 @@ MASK_BELOW = 25                        ! darker than this is background, not soi
 | `MASK_IMAGE` | — | an image marking the material instead, anything non-black being material. Use this *or* `MASK_BELOW`, not both |
 | `OUTLIER_THRESHOLD` | `2.0` | how far a vector may differ from its neighbours, in their own spread, before it is rejected (the normalised median test) |
 | `SMOOTH` | `0.6` | width, in grid points, of the smoothing of the finished field. The strain is a difference between neighbouring vectors, so the sub-pixel scatter that hardly shows in the displacement dominates it. `0` keeps the raw field |
+| `SUBPIXEL_OFFSET` | `0` | `1` makes the passes after the first read their windows *between* the pixels, applying the offset in full instead of rounding it. It gives a four to five times better field per step and removes peak locking, but on the example whose answer is known it makes the *accumulated* shear worse, for a reason not yet found. Leave it off unless you are comparing the two; see [`docs/VALIDATION.md`](docs/VALIDATION.md#8-the-built-in-piv) |
 
 The grid of interrogation windows **is** the PIV grid, so it has to be the grid `BLOCK 2` of
 the `.PAR` describes. It is not left to chance: if the two disagree PIV-NP refuses to run and

@@ -138,14 +138,18 @@ PHOTO_SHEAR = 10 * 2.0 / 128.0                              # 0.15625
 PHOTO_EQ = PHOTO_SHEAR / math.sqrt(3.0)                     # 0.090211
 
 
-def _run_from_photos(directory: Path, smoothing: float | None = None) -> Simulation:
+def _run_from_photos(directory: Path, smoothing: float | None = None,
+                     subpixel_offset: bool = False) -> Simulation:
     """Copy the example and measure its displacements from its photographs."""
     shutil.copytree(PHOTOS, directory, dirs_exist_ok=True)
+    settings = directory / f"{PHOTO_CASE}.PIV"
     if smoothing is not None:
-        settings = directory / f"{PHOTO_CASE}.PIV"
         text = settings.read_text(encoding="latin-1")
         settings.write_text(text.replace("SMOOTH = 0.6", f"SMOOTH = {smoothing}"),
                             encoding="latin-1")
+    if subpixel_offset:
+        with settings.open("a", encoding="latin-1") as handle:
+            handle.write("\nSUBPIXEL_OFFSET = 1\n")
     sim = Simulation.from_directory(directory,
                                     options=RunOptions(source="images", prefetch=0))
     sim.run()
@@ -193,6 +197,38 @@ def test_the_photograph_example_recovers_the_shear_that_was_put_in(workdir: Path
     base = height < np.percentile(height, 10)
     assert np.median(slide[top]) > 0.008            # over 8 mm of the 10 imposed
     assert abs(np.median(slide[base])) < 0.002      # under 2 mm at the base
+
+
+def test_reading_between_pixels_still_accumulates_worse_than_rounding(workdir: Path):
+    """The open question, pinned so that solving it cannot go unnoticed.
+
+    Reading each window between the pixels of the photograph gives a better field by every
+    measure taken of a single step: four to five times less bias and scatter on known
+    shifts, and peak locking gone. It also makes the *accumulated* shear of this example
+    worse -- about 8 % low against about 1 % -- while making the artifacts that should be
+    zero several times smaller. Both estimators read the gradient of each single step to
+    within 1.3 %, so the loss happens over the ten steps of accumulation and nobody has
+    found where.
+
+    That is why ``SUBPIXEL_OFFSET`` is off by default. This test fails the day the
+    accumulation stops losing it, which is exactly when the default should change -- so read
+    the failure as the answer arriving, not as a break.
+    """
+    rounded = _run_from_photos(workdir / "rounded")
+    between = _run_from_photos(workdir / "between", subpixel_offset=True)
+
+    def shear(sim: Simulation) -> float:
+        p = sim.particles
+        kept = output_mask(p, sim.grid, sim.config.total_steps) & (p.nan_initial == 0)
+        return float(np.median(p.strain[kept, 2]))
+
+    off_rounded = abs(shear(rounded) - PHOTO_SHEAR) / PHOTO_SHEAR
+    off_between = abs(shear(between) - PHOTO_SHEAR) / PHOTO_SHEAR
+    assert off_rounded < 0.03, "the shipped default should stay within 3 % of the truth"
+    assert off_between > 0.05, (
+        "reading between pixels now accumulates within 5 % of the truth, which was the "
+        "thing stopping it being the default -- re-measure and consider turning it on"
+    )
 
 
 def test_smoothing_quietens_the_strain_without_moving_the_displacement(workdir: Path):

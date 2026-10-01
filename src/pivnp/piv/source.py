@@ -129,7 +129,8 @@ class ImageSource:
         return analyse(first, second, window=self.settings.window,
                        overlap=self.settings.overlap, passes=self.settings.passes,
                        mask=self._mask, threshold=self.settings.outlier_threshold,
-                       region=self.settings.region, smoothing=self.settings.smoothing)
+                       region=self.settings.region, smoothing=self.settings.smoothing,
+                       between_pixels=self.settings.between_pixels)
 
     def read(self, step: int) -> Frame:
         """Measure one step and hand it over as the analysis expects it."""

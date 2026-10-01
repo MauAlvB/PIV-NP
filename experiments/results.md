@@ -499,7 +499,114 @@ round of validation.
 
 ---
 
+## Phase 7 — reading the windows between pixels, implemented and measured
+
+Verdict first: **implemented, better by every measure of a single step, and off by default,
+because on the one case with a known accumulated answer it makes the answer worse.** Phase 6
+proposed this as the leading improvement and the leading explanation of the disagreement with
+PIVlab. Half of that held up.
+
+`SUBPIXEL_OFFSET = 1` in the `.PIV`. `python experiments/compare_fields.py` draws the
+comparison.
+
+### What it does to a single step, where it is unambiguous
+
+Known shifts, 16 px windows, two passes:
+
+| true | bias, rounded | scatter, rounded | bias, between pixels | scatter |
+|---|---|---|---|---|
+| 0.05 px | −0.0039 | 0.0123 | −0.0005 | **0.0023** |
+| 0.16 | −0.0088 | 0.0394 | −0.0011 | **0.0072** |
+| 0.35 | −0.0096 | 0.0842 | −0.0019 | **0.0163** |
+| 0.50 | 0.0054 | 0.1090 | 0.0009 | **0.0214** |
+| 2.30 | −0.0094 | 0.0743 | −0.0017 | **0.0176** |
+
+And peak locking, the error that swings with where the displacement falls between two pixels,
+is gone:
+
+| shift | rounded | between pixels |
+|---|---|---|
+| 1.00 | 0.0000 | 0.0225 |
+| 1.25 | 0.0784 | 0.0254 |
+| 1.50 | **0.1439** | **0.0211** |
+| 1.75 | 0.0804 | 0.0182 |
+| 2.00 | 0.0000 | 0.0226 |
+
+Rounding is exact at a whole pixel and worst at a half; interpolating is flat. Worst case
+across the fractions, 0.144 against 0.027.
+
+### Why it is off anyway
+
+On `examples/piv-from-images`, where the shear was put in and is known:
+
+| | shear (truth 0.15625) | scatter | volumetric (truth 0) | vertical (truth 0) |
+|---|---|---|---|---|
+| rounded, as shipped | 0.15450 (**−1.1 %**) | 0.0626 | −0.00911 | 0.062 mm |
+| between pixels | 0.14305 (**−8.4 %**) | 0.0587 | **−0.00189** | **0.034 mm** |
+
+Five times less of the artifact that should not exist, and eight times more error in the
+quantity that should. That is not a trade worth making by default on a code whose value is
+that its numbers can be trusted.
+
+What it is **not**: both estimators read the gradient of each single step to within 1.3 %
+(cubic −1.3 %, −0.1 %, −0.8 % at steps 1, 5, 10; rounded +0.5 %, +0.9 %, 0.0 %). So the
+estimator is fine and the loss happens over the ten steps of accumulation. Nor is it the
+interpolation order: bilinear gave −8.6 % and cubic −8.4 %, which is why the code is cubic
+(better on every other count) but also why that was not the cause. Nor is it concentrated at
+the edge of the block — by depth band the error runs −12.5 %, −5.2 %, −12.2 %, +5.2 %,
+scattered rather than concentrated.
+
+Unresolved. The pinning test is
+`test_reading_between_pixels_still_accumulates_worse_than_rounding`, which fails the day it
+stops being true — which is the day the default should change.
+
+### Against PIVlab on the real case, which muddies it further
+
+| | median \|u\| | equivalent strain | within 10 % of PIVlab, displacement |
+|---|---|---|---|
+| PIVlab | 0.596 mm | 0.03046 | — |
+| as shipped | 0.573 | 0.02957 | 57 % of particles |
+| between pixels | 0.668 | 0.02871 | **71 %** |
+
+So on the real test, reading between pixels agrees with PIVlab *better* — 71 % of particles
+within 10 % against 57 % — while on the synthetic test it gets the known answer *worse*. Both
+are true and they pull opposite ways. The figures show why it is not noise: the difference
+maps are coherent regions, not speckle, and the two estimators bracket PIVlab — the rounded
+one reads low over the body of the slope and the interpolating one reads high.
+
+That PIVlab sits between them is consistent with phase 6's reading that the three are
+different estimators rather than one being wrong, and it is a reason to trust the synthetic
+case over the agreement with PIVlab when they disagree: only one of the two has an answer.
+
+### Two bugs of my own, caught by tests rather than by reasoning
+
+* The first version reserved a pixel of room for the interpolation by pulling the *window*
+  in, which charged the last row and column of the grid a whole pixel of offset they never
+  asked for, and that then cost the 0.12 px a one-pixel shift costs. The test on two
+  identical photographs caught it. Clamping the neighbouring *sample* instead is correct.
+* `floor` of a displacement of −1e-16 — which is what two identical photographs produce from
+  round-off — is −1, with a fraction of 0.999…, so a window with nothing to resample got
+  resampled. Snapping a fraction within 1e-9 of a whole pixel fixes it, and identical
+  photographs measure exactly nothing again.
+
+And one bug that was already in `main`, exposed by the change shifting memory around:
+`gid_writer._finite` memoised on `id(p.displacement)`. An `id` is only unique while the
+object lives, so the cache answered one analysis with another's results — an array of the
+wrong length, between two cases in the same test session. It holds the array now.
+
+---
+
 ## A note on this machine
+
+Two more things on this machine, found in phase 7 and both worked around in
+`compare_fields.py`:
+
+* **matplotlib cannot save a figure.** It imports, it plots, and then it takes the
+  interpreter down inside `savefig` with the same `0xc06d007f` — PNG and SVG alike, so it is
+  the font and raster layer rather than the format. PIL writes PNGs perfectly well, so the
+  figures are drawn with numpy and PIL.
+* **Three analyses in one process is one too many.** Each holds several hundred megabytes of
+  window stacks; freeing them between runs is not enough. A process per analysis is reliable.
 
 `numpy` here crashes (`0xc06d007f`) on **any** matrix multiplication, even 3×3, and on
 anything reaching LAPACK. Uninstalling the pip `scipy` removed one of the three BLAS

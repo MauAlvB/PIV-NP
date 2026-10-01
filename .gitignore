@@ -30,3 +30,7 @@ runs/
 
 # Cached output of the experiments (minutes to rebuild, nothing to keep)
 experiments/_*.npz
+
+# Figures made from the dam-break photographs. The case itself is not in the repository
+# because the data is not ours to publish, so neither is anything drawn from it.
+experiments/compare_*.png

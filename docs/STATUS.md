@@ -69,16 +69,16 @@ to try these again.
   before relying on it.
 * How the dry–saturated band of each soil is measured. It is the most sensitive number in the
   moisture method and currently comes from two clicks and four constants.
-* **Decided, not yet done: shift the second PIV pass by the fraction of a pixel.** It
-  currently rounds the offset it gets from the first pass, so on a test moving a sixth of a
-  pixel per step the second pass contributes nothing at all — one pass and two give identical
-  numbers. A prototype that shifts by the fraction cuts the bias about fifteenfold and the
-  scatter about fivefold, which is the largest improvement measured anywhere in this project
-  and lands exactly where its data lives. It is also the best remaining explanation for why
-  the built-in PIV and PIVlab differ systematically on the strain pattern, since PIVlab does
-  shift by the fraction. Needs the fraction *per window* rather than one shift for the whole
-  image, and changes every number the built-in PIV publishes, so it wants its own round of
-  validation. See [`experiments/results.md`](../experiments/results.md), phase 6.
+* **Why `SUBPIXEL_OFFSET` cannot be turned on yet.** Reading the windows between pixels is
+  implemented and shipped, off by default. Per single step it is better by every measure —
+  four to five times less bias and scatter, peak locking gone — and on the real case it
+  agrees with PIVlab better than the default does, 71 % of particles within 10 % against
+  57 %. But on the example whose answer is known it makes the accumulated shear worse, −8.4 %
+  against −1.1 %, while cutting the artifacts that should be zero fivefold. Both estimators
+  read each single step's gradient to within 1.3 %, so the loss is in the accumulation and
+  nobody has found where; it is not the interpolation order and it is not the edge of the
+  material. `test_reading_between_pixels_still_accumulates_worse_than_rounding` fails the day
+  this is solved. See [`experiments/results.md`](../experiments/results.md), phase 7.
 * The PIV grid sits 0.26 mm — half a pixel — from where its coordinates say, from taking the
   window centre at `(window-1)/2` instead of `window/2`. Harmless to the strain, not harmless
   to registering the grid against the moisture images.
