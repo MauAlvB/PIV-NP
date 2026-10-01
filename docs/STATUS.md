@@ -39,6 +39,22 @@ is that the soil moves about a sixth of a pixel per frame while PIV resolves a t
 survived is the finite strain from the deformation gradient, which removes the rigid-rotation
 artifact outright and cuts the scatter without costing signal.
 
+## In progress, on `builtin-piv`
+
+PIV from the photographs inside PIV-NP, so a case can be completed without PIVlab:
+`pivnp <case> --source images`, configured by a `<case>.PIV` file. Working and inside the
+10 % agreed against PIVlab; the numbers and, more importantly, the limits are in
+[`VALIDATION.md`](VALIDATION.md#8-the-built-in-piv) — it agrees on how much strain there is
+much better than on where it is, and that is how it is described to users.
+
+It ships with its own runnable example, `examples/piv-from-images`, whose photographs are
+generated with a known shear so that anyone can check the answer. The real test photographs
+are not in the repository and are not ours to publish.
+
+Not yet committed. What is left before it is: deciding whether the `experiments/` scripts
+for it belong in the repository, and whether anything about the dam-break photographs may be
+published.
+
 ## Decided, not yet done
 
 * **Export PIVlab with frames further apart.** Costs nothing, needs no code change, and is
@@ -57,4 +73,8 @@ artifact outright and cuts the scatter without costing signal.
   before relying on it.
 * How the dry–saturated band of each soil is measured. It is the most sensitive number in the
   moisture method and currently comes from two clicks and four constants.
+* Why the built-in PIV and PIVlab disagree on the strain pattern in a way that does **not**
+  average out over 48 particles. Something structured at the scale of tens of millimetres,
+  not noise. Candidates: the different coverage of the two fields, and PIVlab's own
+  validation.
 * Whether the experimental data of the paper case can be published.

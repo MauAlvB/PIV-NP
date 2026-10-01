@@ -414,7 +414,110 @@ synthetic case with large shear before anyone relies on it.
 The cost is four more blocks in the `.POST.RES`, about 40 % more file, and a few per cent of
 run time.
 
-## 8. Still open
+## 8. The built-in PIV
+
+`--source images` measures the displacements from the photographs instead of reading
+PIVlab's files. The question it has to answer is whether it agrees with PIVlab, and the
+tolerance was agreed before anything was measured: **10 %**.
+
+Two kinds of evidence, because neither alone is enough. Synthetic image pairs settle whether
+the correlation is right, since the displacement was put there and the answer is known
+exactly. The real test settles whether the whole thing agrees with PIVlab, but PIVlab's
+answer is itself a measurement with its own noise, so it cannot adjudicate a hundredth of a
+pixel.
+
+### On synthetic pairs, where the answer is known
+
+Blurred noise, a 32 px window, two passes, over six different speckle patterns at a shift of
+(2.3, −1.7) px:
+
+| | |
+|---|---|
+| bias (mean signed error) | ≤ 0.019 px |
+| typical window | 0.05 px |
+| 99th percentile | 0.15 px |
+| worst single window | 0.33 px |
+| windows measured | 100 % |
+
+The bias is quoted in pixels, not per cent, because the bias of a correlation does not scale
+with the displacement: 0.02 px is 1 % of a 2 px shift and 0.1 % of a 20 px one, and the pixel
+is the honest number.
+
+The error has the shape it should: **zero at a whole-pixel shift and worst near a half**,
+which is peak locking and is what says the sub-pixel fit is doing its job rather than
+rounding. These are the numbers `tests/test_piv.py` holds the implementation to, and they
+were measured before the limits were written, not chosen to pass.
+
+### Against PIVlab, on the dam-break test
+
+The only case with both the photographs and PIVlab's field. Twenty steps, 177 × 78 points,
+the same grid for both.
+
+| | from PIVlab | from the photographs | difference |
+|---|---|---|---|
+| displacement x, per particle | 2.437 mm | 2.243 mm | 7.6 % |
+| displacement y, per particle | 3.105 mm | 2.959 mm | 5.8 % |
+| equivalent strain, over the field | 0.08325 | 0.08187 | 1.7 % |
+| shear strain, over the field | 0.06075 | 0.06416 | 5.6 % |
+| volumetric strain, over the field | 0.05874 | 0.06290 | 7.1 % |
+
+**Inside the 10 % agreed.** The median particle ends 0.29 mm from where PIVlab put it after
+travelling 3.9 mm; 60 % of particles agree within 10 % and 91 % within 25 %.
+
+The displacement is judged particle by particle and the strain over the field, and that is
+not a convenience. The strain is a difference between neighbouring vectors, and this test
+moves 0.16 px per step — so per particle it is a small difference between two noisy numbers,
+and two runs of PIVlab with different validation settings would not agree on it either. A
+first version of this comparison demanded 10 % per particle on the strain and reported 105 %
+while the median strain of the field was 2 % apart.
+
+### What it does *not* do, stated plainly
+
+The two agree on how much strain there is much better than on where it is. Correlating the
+strain of the two with the particles grouped into patches:
+
+| patch | particles averaged | equivalent strain | shear |
+|---|---|---|---|
+| none | 1 | 0.53 | 0.49 |
+| 20 mm | 16 | 0.60 | 0.36 |
+| 40 mm | 48 | 0.61 | 0.34 |
+| 80 mm | 140 | 0.83 | 0.76 |
+
+Point-to-point noise would average away as the patches grow and the correlation would climb
+steadily. It does not — flat to 48 particles, climbing only at 140. The disagreement is
+**spatially structured up to about 40 mm**: the two measure genuinely different fields at
+that scale and agree on the coarse pattern. This has not been run down. The candidates are
+the different coverage (42 % of the built-in field missing against PIVlab's 49 %, in
+different places) and whatever PIVlab's validation does that this does not.
+
+So the built-in PIV is good for seeing where a slope failed and roughly how hard. A strain
+*pattern* taken from it should be checked against PIVlab before it is published. That is the
+intended role — a way in for someone with photographs and no PIV experience — and it is
+stated the same way in the README so nobody discovers it later.
+
+### Two bugs, both found by tests rather than by the comparison
+
+* **A window pushed past the edge of the photograph.** The second pass offsets each window
+  of the second image by what the first pass found; near the border that offset points
+  outside the image and the window is pulled back in, but the code added back the offset it
+  had *requested*. A true −1.7 px came back as −3.7, for the whole top row of the grid. It
+  hid itself, because vectors that wrong are discarded by the outlier test and a discarded
+  row looks like the edge of the material. Fixing it took a synthetic pair from 93 % to
+  **100 % of windows measured**. It changes nothing on the dam-break case, whose 0.16 px
+  steps round to a zero offset, so the clipping never triggers; it would matter on any
+  faster test.
+* **Smoothing that flattened the gradient at every edge.** Section 4 had already measured
+  that a kernel renormalised over the neighbours that exist leans inwards and flattens the
+  gradient, and that continuing the field outwards first removes the cause. The first
+  version of the PIV smoothing renormalised anyway, and the test that should have caught it
+  checked only the interior of the field. On a known gradient with 42 % of its points
+  missing, continuing outwards is off by 0.012 at the typical point against 0.060 — five
+  times better — and is exact on a full grid where renormalising is off by 0.154.
+
+Both are recorded at length in [`../experiments/results.md`](../experiments/results.md),
+phase 5, together with the two comparison methods that were tried and discarded.
+
+## 9. Still open
 
 * **How the dry–saturated band of each soil is measured.** It is the most sensitive number
   of the whole moisture method and currently comes from two clicks and four constants.
