@@ -298,6 +298,20 @@ def _split(offset: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return whole.astype(np.int64), fraction
 
 
+#: How much memory one pass may use for its correlation planes, in bytes. The planes are
+#: four times the window area per window, and a photograph of a few megapixels with a large
+#: window asks for gigabytes of them at once -- enough to bring the interpreter down rather
+#: than merely slow it. Splitting the grid into bands of rows costs nothing measurable: the
+#: transform is already done for thousands of windows at a time within each band.
+CORRELATION_BUDGET = 192 * 1024 * 1024
+
+
+def _band_height(columns: int, window: int) -> int:
+    """How many rows of the grid fit in one band, given the budget."""
+    per_row = columns * (2 * window) ** 2 * 8      # the correlation plane, in bytes
+    return max(1, int(CORRELATION_BUDGET // max(per_row, 1)))
+
+
 def one_pass(first: np.ndarray, second: np.ndarray, rows: np.ndarray, cols: np.ndarray,
              window: int, offset_u: np.ndarray | None = None,
              offset_v: np.ndarray | None = None,
@@ -312,7 +326,23 @@ def one_pass(first: np.ndarray, second: np.ndarray, rows: np.ndarray, cols: np.n
     near zero, which is where the correlation peak is sharpest and the three-point fit least
     biased. Without it only the whole pixels are applied, which is what the first version
     did and which leaves a slow test no better off for the second pass at all.
+
+    The grid is worked through in bands of rows, so that the correlation planes of a large
+    window on a large photograph do not all have to exist at once.
     """
+    height = _band_height(cols.size, window)
+    if height < rows.size:
+        pieces = []
+        for start in range(0, rows.size, height):
+            stop = min(start + height, rows.size)
+            pieces.append(one_pass(
+                first, second, rows[start:stop], cols, window,
+                offset_u=None if offset_u is None else offset_u[start:stop],
+                offset_v=None if offset_v is None else offset_v[start:stop],
+                between_pixels=between_pixels))
+        return tuple(np.concatenate([piece[which] for piece in pieces], axis=0)
+                     for which in range(3))
+
     whole_c = whole_r = None
     extra_c = extra_r = 0.0
     if offset_u is not None:

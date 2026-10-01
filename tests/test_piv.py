@@ -27,6 +27,7 @@ import numpy as np
 import pytest
 
 from pivnp.moisture.images import gaussian_blur
+from pivnp.piv import correlation
 from pivnp.piv.correlation import Field, analyse, one_pass, window_centres
 from pivnp.piv.settings import DEFAULTS, PivSettingsError, parse
 from pivnp.piv.source import ImageSource
@@ -290,6 +291,30 @@ def test_images_of_different_sizes_are_refused():
 def test_at_least_one_pass():
     with pytest.raises(ValueError, match="passes must be at least 1"):
         analyse(speckle((64, 64)), speckle((64, 64)), passes=0)
+
+
+def test_working_in_bands_gives_exactly_the_same_answer():
+    """A large window on a large photograph asks for gigabytes of correlation planes at once.
+
+    So the grid is worked through in bands of rows. That is a memory arrangement and nothing
+    else, and the way to say so is to force the smallest possible band and require the result
+    to be *identical*, not merely close: anything that depends on where a band happens to
+    begin would be a bug in the arrangement.
+    """
+    first = speckle(shape=(256, 256), seed=11)
+    second = shifted(first, SHIFT_X, SHIFT_Y)
+    whole = analyse(first, second, window=32, overlap=0.5, passes=2, smoothing=0.0)
+
+    budget = correlation.CORRELATION_BUDGET
+    try:
+        correlation.CORRELATION_BUDGET = 1            # one row of the grid per band
+        banded = analyse(first, second, window=32, overlap=0.5, passes=2, smoothing=0.0)
+    finally:
+        correlation.CORRELATION_BUDGET = budget
+
+    np.testing.assert_array_equal(np.isnan(whole.u), np.isnan(banded.u))
+    np.testing.assert_array_equal(whole.u[whole.measured], banded.u[banded.measured])
+    np.testing.assert_array_equal(whole.v[whole.measured], banded.v[banded.measured])
 
 
 def test_the_field_reports_where_it_measured():

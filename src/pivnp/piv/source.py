@@ -39,9 +39,16 @@ class ImageSource:
         self.images = None
         self._shape: tuple[int, int] | None = None
         self._mask: np.ndarray | None = None
+        #: The photograph read last, kept because step *n* reads images *n* and *n+1* and
+        #: step *n+1* then reads *n+1* again. On a 3840x2160 JPEG the decoding is most of
+        #: the time the analysis takes, so remembering one image halves the run. Only one:
+        #: these are tens of megabytes each once decoded.
+        self._last: tuple[int, np.ndarray] | None = None
 
     # --- the photographs -------------------------------------------------------------
     def _read(self, step: int) -> np.ndarray:
+        if self._last is not None and self._last[0] == step:
+            return self._last[1]
         path = self.settings.image_path(self.directory, step)
         if not path.exists():
             raise FileNotFoundError(
@@ -57,6 +64,7 @@ class ImageSource:
             raise ConfigError(f"{path.name} is {image.shape[1]}x{image.shape[0]} px and the "
                               f"first photograph is {self._shape[1]}x{self._shape[0]}; every "
                               "image of a sequence has to be the same size")
+        self._last = (step, image)
         return image
 
     def _build_mask(self, first: np.ndarray) -> np.ndarray | None:
