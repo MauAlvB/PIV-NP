@@ -1,8 +1,17 @@
-"""The shipped example runs, and gives the numbers the guide promises.
+"""The shipped examples run, and give the numbers their documentation promises.
 
-``docs/GUIDE.md`` tells a first-time reader which values to expect after running
-``examples/shear-block``. These tests pin those values down, so that the guide cannot go
-stale without something failing here.
+``docs/GUIDE.md`` and each example's own ``README.md`` tell a first-time reader which values
+to expect. These tests pin those values down, so that the documentation cannot go stale
+without something failing here.
+
+Two examples, and the difference between them is the point:
+
+* ``examples/shear-block`` is driven by PIVlab files and has an **exact** answer, so it is
+  checked to twelve decimals;
+* ``examples/piv-from-images`` is driven by the photographs, through the built-in PIV, and
+  has a *known* answer rather than an exact one -- a correlation measures to about a tenth
+  of a pixel. It is checked to the accuracy that was measured, which is about one per cent
+  on the shear.
 """
 
 from __future__ import annotations
@@ -15,7 +24,7 @@ import numpy as np
 import pytest
 
 from pivnp.par_migrate import ANALYSIS_NAMES, GEOMETRY_NAMES, LEGEND, SOIL_NAMES, block
-from pivnp.simulation import Simulation
+from pivnp.simulation import RunOptions, Simulation
 from pivnp.solver import output_mask
 
 EXAMPLE = Path(__file__).parents[1] / "examples" / "shear-block"
@@ -117,3 +126,99 @@ def test_the_example_needs_no_boundary_correction(workdir: Path):
     """Its data has no gaps, so contour 0 and contour 1 give the same thing."""
     sim = _run(workdir / "case")
     assert not sim.nodes.filled.any()
+
+
+# --- the example that needs no PIVlab -------------------------------------------------
+PHOTOS = Path(__file__).parents[1] / "examples" / "piv-from-images"
+PHOTO_CASE = "shearphotos"
+
+#: What ``make_example.py`` put into the photographs: the top of a 128 px block slides 2 px
+#: further per step, over 10 steps.
+PHOTO_SHEAR = 10 * 2.0 / 128.0                              # 0.15625
+PHOTO_EQ = PHOTO_SHEAR / math.sqrt(3.0)                     # 0.090211
+
+
+def _run_from_photos(directory: Path, smoothing: float | None = None) -> Simulation:
+    """Copy the example and measure its displacements from its photographs."""
+    shutil.copytree(PHOTOS, directory, dirs_exist_ok=True)
+    if smoothing is not None:
+        settings = directory / f"{PHOTO_CASE}.PIV"
+        text = settings.read_text(encoding="latin-1")
+        settings.write_text(text.replace("SMOOTH = 0.6", f"SMOOTH = {smoothing}"),
+                            encoding="latin-1")
+    sim = Simulation.from_directory(directory,
+                                    options=RunOptions(source="images", prefetch=0))
+    sim.run()
+    return sim
+
+
+def test_the_photograph_example_ships_every_file_it_needs():
+    names = {p.name for p in PHOTOS.iterdir()}
+    assert {"PIV-NP.TXT", f"{PHOTO_CASE}.PAR", f"{PHOTO_CASE}.PIV",
+            "make_example.py", "README.md"} <= names
+    assert len(list((PHOTOS / "images").glob("shear_*.png"))) == 11   # one more than steps
+    # the whole point of this example: there is no PIVlab export anywhere in it
+    assert not (PHOTOS / "pivlab").exists()
+    assert not list(PHOTOS.glob("datos (*).txt"))
+
+
+def test_the_photograph_example_recovers_the_shear_that_was_put_in(workdir: Path):
+    """The headline claim of the built-in PIV, on a case whose answer is known.
+
+    The tolerances are the measured accuracy, not an aspiration: the shear comes back 1.1 %
+    low and the equivalent strain 3.2 % high, so the limits are set a little outside that.
+    A change that made the correlation worse would fail here before anyone noticed it on
+    real data.
+    """
+    sim = _run_from_photos(workdir / "photos")
+    p = sim.particles
+    published = output_mask(p, sim.grid, sim.config.total_steps) & (p.nan_initial == 0)
+
+    assert p.lost.size == 1500                      # 375 cells x 2x2 particles
+    assert published.sum() == 1440                  # 60 leave the grid as the block shears
+
+    assert np.median(p.strain[published, 2]) == pytest.approx(PHOTO_SHEAR, rel=0.03)
+    assert np.median(p.eq_strain[published]) == pytest.approx(PHOTO_EQ, rel=0.05)
+
+    # a simple shear changes no length and nothing moves vertically, so these are the
+    # artifact, and they are small rather than absent -- which is what the README says
+    assert abs(np.median(p.strain[published, 0])) < 0.01
+    assert abs(np.median(p.strain[published, 1])) < 0.01
+    assert np.median(np.abs(p.displacement[published, 1])) < 2e-4     # under 0.2 mm
+
+    # the top of the block slides and the base does not
+    height = p.position[published, 1]
+    slide = p.displacement[published, 0]
+    top = height > np.percentile(height, 90)
+    base = height < np.percentile(height, 10)
+    assert np.median(slide[top]) > 0.008            # over 8 mm of the 10 imposed
+    assert abs(np.median(slide[base])) < 0.002      # under 2 mm at the base
+
+
+def test_smoothing_quietens_the_strain_without_moving_the_displacement(workdir: Path):
+    """Why ``SMOOTH`` defaults to 0.6, measured on the example rather than argued.
+
+    The displacement is what the smoothing must not touch, and the strain is what it is
+    for. Both are checked in one test because either alone would be easy to satisfy: a
+    smoother that did nothing would pass the first, and one that flattened everything would
+    pass the second.
+    """
+    raw = _run_from_photos(workdir / "raw", smoothing=0.0)
+    smoothed = _run_from_photos(workdir / "smoothed", smoothing=0.6)
+
+    def summary(sim: Simulation) -> tuple[float, float]:
+        p = sim.particles
+        kept = output_mask(p, sim.grid, sim.config.total_steps) & (p.nan_initial == 0)
+        shear = p.strain[kept, 2]
+        height = p.position[kept, 1]
+        top = height > np.percentile(height, 90)
+        spread = np.percentile(shear, 90) - np.percentile(shear, 10)
+        return float(np.median(p.displacement[kept, 0][top])), float(spread)
+
+    raw_slide, raw_spread = summary(raw)
+    smooth_slide, smooth_spread = summary(smoothed)
+
+    # the displacement is left alone: measured 9.275 mm against 9.274
+    assert smooth_slide == pytest.approx(raw_slide, abs=5e-5)
+    # and the scatter of the strain is cut by a third: measured 0.096 to 0.063
+    assert smooth_spread < 0.8 * raw_spread
