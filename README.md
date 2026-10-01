@@ -9,8 +9,8 @@ slope in a geotechnical centrifuge). Unlike classic PIV, which reports velocitie
 fixed (Eulerian) grid, PIV-NP follows each material point (Lagrangian), which makes it
 suitable for **large displacements** and accumulated strains.
 
-> Pinyol, N.M. & Alvarado, M. (2017). *Novel PIV-based analysis for large displacement*.
-> Canadian Geotechnical Journal 54(7): 933-944.
+> Pinyol, N.M. & Alvarado, M. (2017). *Novel analysis for large strains based on particle image velocimetry*.
+> Canadian Geotechnical Journal 54(7): 933-944. doi:10.1139/cgj-2016-0327
 
 Version 2.0 is written in Python and is about **19 times faster** than the original Fortran
 version (`legacy/`): 38 s → 2 s for the centrifuge case.
@@ -283,6 +283,10 @@ Results in `.POST.RES`:
 | `Rotation` | scalar | rotation accumulated by the particle [degrees] |
 | `Vorticity_num` | scalar | kinematic vorticity number: 0 pure shear, 1 simple shear, more = rotation dominates. `NaN` where undefined |
 | `Rot_angle` | scalar | the same thing bounded: 0° pure shear, 45° simple shear, 90° rigid rotation |
+| `Finite_strain` | 3 comp. | Green-Lagrange strain from the deformation gradient: εxx, εyy, γxy |
+| `Fin_equi_strain` | scalar | its equivalent shear strain |
+| `Finite_rotation` | scalar | rotation of the polar decomposition [degrees], exact for any angle |
+| `Finite_area` | scalar | true change of area, `det(F) − 1` |
 | `E_potential`, `E_kinetic`, `E_total` | scalar | energies per unit mass (`E_total` = potential + kinetic) |
 | `Moisture`, `Saturation` | scalar | only with `MOISTER=1` |
 
@@ -291,6 +295,29 @@ position of each particle.
 
 `Vorticity` and `Rotation` are not written in `--legacy-compat` mode, because the original
 Fortran had no such blocks and the regression suite compares the whole file against it.
+
+### Two ways of measuring the same deformation
+
+The `Total_strain` family adds a **linear increment at every step**, which is what the
+original Fortran did. The `Finite_*` family differentiates **once** over the whole analysis,
+from the deformation gradient `F = I + ∂u/∂X` of the accumulated displacement. Both are
+published, because an analysis made with either should be comparable before the older one is
+retired.
+
+Where they differ, the finite one is right:
+
+* a **rigid rotation** deforms nothing, and the Green-Lagrange strain is identically zero for
+  it. The incremental one reports an equivalent shear of 0.005 and a 1.5 % loss of volume on
+  the `rotation` test cases, which turn 50° without deforming.
+* `Finite_rotation` is exact for an angle of any size; `Rotation` accumulates small-angle
+  increments.
+* `Finite_area` is `det(F) − 1`, the true change of area, not the trace of a linear increment.
+* for a real deformation the two agree to the finite correction: simple shear with γ = 0.1
+  gives an equivalent strain of 0.057735 incrementally and **0.057831** finitely, which is
+  the exact closed-form value.
+
+The cost is **4 more blocks in the `.POST.RES`, about 40 % more file**, and a few per cent of
+run time. Neither family is written in `--legacy-compat` mode beyond what the Fortran wrote.
 
 ### Telling rotation apart from shear
 
@@ -520,5 +547,5 @@ The code, its comments and the documents under `docs/` are written in English.
 BSD 4-clause (see [`LICENSE`](LICENSE)). All advertising materials mentioning features or
 use of this software must cite:
 
-> Pinyol, N.M. & Alvarado, M. (2017). Novel PIV-based analysis for large displacement.
-> Canadian Geotechnical Journal 54(7): 933-944.
+> Pinyol, N.M. & Alvarado, M. (2017). Novel analysis for large strains based on particle image velocimetry.
+> Canadian Geotechnical Journal 54(7): 933-944. doi:10.1139/cgj-2016-0327

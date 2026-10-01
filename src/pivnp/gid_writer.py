@@ -18,6 +18,13 @@ from pathlib import Path
 
 import numpy as np
 
+from .finite_strain import (
+    area_change,
+    deformation_gradient,
+    equivalent_shear,
+    green_lagrange,
+    rotation_degrees,
+)
 from .fortran_format import format_e, format_float_rows, format_int_rows
 from .solver import ACTIVE, rotation_angle, vorticity_number
 from .state import Nodes, Particles
@@ -38,6 +45,33 @@ class ResultSpec:
     #: The original Fortran had no such block, so compatibility mode must not write it:
     #: the regression suite compares the whole file byte for byte against that version.
     absent_in_fortran: bool = False
+
+
+#: Last deformation gradient computed, so the four blocks that come out of it do not each
+#: redo the work. ``write_step`` evaluates them one after another on the same state.
+_LAST_FINITE: tuple[int, int, tuple[np.ndarray, ...]] | None = None
+
+
+def _finite(p: Particles) -> tuple[np.ndarray, ...]:
+    """Strain, equivalent shear, rotation and area change from the deformation gradient.
+
+    ``lost`` is already up to date here: ``output_mask`` refreshes it just before the step is
+    written. Particles that left the grid or never had data are kept out of the differences.
+    """
+    global _LAST_FINITE
+    n = p.position.shape[0]
+    stamp = (int(p.lost[:n].sum()), float(p.displacement.sum()))
+    if _LAST_FINITE is not None and _LAST_FINITE[0] == id(p.displacement) \
+            and _LAST_FINITE[1] == stamp:
+        return _LAST_FINITE[2]
+
+    usable = ~p.lost[:n] & (p.nan_initial == ACTIVE)
+    gradient = deformation_gradient(p, usable)
+    strain = green_lagrange(gradient)
+    values = (np.column_stack(strain), equivalent_shear(strain),
+              rotation_degrees(gradient), area_change(gradient))
+    _LAST_FINITE = (id(p.displacement), stamp, values)
+    return values
 
 
 def _nodal_count_by_particle(p: Particles, nodes: Nodes) -> np.ndarray:
@@ -83,6 +117,17 @@ RESULTS: tuple[ResultSpec, ...] = (
     ResultSpec("Vorticity_num", "Scalar", lambda p, n: vorticity_number(p),
                absent_in_fortran=True),
     ResultSpec("Rot_angle", "Scalar", lambda p, n: rotation_angle(p),
+               absent_in_fortran=True),
+    #: The same deformation measured by differentiating once over the whole analysis instead
+    #: of adding a linear increment per step. Published beside the incremental results, not
+    #: instead of them, so that the two can be compared on real work. See finite_strain.
+    ResultSpec("Finite_strain", "Vector", lambda p, n: _finite(p)[0],
+               absent_in_fortran=True),
+    ResultSpec("Fin_equi_strain", "Scalar", lambda p, n: _finite(p)[1],
+               absent_in_fortran=True),
+    ResultSpec("Finite_rotation", "Scalar", lambda p, n: _finite(p)[2],
+               absent_in_fortran=True),
+    ResultSpec("Finite_area", "Scalar", lambda p, n: _finite(p)[3],
                absent_in_fortran=True),
     ResultSpec("E_potential", "Scalar", lambda p, n: p.potential_energy),
     KINETIC_ENERGY,

@@ -9,8 +9,8 @@ ejemplo, un talud en centrífuga). A diferencia del PIV clásico, que da velocid
 malla fija (euleriana), PIV-NP sigue cada punto del material (lagrangiano), así que permite
 **grandes desplazamientos** y deformaciones acumuladas.
 
-> Pinyol, N.M. & Alvarado, M. (2017). *Novel PIV-based analysis for large displacement*.
-> Canadian Geotechnical Journal 54(7): 933-944.
+> Pinyol, N.M. & Alvarado, M. (2017). *Novel analysis for large strains based on particle image velocimetry*.
+> Canadian Geotechnical Journal 54(7): 933-944. doi:10.1139/cgj-2016-0327
 
 La versión 2.0 está escrita en Python y es unas **19 veces más rápida** que la versión
 original en Fortran (`legacy/`): 38 s → 2 s en el caso de la centrífuga.
@@ -276,6 +276,10 @@ Resultados del `.POST.RES`:
 | `Rotation` | escalar | rotación acumulada por la partícula [grados] |
 | `Vorticity_num` | escalar | número cinemático de vorticidad: 0 corte puro, 1 corte simple, más = domina la rotación. `NaN` donde no está definido |
 | `Rot_angle` | escalar | lo mismo acotado: 0° corte puro, 45° corte simple, 90° rotación rígida |
+| `Finite_strain` | 3 comp. | deformación de Green-Lagrange desde el gradiente de deformación: εxx, εyy, γxy |
+| `Fin_equi_strain` | escalar | su deformación de corte equivalente |
+| `Finite_rotation` | escalar | rotación de la descomposición polar [grados], exacta para cualquier ángulo |
+| `Finite_area` | escalar | cambio de área real, `det(F) − 1` |
 | `E_potential`, `E_kinetic`, `E_total` | escalar | energías por unidad de masa (`E_total` = potencial + cinética) |
 | `Moisture`, `Saturation` | escalar | solo con `MOISTER=1` |
 
@@ -284,6 +288,30 @@ actual de cada partícula.
 
 `Vorticity` y `Rotation` no se escriben en modo `--legacy-compat`, porque el Fortran
 original no tenía esos bloques y la suite de regresión compara el archivo completo con él.
+
+### Dos formas de medir la misma deformación
+
+La familia `Total_strain` suma **un incremento lineal en cada paso**, que es lo que hacía el
+Fortran original. La familia `Finite_*` deriva **una sola vez** sobre todo el análisis, desde
+el gradiente de deformación `F = I + ∂u/∂X` del desplazamiento acumulado. Se publican las
+dos, para que un análisis hecho con cualquiera de ellas se pueda comparar antes de retirar la
+antigua.
+
+Donde difieren, la finita es la correcta:
+
+* una **rotación rígida** no deforma nada, y la deformación de Green-Lagrange es idénticamente
+  cero para ella. La incremental reporta 0,005 de corte equivalente y un 1,5 % de pérdida de
+  volumen en los casos `rotation`, que giran 50° sin deformarse.
+* `Finite_rotation` es exacta para cualquier ángulo; `Rotation` acumula incrementos de ángulo
+  pequeño.
+* `Finite_area` es `det(F) − 1`, el cambio de área real, no la traza de un incremento lineal.
+* para una deformación real coinciden salvo el término finito: corte simple con γ = 0,1 da
+  0,057735 por la vía incremental y **0,057831** por la finita, que es el valor exacto de la
+  forma cerrada.
+
+Cuesta **4 bloques más en el `.POST.RES`, un 40 % más de archivo**, y unos pocos por ciento de
+tiempo. En modo `--legacy-compat` no se escribe ninguna de las dos familias más allá de lo
+que escribía el Fortran.
 
 ### Distinguir rotación de corte
 
@@ -517,5 +545,5 @@ pueda usar y modificar el repositorio. Este archivo es la traducción al españo
 BSD de 4 cláusulas (ver [`LICENSE`](LICENSE)). Todo material que mencione el uso de este
 software debe citar:
 
-> Pinyol, N.M. & Alvarado, M. (2017). Novel PIV-based analysis for large displacement.
-> Canadian Geotechnical Journal 54(7): 933-944.
+> Pinyol, N.M. & Alvarado, M. (2017). Novel analysis for large strains based on particle image velocimetry.
+> Canadian Geotechnical Journal 54(7): 933-944. doi:10.1139/cgj-2016-0327

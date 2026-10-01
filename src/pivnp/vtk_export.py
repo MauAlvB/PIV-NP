@@ -32,6 +32,7 @@ VECTORS = {"Displacement", "Inst_displaceme", "Inst_displacement", "Velocity", "
 COMPONENT_NAMES = {
     "Total_strain": ("xx", "yy", "xy"),
     "Inc_strain": ("xx", "yy", "xy"),
+    "Finite_strain": ("xx", "yy", "xy"),
     "E_kinetic": ("x", "y"),
 }
 RENAMES = {"Inst_displaceme": "Inst_displacement"}  # a name cut short by the A15 format

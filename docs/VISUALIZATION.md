@@ -86,6 +86,8 @@ The coordinates are the **current** positions of the particles at each instant (
 | `Vorticity` | scalar (s⁻¹): the curl, which tells rotation apart from shear |
 | `Rotation` | scalar (degrees): rotation accumulated by the particle |
 | `Vorticity_num`, `Rot_angle` | scalar: how the deformation splits between shear and rotation |
+| `Finite_strain` | xx, yy, xy from the deformation gradient: zero for a rigid rotation |
+| `Fin_equi_strain`, `Finite_rotation`, `Finite_area` | scalar: the finite counterparts |
 | `E_potential`, `E_kinetic`, `E_total` | scalar |
 | `NaNs` | data missing around the particle (0 to 4 with IVERSION=1; 0 or 1 with IVERSION=2) |
 | `Moisture`, `Saturation` | scalar (only with `MOISTER=1`) |
