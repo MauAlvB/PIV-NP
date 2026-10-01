@@ -7,11 +7,13 @@ global `COMMON` blocks (more than 60 fixed-size arrays). Version 2.0 splits the
 responsibilities into small modules that are tested separately:
 
 ```
-             ┌────────────┐   ┌─────────────┐
- .PAR ─────► │ config.py  │   │ pivlab_io.py│ ◄───── datos (n).txt, Moist_n.TXT
-             └─────┬──────┘   └──────┬──────┘   (read ahead on worker threads)
-                   │ CaseConfig      │ Frame
-                   ▼                 ▼
+             ┌────────────┐   ┌──────────────────────┐
+ .PAR ─────► │ config.py  │   │ sources.py           │ ◄── datos (n).txt, Moist_n.TXT
+             └─────┬──────┘   │  pivlab_io.py (PIVlab)│    (read ahead on worker threads)
+                   │          │  ...another source    │
+                   │ CaseConfig└──────┬───────────────┘
+                   │                  │ Frame
+                   ▼                  ▼
              ┌──────────────────────────────────┐
              │ simulation.py   (loop of steps)  │
              └──┬──────────┬──────────┬──────┬──┘
@@ -29,7 +31,7 @@ responsibilities into small modules that are tested separately:
 | `COMMON /PARTICULAS/`, `/NODOS/` | `state.Particles`, `state.Nodes` (named arrays) |
 | `COMMON /GEOMETRIA/` + `UCELDA` | `mesh.Grid`, `mesh.locate_point` (O(1) instead of a linear search) |
 | `PIVLAB_DATA` | `config.parse_par`, `particles.create_particles`, `simulation._load_restart` |
-| `VELOCIDADES` | `pivlab_io.FrameSource` + `nodal.*` |
+| `VELOCIDADES` | `sources.DisplacementSource` (`pivlab_io.PivlabSource`) + `nodal.*` |
 | `CONTOUR` | `contour.ContourCorrection` (interface) |
 | `SOLMOV`, `INVAR2` | `solver.advance_particles`, `solver.update_strains`, `solver.deviatoric_q` |
 | `IMPRES_GiD` (16 copied loops) | `gid_writer.RESULTS` (a table) + `GidWriter` |
@@ -122,11 +124,59 @@ interface with several implementations:
 * `TrajectoryCsvWriter` with the trajectory of specific points, to compare against
   laboratory PTV tracking markers.
 
-### P5. Data input decoupled from PIVlab (low effort)
+### P5. Data input decoupled from PIVlab — **done**
 
-`FrameSource` already returns a `Frame` object that is independent of the format. Adding
-readers for PIVlab's `.mat` files (which avoids exporting thousands of `.txt`), OpenPIV or
-DaVis would be adding one class, without touching the computation.
+Where the displacements come from is now an explicit, interchangeable contract. The solver
+never sees a file: it only ever sees one `Frame` per step.
+
+[`sources.py`](../src/pivnp/sources.py) holds `DisplacementSource`, the five members a
+source has to offer, and the registry that `--source` selects from. PIVlab is one
+implementation of it (`PivlabSource` in `pivlab_io.py`), registered under `pivlab`, which is
+the default. Reading the interval between images from the PIVlab header — the last thing
+that tied the analysis to the format — now sits behind `frame_interval()`.
+
+A new source is one class and one registration:
+
+```python
+import numpy as np
+from pivnp.sources import Frame, register_source
+
+
+class MySource:
+    """Velocities straight from a simulation: no files involved."""
+
+    def __init__(self, n_points: int) -> None:
+        self.n_points = n_points
+        self.moisture = False   # are there Moist_<n>.TXT to read?
+        self.images = None      # moisture from images; the analysis sets this
+
+    def frames(self, steps):
+        for step in steps:                      # in order: the moisture model has memory
+            u = np.full(self.n_points, 0.2)     # m/s at every grid point, NaN if missing
+            zeros = np.zeros(self.n_points)
+            yield Frame(step, f"my data {step}", u, zeros, zeros, zeros)
+
+    def mesh_in_metres(self, step=1):           # only needed with MOISTER=2
+        x = y = np.zeros(self.n_points)
+        return x, y, 0.001, np.ones(self.n_points, dtype=bool)
+
+    def frame_interval(self):
+        return None                             # unknown: the DT check is skipped
+
+
+@register_source("mine")
+def _build(case_dir, config, prefetch=4):
+    return MySource(config.n_nodes)
+```
+
+Then `pivnp <case> --source mine`. The points must come in the order of the PIVlab export
+(by columns, y growing downwards), which is the order `pivlab_to_node` maps to PIV-NP nodes.
+`tests/test_sources.py` runs a whole analysis through a source like this one, so the seam
+stays checked.
+
+Still worth adding, now that it is cheap: a reader for PIVlab's `.mat` files (which would
+avoid exporting thousands of `.txt`), OpenPIV, DaVis, and a PIV analysis built into PIV-NP
+so that no external package is needed at all.
 
 ### P6. API for notebooks (low effort)
 
@@ -151,4 +201,6 @@ notebook with the centrifuge case.
 
 1. **P2** (named keys) + **P3**: configuration with names and selectable computation options.
 2. **P4** (HDF5/VTK) and **P7** (CI) to share the code with other groups.
-3. **P5**, **P6** and **P8** as the group needs them.
+3. A PIV analysis built into PIV-NP, as a source (the seam of P5 is already there), so that
+   a case can be run without an external PIV package.
+4. **P6** and **P8** as the group needs them.

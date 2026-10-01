@@ -73,8 +73,9 @@ Options:
 | Option | Description |
 |---|---|
 | `--case NAME` | case name (otherwise read from `PIV-NP.TXT`) |
+| `--source NAME` | where the displacement data comes from (default `pivlab`); see [below](#other-sources-of-displacement) |
 | `--threads N` | computation threads (default: all cores) |
-| `--prefetch N` | PIVlab files read ahead (default 4) |
+| `--prefetch N` | steps read ahead (default 4) |
 | `--contour-min-neighbors N` | with `ICONTOUR=1`: neighbours with data required (default 3) |
 | `--contour-layers N` | with `ICONTOUR=1` and `3`: layers of points to rebuild (default 1) |
 | `--contour-min-particles N` | with `ICONTOUR=2`: particles required around the point (default 1) |
@@ -107,6 +108,17 @@ python -m pivnp.compare reference.POST.RES new.POST.RES
 ```
 
 Compares line by line and tolerates differences of one unit in the sixth digit.
+
+### Other sources of displacement
+
+The velocity field does not have to come from PIVlab. The analysis only ever sees one
+`Frame` per step, so any origin can provide it: a PIV analysis built into PIV-NP, another
+PIV package, or a numerical simulation. `pivnp --source <name>` picks which one, and
+`pivlab` is the default.
+
+Writing a new one is one class and one registration — the contract, with a worked example,
+is in [`src/pivnp/sources.py`](src/pivnp/sources.py) and in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#p5-data-input-decoupled-from-pivlab--done).
 
 ## Input files
 
@@ -410,6 +422,7 @@ piv-np/
 ├── src/pivnp/
 │   ├── config.py          reading and validation of PIV-NP.TXT and .PAR
 │   ├── par_migrate.py     conversion of old .PAR files to the single format
+│   ├── sources.py         where the displacement data comes from (interchangeable)
 │   ├── mesh.py            grids and particle location
 │   ├── particles.py       particle generation
 │   ├── state.py           particle and nodal arrays

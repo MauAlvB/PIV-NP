@@ -416,6 +416,7 @@ piv-np/
 ├── src/pivnp/
 │   ├── config.py          lectura y validación de PIV-NP.TXT y .PAR
 │   ├── par_migrate.py     conversión de los .PAR antiguos al formato único
+│   ├── sources.py         de dónde vienen los desplazamientos (intercambiable)
 │   ├── mesh.py            mallas y localización de partículas
 │   ├── particles.py       generación de partículas
 │   ├── state.py           arrays de partículas y nodos

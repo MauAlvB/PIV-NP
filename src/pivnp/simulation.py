@@ -36,9 +36,10 @@ from .nodal import (
     load_measurements,
 )
 from .particles import cell_centers, create_particles
-from .pivlab_io import FrameSource, frame_interval_in_header, pivlab_to_node
+from .pivlab_io import pivlab_to_node
 from .restart import NodalState, RestartData, read_restart, write_restart
 from .solver import advance_particles, count_nan_nodes, output_mask, update_strains
+from .sources import DisplacementSource, build_source
 from .state import Nodes, Particles
 
 log = logging.getLogger("pivnp")
@@ -46,7 +47,9 @@ log = logging.getLogger("pivnp")
 
 @dataclass(frozen=True)
 class RunOptions:
-    prefetch: int = 4  # PIVlab files read ahead
+    #: Where the displacement data comes from; see :mod:`pivnp.sources`.
+    source: str = "pivlab"
+    prefetch: int = 4  # steps read ahead
     contour_min_neighbors: int = 3  # ICONTOUR=1: neighbours with data needed
     contour_layers: int = 1  # ICONTOUR=1 and 3: layers of points to rebuild
     contour_min_particles: int = 1  # ICONTOUR=2: particles needed around the point
@@ -77,7 +80,7 @@ class Simulation:
     """One PIV-NP analysis over the files of a case directory."""
 
     def __init__(self, case_dir: Path, case_name: str, config: CaseConfig,
-                 frames: FrameSource, contour: ContourCorrection,
+                 frames: DisplacementSource, contour: ContourCorrection,
                  options: RunOptions = DEFAULT_OPTIONS) -> None:
         self.case_dir = Path(case_dir)
         self.case_name = case_name
@@ -102,8 +105,7 @@ class Simulation:
     def from_directory(cls, case_dir: Path, case_name: str | None = None,
                        options: RunOptions = DEFAULT_OPTIONS) -> Simulation:
         name, config = load_case(case_dir, case_name)
-        frames = FrameSource(case_dir, config.n_nodes, config.pivlab_format,
-                             config.moisture, prefetch=options.prefetch)
+        frames = build_source(options.source, case_dir, config, options.prefetch)
         if config.moisture_from_images:
             frames.images = moisture_source(case_dir, name, frames)
             frames.moisture = False
@@ -124,22 +126,19 @@ class Simulation:
         return AVERAGE if self.contour.normalizes_staggered else NO_AVERAGE
 
     def check_frame_interval(self) -> float | None:
-        """Warn when the DT of the ``.PAR`` does not match the interval PIVlab used.
+        """Warn when the DT of the ``.PAR`` does not match the interval of the source.
 
         If they do not match, the displacements come out multiplied by the ratio between the
-        two: a mistake with no symptom other than results at a different scale.
+        two: a mistake with no symptom other than results at a different scale. A source
+        that does not know its interval returns ``None`` and nothing is checked.
         """
-        try:
-            interval = frame_interval_in_header(self.frames.velocity_path(1))
-        except (FileNotFoundError, OSError):
-            return None
+        interval = self.frames.frame_interval()
         if interval is None or math.isclose(interval, self.config.dt, rel_tol=1e-3):
             return interval
         log.warning(
             "The .PAR uses DT=%g s, but the PIVlab files were exported with an interval "
             "between images of %g s: displacements will come out multiplied by %.4g. Check "
-            "the DT of the .PAR or the interval you exported from PIVlab with (if the files "
-            "do not come from PIVlab, ignore this warning).",
+            "the DT of the .PAR or the interval you exported the data with.",
             self.config.dt, interval, self.config.dt / interval)
         return interval
 
@@ -197,7 +196,7 @@ class Simulation:
             compute_nodal_momentum_v2(self.nodes, self.grid, self.centers, self.particles, step,
                                       normalize=self.staggered_average)
         if step == 1 or step % self.options.log_every == 0:
-            log.info("ANALYZING %s", frame.source.name)
+            log.info("ANALYZING %s", frame.label)
 
     def _write_output(self, writer: GidWriter, step: int, t: float, summary: RunSummary,
                       append: bool = False) -> None:
@@ -263,11 +262,11 @@ class Simulation:
         ), extended=not self.options.legacy_compat)
 
 
-def moisture_source(case_dir: Path, case_name: str, frames: FrameSource):
+def moisture_source(case_dir: Path, case_name: str, frames: DisplacementSource):
     """Moisture source computed from the test images (MOISTER=2).
 
-    The PIV-NP grid is placed on the image with the coordinates and the conversion factor of
-    the first PIVlab file, and with the mask of nodes PIVlab measured.
+    The PIV-NP grid is placed on the image with the coordinates and the conversion factor the
+    source reports, and with the mask of points that have data.
     """
     from .moisture.source import Mesh, source_for_case
 
@@ -286,8 +285,8 @@ def write_moisture_files(case_dir: Path, case_name: str | None = None,
 
     name, config = load_case(case_dir, case_name)
     case_dir = Path(case_dir)
-    frames = FrameSource(case_dir, config.n_nodes, config.pivlab_format,
-                         prefetch=options.prefetch)
+    frames = build_source(options.source, case_dir, config, options.prefetch)
+    frames.moisture = False  # it is about to be computed from the images, not read
     x, y, metres_per_pixel, _ = frames.mesh_in_metres(1)
     mesh = Mesh(x, y, metres_per_pixel)
     frames.images = moisture_source(case_dir, name, frames)

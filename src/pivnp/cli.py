@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .config import ConfigError
 from .simulation import RunOptions, run_case, write_moisture_files
+from .sources import available_sources
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,10 +22,12 @@ def build_parser() -> argparse.ArgumentParser:
                         help="directory holding PIV-NP.TXT, <case>.PAR and the PIVlab data "
                              "(the current one by default)")
     parser.add_argument("--case", help="case name (otherwise it is read from PIV-NP.TXT)")
+    parser.add_argument("--source", default="pivlab", choices=available_sources(),
+                        help="where the displacement data comes from (default: pivlab)")
     parser.add_argument("--threads", type=int,
                         help="computation threads (all cores by default)")
     parser.add_argument("--prefetch", type=int, default=4,
-                        help="PIVlab files read ahead (0 = no read-ahead)")
+                        help="steps read ahead (0 = no read-ahead)")
     parser.add_argument("--contour-min-neighbors", type=int, default=3,
                         help="with ICONTOUR=1: neighbours with data needed to rebuild a node")
     parser.add_argument("--contour-layers", type=int, default=1,
@@ -62,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         numba.set_num_threads(args.threads)
 
     options = RunOptions(
+        source=args.source,
         prefetch=args.prefetch,
         contour_min_neighbors=args.contour_min_neighbors,
         contour_layers=args.contour_layers,

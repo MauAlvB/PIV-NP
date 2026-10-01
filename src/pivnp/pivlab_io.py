@@ -3,6 +3,9 @@
 PIVlab stores the points by columns: constant x and y growing *downwards* (the image axis).
 PIV-NP numbers the nodes by rows from the bottom left and uses the y axis pointing up, which
 is why the nodes are reordered and the sign of the vertical velocity is flipped.
+
+This is the displacement source PIV-NP ships with. It implements the contract of
+:mod:`pivnp.sources`, which is where to look to add another one.
 """
 
 from __future__ import annotations
@@ -11,14 +14,20 @@ import logging
 import re
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 
+from .sources import Frame, register_source
+
 if TYPE_CHECKING:  # types only: the moisture package does not depend on this module
+    from .config import CaseConfig
     from .moisture.source import MoistureSource
+
+__all__ = ["Frame", "FrameSource", "PivlabSource", "pivlab_to_node", "read_moisture_file",
+           "read_velocity_file", "frame_interval_in_header", "xy_factor_in_header"]
 
 VELOCITY_PATTERN = "datos ({step}).TXT"
 MOISTURE_PATTERN = "Moist_{step}.TXT"
@@ -31,22 +40,6 @@ _TOKENS = re.compile(r"[,\s]+")
 #: Conversion factors PIVlab writes on the second line of every file.
 _XY_FACTOR = re.compile(r"px\s*->\s*m\)\s*:\s*([0-9.eE+-]+)")
 _UV_FACTOR = re.compile(r"px/frame\s*->\s*m/s\)\s*:\s*([0-9.eE+-]+)")
-
-
-@dataclass(frozen=True)
-class Frame:
-    """Data of one step, in the order of the points of the PIVlab file."""
-
-    step: int
-    source: Path
-    u: np.ndarray  # x velocity (NaN when PIVlab did not measure it)
-    v: np.ndarray  # y velocity, image axis (downwards)
-    moisture: np.ndarray
-    saturation: np.ndarray
-    #: Gray of the test image, already normalized, when the moisture is computed from the
-    #: images. It is the intermediate step: the moisture comes from applying the model to it,
-    #: and the model carries memory of the previous steps, so it cannot be computed here.
-    normalized_gray: np.ndarray | None = None
 
 
 def pivlab_to_node(n_cols: int, n_rows: int) -> np.ndarray:
@@ -130,8 +123,12 @@ def read_moisture_file(path: Path, n_nodes: int) -> tuple[np.ndarray, np.ndarray
     return data[:, 2].copy(), data[:, 3].copy()
 
 
-class FrameSource:
-    """Provider of PIVlab steps, reading ahead on threads."""
+class PivlabSource:
+    """Provider of PIVlab steps, reading ahead on threads.
+
+    The displacement source PIV-NP ships with: it satisfies
+    :class:`pivnp.sources.DisplacementSource`.
+    """
 
     def __init__(
         self,
@@ -161,6 +158,16 @@ class FrameSource:
     def velocity_path(self, step: int) -> Path:
         """PIVlab file of step ``step``."""
         return self._path(VELOCITY_PATTERN, step)
+
+    def frame_interval(self) -> float | None:
+        """Interval between images the files were exported with, from their own header.
+
+        ``None`` when the files do not state it, or are not there yet.
+        """
+        try:
+            return frame_interval_in_header(self.velocity_path(1))
+        except (FileNotFoundError, OSError):
+            return None
 
     def mesh_in_metres(self, step: int = 1) -> tuple[np.ndarray, np.ndarray, float, np.ndarray]:
         """Nodes in metres, metres per pixel and which nodes PIVlab measured, from a file."""
@@ -203,3 +210,15 @@ class FrameSource:
                     pending.append(pool.submit(self.read, steps[ahead]))
                 pending[k] = None  # releases the memory of the frame already consumed
                 yield self._with_moisture(frame)
+
+
+#: The name PivlabSource had before the displacement sources were made interchangeable.
+FrameSource = PivlabSource
+
+
+@register_source("pivlab")
+def _build_pivlab_source(case_dir: Path, config: CaseConfig,
+                         prefetch: int = 4) -> PivlabSource:
+    """Build the PIVlab source of a case, as ``--source pivlab`` does."""
+    return PivlabSource(case_dir, config.n_nodes, config.pivlab_format,
+                        config.moisture, prefetch=prefetch)
