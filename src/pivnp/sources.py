@@ -137,6 +137,7 @@ def available_sources() -> list[str]:
 def _load_builtin_sources() -> None:
     """Import the modules that register the sources shipped with PIV-NP."""
     from . import pivlab_io  # noqa: F401  registers "pivlab"
+    from .piv import source  # noqa: F401  registers "images"
 
 
 def build_source(name: str, case_dir: Path, config: CaseConfig,
