@@ -291,7 +291,38 @@ The benefit also has a clear dependence: the smoother the field near the boundar
 the correction gains. On the centrifuge the median error drops to 0.05× of what not
 correcting cost; on the dam failure, where the motion is abrupt, it stays at 0.52×.
 
-## 6. Still open
+## 6. Rotation, measured against a known answer
+
+A rigid rotation does not deform the material, but accumulating linear strain increments
+reports strain for it. The synthetic `rotation` cases pin that down: 50 steps of 1° leave
+εxx = εyy = n·(cos Δθ − 1) and an equivalent shear strain of about 0.005 where there is no
+deformation at all. Nothing in the results told the reader that.
+
+The curl of the velocity field does, and it comes nearly free: shear and rotation are the
+symmetric and the antisymmetric halves of the same velocity gradient, which the solver
+already evaluates to get the strains. Two results were added from it, `Vorticity` (s⁻¹) and
+`Rotation` (degrees accumulated).
+
+Measured on the cases where the answer is known:
+
+| Case | True value | Measured | Error |
+|---|---|---|---|
+| Simple shear at 0.05 s⁻¹ for 2 s (`shear-block`) | ω = −0.050000 s⁻¹, −2.864789° | identical to every digit | 0 |
+| Rigid rotation, 1°/s for 50 s (`rotation_1P`), boundary rebuilt | 50° | 49.997°, the same on every particle | **0.003°** |
+| the same case, boundary not corrected | 50° | 49.12° on average, spread 48.2 to 50.0 | 0.9° |
+
+So on the very case where the strain claims a deformation that is not there, the rotation
+lands within three thousandths of a degree of the truth. The second and third rows are also
+one more measurement of what the boundary correction is worth.
+
+The accumulated rotation inherits the first-order nature of the formulation, which is why it
+was checked against a finite 50° rotation rather than assumed; it is carried in the `.REC`
+(extension version 3), so a restarted analysis does not start turning from zero again.
+
+Neither result is written in `--legacy-compat` mode: the original Fortran had no such blocks,
+and the regression suite compares the whole file against it.
+
+## 7. Still open
 
 * **How the dry–saturated band of each soil is measured.** It is the most sensitive number
   of the whole moisture method and currently comes from two clicks and four constants.

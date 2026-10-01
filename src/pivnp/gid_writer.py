@@ -35,6 +35,9 @@ class ResultSpec:
     only_active: bool = True  # leaves out particles with nan_initial != 0
     integer: bool = False  # list-directed writing of integers (the NaNs block)
     needs_moisture: bool = False
+    #: The original Fortran had no such block, so compatibility mode must not write it:
+    #: the regression suite compares the whole file byte for byte against that version.
+    absent_in_fortran: bool = False
 
 
 def _nodal_count_by_particle(p: Particles, nodes: Nodes) -> np.ndarray:
@@ -70,6 +73,11 @@ RESULTS: tuple[ResultSpec, ...] = (
     ResultSpec("Vol_strain", "Scalar", lambda p, n: p.vol_strain),
     ResultSpec("Ins_vol_strain", "Scalar", lambda p, n: p.vol_strain_increment),
     ResultSpec("In_E_strain", "Scalar", lambda p, n: p.eq_strain_increment),
+    #: Rotation, which the strains cannot tell you: a rigid rotation does not deform the
+    #: material, yet this incremental formulation reports strain for it. These two separate
+    #: the two things.
+    ResultSpec("Vorticity", "Scalar", lambda p, n: p.vorticity, absent_in_fortran=True),
+    ResultSpec("Rotation", "Scalar", lambda p, n: p.rotation, absent_in_fortran=True),
     ResultSpec("E_potential", "Scalar", lambda p, n: p.potential_energy),
     KINETIC_ENERGY,
     ResultSpec("E_total", "Scalar", lambda p, n: p.total_energy),
@@ -81,13 +89,15 @@ RESULTS: tuple[ResultSpec, ...] = (
 def result_specs(legacy_compat: bool = False) -> tuple[ResultSpec, ...]:
     """Blocks of the ``.POST.RES``.
 
-    In compatibility mode, "NaNs" goes back to being the nodal counter of the original and
-    "E_kinetic" its two components.
+    In compatibility mode, "NaNs" goes back to being the nodal counter of the original,
+    "E_kinetic" to its two components, and the blocks the original never wrote are left out,
+    so that the file stays identical to the one that version produced.
     """
     if not legacy_compat:
         return RESULTS
     replacements = {MISSING_DATA: LEGACY_MISSING_DATA, KINETIC_ENERGY: LEGACY_KINETIC_ENERGY}
-    return tuple(replacements.get(spec, spec) for spec in RESULTS)
+    return tuple(replacements.get(spec, spec) for spec in RESULTS
+                 if not spec.absent_in_fortran)
 
 
 def result_header(name: str, kind: str, time: float) -> str:

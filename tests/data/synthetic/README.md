@@ -42,3 +42,8 @@ measured.
 That residual really is a limitation of the formulation, not of this implementation:
 removing it would need a finite-strain measure (from the deformation gradient). The tests
 pin both values down so that any change making them worse is caught.
+
+The `Rotation` result reports the turn itself, and on this case it is accurate: with the
+boundary rebuilt it comes out as **49.997°** against the true 50°, the same on every
+particle. So the case is also the reference for that result — and a reminder that where the
+strain lies here, the rotation does not.

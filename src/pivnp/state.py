@@ -27,6 +27,12 @@ class Particles(NamedTuple):
     eq_strain_increment: np.ndarray  # EPSEQ2
     vol_strain: np.ndarray  # EVOLUMETRIC
     vol_strain_increment: np.ndarray  # EVOL_IN
+    #: Curl of the velocity field at the particle, dv/dx - du/dy, in 1/s. Positive
+    #: counter-clockwise. The antisymmetric half of the same gradient the strains come from,
+    #: so it costs almost nothing and it is what tells rotation apart from shear.
+    vorticity: np.ndarray
+    #: Rotation accumulated by the particle, in degrees, from adding vorticity*dt/2.
+    rotation: np.ndarray
     mass: np.ndarray  # AMP (always 1)
     potential_energy: np.ndarray  # E_Potential
     kinetic_energy: np.ndarray  # E_Cinetic_x, E_Cinetic_y (n, 2)
@@ -48,7 +54,8 @@ class Particles(NamedTuple):
             step_displacement=vec(2),
             position_increment=vec(2), velocity=vec(2), acceleration=vec(2),
             strain=vec(4), strain_increment=vec(3), eq_strain=vec(), eq_strain_increment=vec(),
-            vol_strain=vec(), vol_strain_increment=vec(), mass=np.ones(n),
+            vol_strain=vec(), vol_strain_increment=vec(),
+            vorticity=vec(), rotation=vec(), mass=np.ones(n),
             potential_energy=vec(), kinetic_energy=vec(2), total_energy=vec(),
             moisture=vec(), saturation=vec(),
             nan_initial=np.zeros(n, dtype=np.int8), nan_step=np.zeros(n, dtype=np.int8),

@@ -247,6 +247,8 @@ class Simulation:
             return 0, 0.0, False
         if data.nodes is None:
             return 0, 0.0, False
+        if data.rotation is not None:
+            p.rotation[:n] = data.rotation
         data.nodes.apply_to(self.nodes)
         return data.step, data.time, True
 
@@ -258,7 +260,7 @@ class Simulation:
             position=p.position[:n], displacement=p.displacement[:n], strain=p.strain[:n],
             eq_strain=p.eq_strain[:n], nan_initial=p.nan_initial[:n],
             time=t, step=step, nodes=NodalState.from_nodes(self.nodes),
-            initial_position=p.initial_position[:n],
+            initial_position=p.initial_position[:n], rotation=p.rotation[:n],
         ), extended=not self.options.legacy_compat)
 
 

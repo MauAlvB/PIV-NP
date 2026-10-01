@@ -279,11 +279,29 @@ Results in `.POST.RES`:
 | `Total_strain`, `Inc_strain` | 3 comp. | εxx, εyy, γxy accumulated / per step |
 | `Equi_strain`, `In_E_strain` | scalar | equivalent shear strain, accumulated / per step |
 | `Vol_strain`, `Ins_vol_strain` | scalar | volumetric strain, accumulated / per step |
+| `Vorticity` | scalar | curl of the velocity field, ∂v/∂x − ∂u/∂y [s⁻¹], positive counter-clockwise |
+| `Rotation` | scalar | rotation accumulated by the particle [degrees] |
 | `E_potential`, `E_kinetic`, `E_total` | scalar | energies per unit mass (`E_total` = potential + kinetic) |
 | `Moisture`, `Saturation` | scalar | only with `MOISTER=1` |
 
 Since the mesh holds the initial positions, `mesh + Displacement` is always the current
 position of each particle.
+
+`Vorticity` and `Rotation` are not written in `--legacy-compat` mode, because the original
+Fortran had no such blocks and the regression suite compares the whole file against it.
+
+### Telling rotation apart from shear
+
+A rigid rotation does not deform the material, but accumulating linear strain increments
+reports strain for it: the `rotation` test cases turn 50° without deforming and still come
+out with an equivalent shear strain of about 0.005. Looking at `Equi_strain` alone there is
+no way to know whether a zone is really shearing or just turning.
+
+`Vorticity` is what separates the two, and it costs almost nothing: shear and rotation are
+the symmetric and the antisymmetric halves of the same velocity gradient, which the solver
+already computes. On those same cases, with the boundary rebuilt, `Rotation` lands within
+**0.01°** of the true 50° and is identical on every particle — so where the strain lies, the
+rotation does not.
 
 ### Continuing an analysis
 

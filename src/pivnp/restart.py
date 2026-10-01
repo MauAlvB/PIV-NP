@@ -22,7 +22,11 @@ import numpy as np
 from .state import Nodes
 
 _MARKER = np.dtype("<i4")
-EXTENSION_VERSION = 2
+#: Version of the records appended after the seven of the original. 3 added the accumulated
+#: rotation, which has to carry over or a restarted analysis would start turning from zero.
+EXTENSION_VERSION = 3
+#: Versions that can still be read, so a ``.REC`` written by an earlier build keeps working.
+READABLE_VERSIONS = (2, 3)
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,8 @@ class RestartData:
     step: int = 0  # steps already computed
     nodes: NodalState | None = None
     initial_position: np.ndarray | None = None  # position when the original analysis started
+    #: Rotation accumulated so far, in degrees. ``None`` in a file written before it existed.
+    rotation: np.ndarray | None = None
 
     @property
     def n_particles(self) -> int:
@@ -113,6 +119,8 @@ def write_restart(path: Path, data: RestartData, extended: bool = True) -> None:
         _write_record(f, nodes.saturation.astype("<f8"))
         initial = data.position if data.initial_position is None else data.initial_position
         _write_record(f, initial.astype("<f8"))
+        rotation = (np.zeros(data.n_particles) if data.rotation is None else data.rotation)
+        _write_record(f, rotation.astype("<f8"))
 
 
 def read_restart(path: Path) -> RestartData:
@@ -126,9 +134,9 @@ def read_restart(path: Path) -> RestartData:
         nan_initial = _read_record(f, "<i4").astype(np.int8)
 
         header = _read_record(f, "<i4", optional=True)
-        time, step, nodes, initial = 0.0, 0, None, None
+        time, step, nodes, initial, rotation = 0.0, 0, None, None, None
         if header is not None:
-            if header[0] != EXTENSION_VERSION:
+            if header[0] not in READABLE_VERSIONS:
                 raise ValueError(f"{path}: unknown restart version {header[0]}")
             n_measured, n_mesh, step = int(header[1]), int(header[2]), int(header[3])
             time = float(_read_record(f, "<f8")[0])
@@ -141,5 +149,7 @@ def read_restart(path: Path) -> RestartData:
                 saturation=_read_record(f, "<f8").copy(),
             )
             initial = _read_record(f, "<f8").reshape(n, 2).copy()
+            if header[0] >= 3:
+                rotation = _read_record(f, "<f8").copy()
         return RestartData(version, position, displacement, strain, eq_strain, nan_initial,
-                           time, step, nodes, initial)
+                           time, step, nodes, initial, rotation)

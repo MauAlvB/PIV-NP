@@ -272,11 +272,29 @@ Resultados del `.POST.RES`:
 | `Total_strain`, `Inc_strain` | 3 comp. | εxx, εyy, γxy acumuladas / del paso |
 | `Equi_strain`, `In_E_strain` | escalar | deformación de corte equivalente acumulada / del paso |
 | `Vol_strain`, `Ins_vol_strain` | escalar | deformación volumétrica acumulada / del paso |
+| `Vorticity` | escalar | rotacional del campo de velocidades, ∂v/∂x − ∂u/∂y [s⁻¹], positivo antihorario |
+| `Rotation` | escalar | rotación acumulada por la partícula [grados] |
 | `E_potential`, `E_kinetic`, `E_total` | escalar | energías por unidad de masa (`E_total` = potencial + cinética) |
 | `Moisture`, `Saturation` | escalar | solo con `MOISTER=1` |
 
 Como la malla lleva las posiciones iniciales, `malla + Displacement` es siempre la posición
 actual de cada partícula.
+
+`Vorticity` y `Rotation` no se escriben en modo `--legacy-compat`, porque el Fortran
+original no tenía esos bloques y la suite de regresión compara el archivo completo con él.
+
+### Distinguir rotación de corte
+
+Una rotación rígida no deforma el material, pero acumular incrementos lineales de
+deformación dice que sí: los casos `rotation` giran 50° sin deformarse y aun así salen con
+una deformación de corte equivalente de unos 0,005. Mirando solo `Equi_strain` no hay forma
+de saber si una zona está cortando de verdad o solo girando.
+
+`Vorticity` es lo que las separa, y cuesta casi nada: el corte y la rotación son las partes
+simétrica y antisimétrica del mismo gradiente de velocidades, que el solver ya calcula. En
+esos mismos casos, con el contorno reconstruido, `Rotation` queda a **0,01°** de los 50°
+verdaderos y es idéntica en todas las partículas: donde la deformación miente, la rotación
+no.
 
 ### Continuar un análisis
 

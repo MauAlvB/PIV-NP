@@ -58,6 +58,10 @@ Tips:
 * **Evolution of one particle over time**: select it with *Select Points On* and apply
   *Filters → Plot Selection Over Time*. The `id` array is GiD's particle number.
 * **Filtering particles**: *Filters → Threshold* on any result.
+* **Is it shearing or just turning?** Colour by `Vorticity` beside `Equi_strain`. A rigid
+  rotation shows up in the first and, misleadingly, in the second too: see the note in the
+  [README](../README.md) on telling rotation apart from shear. Use a diverging colour map
+  (*Cool to Warm*) centred on zero, since the sign is the direction of the turn.
 * **Saving the setup** to reuse it with other tests: *File → Save State* (`.pvsm`) and,
   when loading it, *Search files under specified directory* with the new folder.
 * **Video**: *File → Save Animation* (`.avi`/`.ogv`) or a series of `.png`.
@@ -73,6 +77,8 @@ The coordinates are the **current** positions of the particles at each instant (
 | `Displacement`, `Inst_displacement`, `Velocity`, `Acceleration` | vector (x, y, 0) |
 | `Total_strain`, `Inc_strain` | xx, yy, xy (engineering γxy) |
 | `Equi_strain`, `In_E_strain`, `Vol_strain`, `Ins_vol_strain` | scalar |
+| `Vorticity` | scalar (s⁻¹): the curl, which tells rotation apart from shear |
+| `Rotation` | scalar (degrees): rotation accumulated by the particle |
 | `E_potential`, `E_kinetic`, `E_total` | scalar |
 | `NaNs` | data missing around the particle (0 to 4 with IVERSION=1; 0 or 1 with IVERSION=2) |
 | `Moisture`, `Saturation` | scalar (only with `MOISTER=1`) |

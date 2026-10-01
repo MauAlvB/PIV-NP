@@ -31,7 +31,13 @@ After 2 s of shearing at 0.05 s⁻¹:
 | `Equi_strain` | **0.0577** = 0.100/√3 on every particle |
 | `Displacement` x | from **0.25 mm** at the base to **7.75 mm** at the top |
 | `Displacement` y | 0 |
+| `Vorticity` | **−0.0500** s⁻¹ on every particle |
+| `Rotation` | **−2.8648°** on every particle |
 | particles published | **372** of 384 |
+
+The vorticity is not zero, which surprises people: simple shear is pure shear **plus** a
+rotation, so the block turns while it deforms. Here ω = ∂v/∂x − ∂u/∂y = 0 − 0.05 = −0.05
+s⁻¹, clockwise, and over the 2 s that is ω/2 × 2 s = −0.05 rad = −2.8648°.
 
 The 12 missing particles are the ones on the right that leave the grid as the block shears;
 once a particle leaves it stops being computed, which is what happens in a real test too.

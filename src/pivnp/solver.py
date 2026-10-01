@@ -134,7 +134,8 @@ def advance_particles(particles: Particles, nodes: Nodes, grid: Grid, config: Ca
 def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
                    position, increment, velocity, mass, strain, strain_inc,
                    vol_strain, vol_strain_inc, potential, kinetic, total, moisture,
-                   eq_strain, eq_strain_inc, legacy_divide_by_mass, gravity, j2_threshold):
+                   eq_strain, eq_strain_inc, vorticity, rotation,
+                   legacy_divide_by_mass, gravity, j2_threshold):
     for i in prange(position.shape[0]):
         if lost[i]:
             continue
@@ -142,6 +143,7 @@ def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
         d0 = 0.0
         d1 = 0.0
         d2 = 0.0
+        d3 = 0.0
         for j in range(4):
             node = cell_node(cell, n_cols, j)
             # Derivatives of the shape functions at the centre of the element: the strain is
@@ -164,12 +166,21 @@ def _strain_kernel(lost, cells, n_cols, dx, dy, dt, momentum, nodal_mass,
             d0 = d0 + momentum[node, 0] * fx
             d1 = d1 + momentum[node, 1] * fy
             d2 = d2 + momentum[node, 0] * fy + momentum[node, 1] * fx
+            # The antisymmetric counterpart of d2: the same two derivatives with a minus,
+            # which is the curl. Nothing else to look up, so it comes practically free.
+            d3 = d3 + momentum[node, 1] * fx - momentum[node, 0] * fy
         if abs(d0) < MACHINE_EPSILON and d0 != 0.0:
             d0 = 0.0
         if abs(d1) < MACHINE_EPSILON and d1 != 0.0:
             d1 = 0.0
         if abs(d2) < MACHINE_EPSILON and d2 != 0.0:
             d2 = 0.0
+        if abs(d3) < MACHINE_EPSILON and d3 != 0.0:
+            d3 = 0.0
+        # d3 is the curl times dt. Half of it is the rotation of the material element over
+        # the step, which accumulates; the curl itself is reported as it stands.
+        vorticity[i] = d3 / dt
+        rotation[i] = rotation[i] + 0.5 * d3 * 180.0 / np.pi
         strain_inc[i, 0] = d0
         strain_inc[i, 1] = d1
         strain_inc[i, 2] = d2
@@ -206,7 +217,8 @@ def update_strains(particles: Particles, nodes: Nodes, grid: Grid, config: CaseC
         p.lost, cells, grid.n_cols, grid.dx, grid.dy, config.dt, nodes.momentum, nodes.mass,
         p.position, p.position_increment, p.velocity, p.mass, p.strain, p.strain_increment,
         p.vol_strain, p.vol_strain_increment, p.potential_energy, p.kinetic_energy,
-        p.total_energy, p.moisture, p.eq_strain, p.eq_strain_increment, legacy_compat,
+        p.total_energy, p.moisture, p.eq_strain, p.eq_strain_increment,
+        p.vorticity, p.rotation, legacy_compat,
         LEGACY_GRAVITY_STEP if legacy_compat else GRAVITY,
         LEGACY_J2_THRESHOLD if legacy_compat else J2_THRESHOLD,
     )
