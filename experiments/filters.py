@@ -296,6 +296,10 @@ CANDIDATES: dict[str, Filter] = {
     "gaussian s=1.5": gaussian(1.5),
     "savitzky-golay 5x5": savitzky_golay(2),
     # the same filters, but told what lies past the edge of the material
+    "edge: median 3x3": across_the_edge(median(1)),
+    "edge: median 5x5": across_the_edge(median(2), rings=4),
+    "edge: median then avg": across_the_edge(
+        lambda f: moving_average(1)(median(1)(f)), rings=4),
     "edge: average 3x3": across_the_edge(moving_average(1)),
     "edge: average x2": across_the_edge(moving_average(2)),
     "edge: gaussian s=1.0": across_the_edge(gaussian(1.0)),

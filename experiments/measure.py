@@ -64,10 +64,18 @@ def roughness(values: np.ndarray, position: np.ndarray, grid_step: float) -> flo
 
 
 def main() -> None:
-    header = (f"{'filter':<20}{'gamma_xy':>11}{'eq strain':>11}{'rotation':>10}"
+    header = (f"{'filter':<22}{'gamma_xy':>11}{'eq strain':>11}{'rotation':>10}"
               f"{'strain noise':>14}{'quiet zone':>12}")
     print(header)
     print("-" * len(header))
+
+    # The quiet zone has to be the SAME particles for every filter, chosen on the unfiltered
+    # run. Picking each filter's own lowest quarter instead compares a filter against itself,
+    # and makes "it scaled everything down" look like "it removed noise".
+    reference = run(REAL, CANDIDATES["none"])
+    ref_mask = alive(reference)
+    ref_strain = reference.particles.eq_strain[ref_mask]
+    quiet = ref_strain <= np.percentile(ref_strain, 25)
 
     for label, velocity_filter in CANDIDATES.items():
         # --- bias: the cases whose answer is known
@@ -85,16 +93,16 @@ def main() -> None:
         mask = alive(real)
         eq_real = p.eq_strain[mask]
         noise = roughness(eq_real, p.position[mask], real.grid.dy)
-        quiet = eq_real <= np.percentile(eq_real, 25)
         quiet_level = float(np.mean(eq_real[quiet]))
 
-        print(f"{label:<20}{gxy:>11.6f}{eq:>11.6f}{rotation:>10.3f}"
+        print(f"{label:<22}{gxy:>11.6f}{eq:>11.6f}{rotation:>10.3f}"
               f"{noise:>14.5f}{quiet_level:>12.5f}")
 
-    print(f"\n{'truth':<20}{TRUE_SHEAR_STRAIN:>11.6f}{TRUE_EQ_STRAIN:>11.6f}"
+    print(f"\n{'truth':<22}{TRUE_SHEAR_STRAIN:>11.6f}{TRUE_EQ_STRAIN:>11.6f}"
           f"{TRUE_ROTATION:>10.3f}{'lower=better':>14}{'lower=better':>12}")
     print("\nstrain noise: scatter between neighbouring particles in the real case")
-    print("quiet zone  : mean strain of the quarter that deformed least, which should be ~0")
+    print("quiet zone  : mean strain of the particles that deformed least WITHOUT a filter,")
+    print("              the same ones for every row, which should be near zero")
 
 
 if __name__ == "__main__":
