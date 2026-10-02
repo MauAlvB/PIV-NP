@@ -492,8 +492,21 @@ OVERLAP = 0.5    ! so there is a vector every 8 px
 PASSES  = 2      ! 32 px first to find the movement, then 16 to pin it down
 ```
 
-A smaller `WINDOW` gives more vectors and trusts each one less; 16 or 32 are the usual
-choices and it must be a power of two. And two that keep the grid off the background:
+**`WINDOW` is the setting that decides whether your result is worth anything**, so it is
+worth a paragraph. The grid step is `WINDOW × (1 − OVERLAP)`, which means any step you want
+can be reached with a small window and little overlap, or a large window and a lot of it.
+Those two are *not* equivalent and nothing will warn you: the first gives a noisy field and
+the second a measurement. Pick the window for how far the soil moves between photographs —
+the movement should stay under about a quarter of it — and let the overlap follow.
+
+Getting it wrong is quiet. On a slope test analysed here, a 64 px window ran without
+complaint and gave a field nearly three times rougher than PIVlab's; since the strain is a
+difference between neighbouring vectors, that came out at *twice* the real strain, with the
+rotation doubled too. A 200 px window on the same case matched PIVlab. If your strains look
+implausibly large, suspect the window before you suspect the soil.
+
+A window must be even; a power of two is fastest. And two settings that keep the grid off
+the background:
 
 ```
 REGION     = 232, 213, 1656, 845   ! left, top, right, bottom: where the material is

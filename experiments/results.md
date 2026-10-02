@@ -596,6 +596,67 @@ wrong length, between two cases in the same test session. It holds the array now
 
 ---
 
+## Phase 8 — Slope_RGB, a test that actually moves
+
+Verdict first: **the built-in PIV handles it, and the interrogation window is what decides
+whether the answer is worth anything.** Everything measured about it until now was measured
+on the dam break, where the soil moves 0.16 px between photographs. This slope moves up to
+19.5 px, which is the regime most tests are in, and it exposes something the dam break could
+not.
+
+`python experiments/slope_rgb.py`. The case is read-only; everything runs on a copy.
+
+### The window, and a wrong answer that looked plausible
+
+The case's grid steps by 50 px. A 64 px window at 0.219 overlap steps by 50, lands on
+PIVlab's 60 x 35 points exactly, and runs without complaint. The result:
+
+| | median \|u\| | equivalent strain | shear | rotation |
+|---|---|---|---|---|
+| PIVlab | 1261 mm | 0.357 | 0.144 | 9.8° |
+| built-in PIV, 64 px window | 946 mm | **0.699** | **0.511** | **19.8°** |
+
+Twice the strain and twice the rotation. Nothing in the run said anything was wrong.
+
+What is wrong is the window. Measured over four steps, on the same grid, against PIVlab:
+
+| window | overlap | measured | our roughness | PIVlab's | median gap |
+|---|---|---|---|---|---|
+| 64 | 0.219 | 64 % | **0.257** | 0.096 | 0.869 px |
+| 100 | 0.500 | 74 % | 0.162 | 0.096 | 0.666 |
+| 128 | 0.609 | 80 % | 0.141 | 0.096 | 0.560 |
+| 160 | 0.688 | 86 % | 0.115 | 0.096 | 0.518 |
+| **200** | 0.750 | **89 %** | **0.091** | 0.096 | 0.486 |
+
+At 64 px the field is 2.7 times rougher than PIVlab's, and the strain is a difference between
+neighbouring vectors, so a field 2.7 times rougher is a strain about twice as large. That is
+the whole of it. PIVlab reaching a 50 px step at its usual half overlap would have used a
+100 px window; 200 px at 0.75 overlap is what matches what it actually produced.
+
+**The lesson generalises past this case.** The grid step is set by `WINDOW x (1 - OVERLAP)`,
+so any step can be reached with a small window and little overlap or a large one with a lot.
+Those two are not equivalent and nothing in the settings says so: the first is noise and the
+second is a measurement. The window has to be chosen for how far and how unevenly the soil
+moves, and the overlap then follows from the grid wanted. The README and the guide now say
+this where the key is described.
+
+At 200 px one pass is enough: a second changes the roughness from 0.096 to 0.095 and costs
+5.7 times the time, because 19.5 px is a tenth of that window rather than a third of it.
+
+### Two things this case forced into the code
+
+* **The window no longer has to be a power of two.** Nothing in the transform needs it, and
+  the rule was rejecting 200 px -- the only window that works here.
+* **Correlating in bands**, since a 200 px window over a 4-megapixel photograph wants
+  gigabytes of correlation planes at once. The result is bit-identical; the test forces the
+  smallest band and requires equality rather than closeness.
+
+And a third that is pure speed: the source was decoding every photograph twice, because step
+*n* reads images *n* and *n+1* and step *n+1* reads *n+1* again. Remembering the last image
+took five steps of this case from 74 s to 41 s.
+
+---
+
 ## A note on this machine
 
 Two more things on this machine, found in phase 7 and both worked around in

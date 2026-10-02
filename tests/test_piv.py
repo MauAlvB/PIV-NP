@@ -479,9 +479,19 @@ def test_a_line_without_a_value_is_refused():
         parse("IMAGES\n")
 
 
-def test_a_window_that_is_not_a_power_of_two_is_refused():
-    with pytest.raises(PivSettingsError, match="power of two"):
-        parse(MINIMAL + "WINDOW = 24\n")
+def test_a_window_that_is_not_a_power_of_two_is_allowed():
+    """A power of two is faster, not required -- and insisting on it blocked a real case.
+
+    The Slope_RGB test needs a 200 px window to match the grid PIVlab used on it; at 64 the
+    field comes back nearly three times rougher than PIVlab's and the strain twice as large.
+    Nothing in the transform needs a power of two, so the rule was rejecting good settings
+    for no reason. Odd windows are still refused, because the grid arithmetic puts the centre
+    of a window at ``(window-1)/2``.
+    """
+    assert parse(MINIMAL + "WINDOW = 200\n").window == 200
+    assert parse(MINIMAL + "WINDOW = 24\n").window == 24
+    with pytest.raises(PivSettingsError, match="should be even"):
+        parse(MINIMAL + "WINDOW = 25\n")
 
 
 def test_a_window_too_small_to_correlate_is_refused():

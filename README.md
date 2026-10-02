@@ -301,7 +301,7 @@ MASK_BELOW = 25                        ! darker than this is background, not soi
 | `IMAGES` | — | **required**: name of each photograph; must contain `{n}`, and `{n:03d}` pads it with zeros (`shot_001.jpg`) |
 | `SCALE` | — | **required**: metres per pixel. This one number turns every displacement into metres, and there is no way to guess it — measure something of known length in a photograph, or take it from the calibration of the test |
 | `CHANNEL` | `gray` | channel used: `1` red, `2` green, `3` blue, `0`/`gray` grayscale |
-| `WINDOW` | `32` | side of the final interrogation window, in pixels; a power of two, 16 or 32 is usual. Smaller resolves more detail and measures less reliably |
+| `WINDOW` | `32` | side of the final interrogation window, in pixels; an even number, 16 or 32 is usual and a power of two is fastest. **This is the setting that decides whether the result is any good.** Too small for how far and how unevenly the soil moves gives a noisy field, and the strain is a difference between neighbouring vectors, so a noisy field is inflated strain. If your displacements per step exceed about a quarter of the window, raise it |
 | `OVERLAP` | `0.5` | how much neighbouring windows share, so the grid step is `WINDOW × (1 − OVERLAP)` |
 | `PASSES` | `2` | each pass before the last uses a window twice as wide, to find a displacement it knows nothing about. A third pass buys very little |
 | `FIRST_IMAGE` | `1` | number of the first photograph, for sequences that do not start at 1 |

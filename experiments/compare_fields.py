@@ -195,8 +195,14 @@ def stack(panels: list[Image.Image], heading: str) -> Image.Image:
 
 
 def figure(results: dict[str, dict], quantity: str, unit: float, label: str,
-           filename: str) -> Path:
-    """The three analyses of one quantity, and the two differences from PIVlab."""
+           filename: str, signed: bool = False, title: str = "Dam break",
+           steps: int = 20) -> Path:
+    """The three analyses of one quantity, and the two differences from PIVlab.
+
+    ``signed`` is for a quantity that turns both ways, such as a rotation: it gets the
+    blue-white-red ramp centred on zero, because showing the size of a rotation and throwing
+    away which way it went loses the thing worth seeing.
+    """
     shown = np.ones_like(results["PIVlab"]["shown"])
     for data in results.values():
         shown = shown & data["shown"]
@@ -206,31 +212,40 @@ def figure(results: dict[str, dict], quantity: str, unit: float, label: str,
     extent = (x.min(), x.max(), y.min(), y.max())
     values = {n: results[n][quantity][shown] * unit for n in names}
 
-    # The top of the scale is the 95th percentile, not the largest value: a handful of
-    # particles on the face of the slope are several times the rest, and letting them set the
-    # scale paints everything else black and hides the comparison the figure is for.
-    high = float(np.nanpercentile(values["PIVlab"], 95))
+    # The top of the scale is a percentile, not the largest value: a handful of particles on
+    # the face of the slope are several times the rest, and letting them set the scale paints
+    # everything else black and hides the comparison the figure is for.
+    if signed:
+        high = float(np.nanpercentile(np.abs(values["PIVlab"]), 97))
+        low, table, capped = -high, DIVERGING, "97th percentile of the size"
+    else:
+        high = float(np.nanpercentile(values["PIVlab"], 95))
+        low, table, capped = 0.0, SEQUENTIAL, "95th percentile"
     panels = []
     for name in names:
         picture = raster(x, y, values[name], extent, RASTER_WIDTH)
-        panels.append(panel(picture, 0.0, high, SEQUENTIAL, name,
+        panels.append(panel(picture, low, high, table, name,
                             f"median {np.nanmedian(values[name]):.4g}, "
-                            f"scale capped at the 95th percentile", label))
+                            f"scale capped at the {capped}", label))
 
     reference = values[names[0]]
     span = max(float(np.nanpercentile(np.abs(values[n] - reference), 90))
                for n in names[1:]) or 1.0
+    scale_of_it = float(np.nanmedian(np.abs(reference)))
     for name in names[1:]:
         gap = values[name] - reference
         picture = raster(x, y, gap, extent, RASTER_WIDTH)
         typical = np.nanmedian(np.abs(gap))
+        # as a fraction of the typical *size*, not of the median, which for a signed
+        # quantity sits near zero and would turn any difference into a huge percentage
+        share = (f" ({100 * typical / scale_of_it:.0f} % of its typical size)"
+                 if scale_of_it > 0 else "")
         panels.append(panel(picture, -span, span, DIVERGING,
                             f"{name} minus {names[0]}",
-                            f"median difference {typical:.4g}  "
-                            f"({100 * typical / np.nanmedian(reference):.0f} % of the "
-                            f"median), blue = lower than PIVlab", label))
+                            f"median difference {typical:.4g}{share}, "
+                            f"blue = lower than PIVlab", label))
 
-    out = stack(panels, f"Dam break: {label} accumulated over 20 steps")
+    out = stack(panels, f"{title}: {label} accumulated over {steps} steps")
     path = HERE / filename
     out.save(path)
     print(f"wrote {path}  ({out.width}x{out.height})")

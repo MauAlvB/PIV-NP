@@ -305,7 +305,7 @@ MASK_BELOW = 25                        ! más oscuro que esto es fondo, no suelo
 | `IMAGES` | — | **obligatoria**: nombre de cada fotografía; debe contener `{n}`, y `{n:03d}` lo rellena con ceros (`foto_001.jpg`) |
 | `SCALE` | — | **obligatoria**: metros por píxel. Este único número convierte cada desplazamiento a metros, y no hay forma de adivinarlo: mide algo de longitud conocida en una fotografía, o tómalo de la calibración del ensayo |
 | `CHANNEL` | `gray` | canal usado: `1` rojo, `2` verde, `3` azul, `0`/`gray` escala de grises |
-| `WINDOW` | `32` | lado de la ventana de interrogación final, en píxeles; potencia de dos, 16 o 32 es lo habitual. Más pequeña resuelve más detalle y mide con menos fiabilidad |
+| `WINDOW` | `32` | lado de la ventana de interrogación final, en píxeles; número par, 16 o 32 es lo habitual y una potencia de dos es lo más rápido. **Es el ajuste que decide si el resultado sirve.** Demasiado pequeña para lo que se mueve y se deforma el suelo da un campo ruidoso, y la deformación es una diferencia entre vectores vecinos, así que campo ruidoso es deformación inflada. Si el desplazamiento por paso supera un cuarto de la ventana, súbela |
 | `OVERLAP` | `0.5` | cuánto comparten las ventanas vecinas, así que el paso de la malla es `WINDOW × (1 − OVERLAP)` |
 | `PASSES` | `2` | cada pasada anterior a la última usa una ventana del doble de ancho, para encontrar un desplazamiento del que no sabe nada. Una tercera pasada aporta muy poco |
 | `FIRST_IMAGE` | `1` | número de la primera fotografía, para secuencias que no empiezan en 1 |

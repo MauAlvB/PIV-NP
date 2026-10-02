@@ -105,8 +105,9 @@ class PivSettings:
                           "become one in metres")
         if self.window < 8:
             errors.append(f"WINDOW={self.window} is too small to correlate; 16 or 32 is usual")
-        if self.window & (self.window - 1):
-            errors.append(f"WINDOW={self.window} should be a power of two, for the transform")
+        if self.window % 2:
+            errors.append(f"WINDOW={self.window} should be even, so that the grid of windows "
+                          "sits where the arithmetic says it does")
         if not 0.0 <= self.overlap < 1.0:
             errors.append(f"OVERLAP={self.overlap} must be between 0 and 1")
         if not 1 <= self.passes <= 4:
