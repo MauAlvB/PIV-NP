@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
+
 from finite_strain import (  # noqa: E402
     deformation_gradient,
     equivalent_shear,
@@ -27,6 +28,7 @@ from finite_strain import (  # noqa: E402
     rotation_degrees,
     volume_change,
 )
+from test_images import DAM_BREAK, case_folder  # noqa: E402
 
 from pivnp.contour import make_contour_correction  # noqa: E402
 from pivnp.simulation import Simulation  # noqa: E402
@@ -36,7 +38,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CASES = {
     "rotation_1P": (ROOT / "tests" / "data" / "synthetic" / "rotation_1P", 3),
     "shear-block": (ROOT / "examples" / "shear-block", None),
-    "dam-break": (ROOT / "examples" / "dam-break-swir", None),
+    "dam-break": (case_folder(DAM_BREAK, "the dam-break case and its photographs",
+                              ROOT / "examples" / "dam-break-swir"), None),
 }
 
 

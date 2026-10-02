@@ -8,14 +8,20 @@ measurement limit.
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
 
-from pivnp.config import load_case
-from pivnp.sources import build_source
+sys.path.insert(0, str(Path(__file__).parent))
 
-CASE = Path(__file__).resolve().parents[1] / "examples" / "dam-break-swir"
+from test_images import DAM_BREAK, case_folder  # noqa: E402
+
+from pivnp.config import load_case  # noqa: E402
+from pivnp.sources import build_source  # noqa: E402
+
+CASE = case_folder(DAM_BREAK, "the dam-break case and its photographs",
+                   Path(__file__).resolve().parents[1] / "examples" / "dam-break-swir")
 
 name, cfg = load_case(CASE)
 source = build_source("pivlab", CASE, cfg, prefetch=0)

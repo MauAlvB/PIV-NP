@@ -143,6 +143,10 @@ def run_one(number: int, steps: int) -> None:
 
 
 def gather(fresh: bool, steps: int) -> dict[str, dict]:
+    # ask for the case here, before any subprocess is started: otherwise the message about
+    # where the data should be comes out of a child and is followed by the parent reporting
+    # that the child failed, which buries the only line worth reading
+    case_folder(SLOPE_RGB, "the Slope_RGB case and its photographs")
     out = {}
     for number, name in enumerate(RUNS):
         part = HERE / f"_slope_part{number}.npz"

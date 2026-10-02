@@ -18,14 +18,17 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
+
 from filters import CANDIDATES, FilteredSource  # noqa: E402
+from test_images import DAM_BREAK, case_folder  # noqa: E402
 
 from pivnp.config import load_case  # noqa: E402
 from pivnp.simulation import Simulation  # noqa: E402
 from pivnp.solver import output_mask  # noqa: E402
 from pivnp.sources import build_source  # noqa: E402
 
-CASE = Path(__file__).resolve().parents[1] / "examples" / "dam-break-swir"
+CASE = case_folder(DAM_BREAK, "the dam-break case and its photographs",
+                   Path(__file__).resolve().parents[1] / "examples" / "dam-break-swir")
 
 
 def run(velocity_filter) -> tuple[np.ndarray, np.ndarray]:

@@ -16,7 +16,9 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
+
 from filters import CANDIDATES, FilteredSource  # noqa: E402
+from test_images import DAM_BREAK, case_folder  # noqa: E402
 
 from pivnp.config import load_case  # noqa: E402
 from pivnp.contour import make_contour_correction  # noqa: E402
@@ -27,7 +29,8 @@ from pivnp.sources import build_source  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 SHEAR = ROOT / "examples" / "shear-block"
 ROTATION = ROOT / "tests" / "data" / "synthetic" / "rotation_1P"
-REAL = ROOT / "examples" / "dam-break-swir"
+REAL = case_folder(DAM_BREAK, "the dam-break case and its photographs",
+                   ROOT / "examples" / "dam-break-swir")
 
 TRUE_SHEAR_STRAIN = 0.10
 TRUE_EQ_STRAIN = 0.10 / math.sqrt(3.0)
