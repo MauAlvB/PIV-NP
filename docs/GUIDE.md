@@ -505,6 +505,14 @@ difference between neighbouring vectors, that came out at *twice* the real strai
 rotation doubled too. A 200 px window on the same case matched PIVlab. If your strains look
 implausibly large, suspect the window before you suspect the soil.
 
+**If your test changes pace, analyse it in two stages.** The same slope moved 7 px per
+photograph while it was failing and well under 1 px once it settled, and no single window
+serves both: the 200 px window that measures the failure correctly reads only a third of the
+quiet movement afterwards, because a pixel is half a per cent of its width. Run the fast part
+with a large window, then set `restart = 1` and run the slow part with a small one —
+[§4](#running-a-test-in-two-stages) describes the mechanics. One window for a test that
+changes regime will be wrong for one half of it.
+
 A window must be even; a power of two is fastest. And two settings that keep the grid off
 the background:
 

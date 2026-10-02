@@ -643,6 +643,58 @@ this where the key is described.
 At 200 px one pass is enough: a second changes the roughness from 0.096 to 0.095 and costs
 5.7 times the time, because 19.5 px is a tenth of that window rather than a third of it.
 
+### With the window right: strain and rotation agree, displacement does not
+
+149 steps, 200 px window, one pass, against PIVlab on the 8649 particles both keep:
+
+| | median \|u\| | equivalent strain | shear | rotation |
+|---|---|---|---|---|
+| PIVlab | 1240 mm | 0.3535 | 0.1416 | 9.61° |
+| built-in PIV | 858 mm | **0.3677 (+4 %)** | 0.1776 (+25 %) | **9.19° (−4 %)** |
+
+Strain and rotation went from +96 % and +106 % to +4 % and −4 % on the window alone. The
+maps agree on everything a reader would look for: the failure surface, the fast-moving
+wedge, and -- most clearly of all -- the rotation, where both draw the slip surface as a band
+of one sign against a body of the other.
+
+The displacement is 31 % low, and that is one thing, not a general deficiency. Per single
+step, against PIVlab where both measured:
+
+| step | PIVlab | ours | ratio |
+|---|---|---|---|
+| 5 | 7.39 px | 7.36 | **0.995** |
+| 20 | 6.58 | 6.60 | **1.004** |
+| 25 | 8.22 | 7.51 | 0.913 |
+| 40 | 2.20 | 1.38 | 0.627 |
+| 80 | 1.52 | 0.83 | 0.547 |
+| 100 | 0.93 | 0.34 | **0.366** |
+| 140 | 0.71 | 0.26 | **0.362** |
+
+**The ratio follows the size of the movement.** While the slope is failing, at 6 to 8 px a
+step, the two agree to half a per cent. Once it settles, at well under a pixel, we read a
+third of what PIVlab reads -- because a 200 px window cannot resolve a displacement that is
+half a per cent of its own width. The window that rescued the strain is too large for the
+quiet end of the same test.
+
+So it is the dam-break problem again, arriving in the second half of a test whose first half
+was in the opposite regime. A multi-pass with a smaller final window recovers much of it and
+costs the rest:
+
+| | fast steps | slow steps | roughness (PIVlab 0.096) | worst vector |
+|---|---|---|---|---|
+| 200 px, one pass | 0.99–1.00 | 0.32–0.37 | **0.091–0.096** | 11 px |
+| 100 px, two passes | 1.01–1.05 | 0.60–0.80 | 0.145–0.204 | **52 px** |
+| 128 px, two passes | 1.01–1.04 | 0.54–0.63 | 0.127–0.175 | **65 px** |
+
+Twice as much of the slow movement recovered, a field 1.6 to 2 times rougher -- which puts
+the strain back where it was -- and gross outliers of 50 to 65 px that the median test does
+not catch. There is no setting here that serves both halves.
+
+**What a user should do about it**, and the code already allows it: analyse the test in two
+stages. PIV-NP restarts from a `.REC`, so the violent phase can be run with a large window
+and the quiet phase with a small one, each set for what it has to measure. That is the
+honest answer to a test that changes regime, and it is what the guide now says.
+
 ### Two things this case forced into the code
 
 * **The window no longer has to be a power of two.** Nothing in the transform needs it, and
