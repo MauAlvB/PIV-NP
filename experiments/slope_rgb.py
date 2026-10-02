@@ -7,8 +7,8 @@ nothing said whether that carries over to a test that actually moves.
 
     python experiments/slope_rgb.py [--fresh] [--steps N]
 
-The case is read from ``SLOPE_RGB_CASE`` (or the path below) and **never written to**: it
-holds results from earlier work. Everything runs on a copy.
+The case is named by ``SLOPE_RGB_CASE`` and is **never written to**: it holds results from
+earlier work. Everything runs on a copy.
 
 Setting it up took three things the case does not carry:
 
@@ -43,7 +43,6 @@ because 19.5 px of movement is a tenth of the window rather than a third of it.
 """
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
@@ -54,11 +53,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from test_images import SLOPE_RGB, case_folder  # noqa: E402
+
 from pivnp.simulation import RunOptions, Simulation  # noqa: E402
 from pivnp.solver import output_mask  # noqa: E402
 
-CASE = Path(os.environ.get("SLOPE_RGB_CASE",
-                           r"C:\Users\Usuario\Desktop\Prueba\Slope_RGB Completo"))
 HERE = Path(__file__).parent
 NAME = "Slope_Vis"
 
@@ -89,8 +88,9 @@ KEYS = ("x", "y", "ux", "uy", "eq", "shear", "rotation", "vorticity", "shown")
 
 def prepare(steps: int, subpixel: bool) -> Path:
     """A working copy of the case, set up for the run. The original is never touched."""
+    case = case_folder(SLOPE_RGB, "the Slope_RGB case and its photographs")
     work = Path(tempfile.mkdtemp(prefix="slope_"))
-    shutil.copytree(CASE, work, dirs_exist_ok=True)
+    shutil.copytree(case, work, dirs_exist_ok=True)
     for stale in list(work.glob("*.POST.*")) + list(work.glob("*.REC")):
         stale.unlink()
     (work / "PIV-NP.TXT").write_text(f"{NAME}\n", encoding="ascii")

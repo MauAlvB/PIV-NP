@@ -21,10 +21,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from test_images import DAM_BREAK, case_folder  # noqa: E402
+
 from pivnp.simulation import RunOptions, Simulation  # noqa: E402
 from pivnp.solver import output_mask  # noqa: E402
 
-CASE = Path(__file__).resolve().parents[1] / "examples" / "dam-break-swir"
+CASE = case_folder(DAM_BREAK, "the dam-break case and its photographs",
+                   Path(__file__).resolve().parents[1] / "examples" / "dam-break-swir")
 
 
 def _pearson(x: np.ndarray, y: np.ndarray) -> float:

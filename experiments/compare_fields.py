@@ -32,10 +32,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from test_images import DAM_BREAK, case_folder  # noqa: E402
+
 from pivnp.simulation import RunOptions, Simulation  # noqa: E402
 from pivnp.solver import output_mask  # noqa: E402
 
-CASE = Path(__file__).resolve().parents[1] / "examples" / "dam-break-swir"
+CASE = case_folder(DAM_BREAK, "the dam-break case and its photographs",
+                   Path(__file__).resolve().parents[1] / "examples" / "dam-break-swir")
 HERE = Path(__file__).parent
 
 RUNS = {
